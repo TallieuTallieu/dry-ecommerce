@@ -4,7 +4,7 @@
 #### Installation
 
 ```ssh
-composer require reinvanoyen/dry-ecommerce
+composer require tallieutallieu/dry-ecommerce
 ```
 
 #### Register the service provider

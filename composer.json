@@ -1,10 +1,10 @@
 {
-  "name": "reinvanoyen/dry-ecommerce",
+  "name": "tallieutallieu/dry-ecommerce",
   "minimum-stability": "dev",
   "description": "E-commerce package",
   "type": "library",
   "require": {
-    "reinvanoyen/oak": "^1.0.8"
+    "tallieutallieu/oak": "^1.0.8"
   },
   "autoload": {
     "psr-4": {
