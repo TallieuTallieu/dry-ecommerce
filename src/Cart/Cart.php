@@ -2,22 +2,23 @@
 
 namespace Tnt\Ecommerce\Cart;
 
+use Closure;
 use dry\db\FetchException;
-use Oak\Contracts\Container\ContainerInterface;
-use Oak\Dispatcher\Facade\Dispatcher;
-use Oak\Session\Facade\Session;
-use Tnt\Ecommerce\Contracts\BuyableInterface;
-use Tnt\Ecommerce\Contracts\CartInterface;
-use Tnt\Ecommerce\Contracts\CustomerInterface;
-use Tnt\Ecommerce\Contracts\FulfillmentInterface;
-use Tnt\Ecommerce\Contracts\OrderInterface;
-use Tnt\Ecommerce\Contracts\PaymentInterface;
-use Tnt\Ecommerce\Contracts\ShopInterface;
-use Tnt\Ecommerce\Contracts\TotalingInterface;
-use Tnt\Ecommerce\Events\Order\Created;
-use Tnt\Ecommerce\Model\CartItem;
-use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Model\Order;
+use Oak\Session\Facade\Session;
+use Tnt\Ecommerce\Model\CartItem;
+use Oak\Dispatcher\Facade\Dispatcher;
+use Tnt\Ecommerce\Model\DiscountCode;
+use Tnt\Ecommerce\Events\Order\Created;
+use Tnt\Ecommerce\Contracts\CartInterface;
+use Tnt\Ecommerce\Contracts\ShopInterface;
+use Tnt\Ecommerce\Contracts\OrderInterface;
+use Tnt\Ecommerce\Contracts\BuyableInterface;
+use Tnt\Ecommerce\Contracts\PaymentInterface;
+use Tnt\Ecommerce\Contracts\CustomerInterface;
+use Tnt\Ecommerce\Contracts\TotalingInterface;
+use Oak\Contracts\Container\ContainerInterface;
+use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 
 /**
  * Class Cart
@@ -272,7 +273,7 @@ class Cart implements CartInterface, TotalingInterface
      * @param CustomerInterface $customer
      * @return OrderInterface
      */
-    public function checkout(CustomerInterface $customer): OrderInterface
+    public function checkout(CustomerInterface $customer, Closure $callback = null): OrderInterface
     {
         // Create the order
         $order = new Order();
@@ -301,6 +302,10 @@ class Cart implements CartInterface, TotalingInterface
 
         // Dispatch an order created event
         Dispatcher::dispatch(Created::class, new Created($order));
+
+        if($callback){
+            call_user_func($callback, $order);
+        }
 
         // Pay
         $this->app->get(PaymentInterface::class)->pay($order);
