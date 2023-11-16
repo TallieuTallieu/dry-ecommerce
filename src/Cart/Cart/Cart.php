@@ -303,13 +303,17 @@ class Cart implements CartInterface, TotalingInterface
      * @param CustomerInterface $customer
      * @return OrderInterface
      */
-    public function checkout(CustomerInterface $customer): OrderInterface
+    public function checkout(CustomerInterface $customer, \Closure $callback = null): OrderInterface
     {
         // Create the order
         $order = $this->orderFactory->create($this, $customer);
 
         // Dispatch an order created event
         $this->dispatcher->dispatch(Created::class, new Created($order));
+
+        if ($callback) {
+            call_user_func($callback, $order);
+        }
 
         // Pay
         $this->payment->pay($order);
