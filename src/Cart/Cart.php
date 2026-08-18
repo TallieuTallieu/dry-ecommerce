@@ -3,6 +3,7 @@
 namespace Tnt\Ecommerce\Cart;
 
 use Closure;
+use dry\util\Str;
 use dry\db\FetchException;
 use Tnt\Ecommerce\Model\Order;
 use Oak\Session\Facade\Session;
@@ -292,7 +293,7 @@ class Cart implements CartInterface, TotalingInterface
         $start = rand(5, 8);
         $rest = 8 - $start;
 
-        $order->order_id = $order->id.'-'.\dry\util\string\random($start).'_'.\dry\util\string\random($rest);
+        $order->order_id = $order->id.'-'.Str::random($start).'_'.Str::random($rest);
         $order->save();
 
         // Add all items to the order
