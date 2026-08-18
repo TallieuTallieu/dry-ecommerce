@@ -273,7 +273,7 @@ class Cart implements CartInterface, TotalingInterface
      * @param CustomerInterface $customer
      * @return OrderInterface
      */
-    public function checkout(CustomerInterface $customer, Closure $callback = null): OrderInterface
+    public function checkout(CustomerInterface $customer, ?Closure $callback = null): OrderInterface
     {
         // Create the order
         $order = new Order();

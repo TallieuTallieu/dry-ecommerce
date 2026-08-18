@@ -1,14 +1,23 @@
 {
   "name": "tallieutallieu/dry-ecommerce",
-  "minimum-stability": "dev",
   "description": "E-commerce package",
   "type": "library",
+  "license": "proprietary",
   "require": {
-    "tallieutallieu/oak": "^1.0 | ^1.1"
+    "php": "^8.2",
+    "tallieutallieu/dry": "^4.0",
+    "tallieutallieu/dry-dbi": "^3.0",
+    "tallieutallieu/oak": "^3.0"
   },
   "autoload": {
     "psr-4": {
       "Tnt\\Ecommerce\\": "src/"
     }
-  }
+  },
+  "repositories": [
+    {
+      "type": "vcs",
+      "url": "git@bitbucket.org:tallieu/dry3.git"
+    }
+  ]
 }
