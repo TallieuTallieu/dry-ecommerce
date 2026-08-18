@@ -12,6 +12,12 @@ oak's container, dry's ORM and dry-dbi's query/table builders.
 - Commits: Conventional Commits, one focused commit per ticket
 - Never force-push. Never push without being asked.
 
+> [!important] Never set a story's state by hand
+> Shortcut state is driven **automatically by the branch**. Check out the
+> branch matching the ticket *before* committing, and the story follows along.
+> Pushing and merging the pull request is the user's job, not an agent's —
+> commit on the right branch and stop there.
+
 > [!important] `master`, not `main`
 > The house CI template this package adopts (copied from dry-dbi) keys its
 > workflows off `master` — `ci.yml` on `pull_request: branches: [master]` and
