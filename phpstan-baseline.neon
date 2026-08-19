@@ -241,7 +241,7 @@ parameters:
 			path: src/Events/Order/OrderEvent.php
 
 		-
-			message: '#^PHPDoc tag @var has invalid value \(\$quantity\)\: Unexpected token "\$quantity", expected type at offset 13 on line 2$#'
+			message: '#^PHPDoc tag @var has invalid value \(\$quantity\)\: Unexpected token "\$quantity", expected type at offset 16 on line 2$#'
 			identifier: phpDoc.parseError
 			count: 1
 			path: src/Events/Stock/StockEvent.php

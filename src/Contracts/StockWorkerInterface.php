@@ -13,7 +13,10 @@ interface StockWorkerInterface
      * @param float $quantity
      * @return bool
      */
-    public function isAvailable(BuyableInterface $buyable, float $quantity = 1): bool;
+    public function isAvailable(
+        BuyableInterface $buyable,
+        float $quantity = 1
+    ): bool;
 
     /**
      * @param BuyableInterface $buyable

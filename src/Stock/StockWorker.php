@@ -39,11 +39,16 @@ class StockWorker implements StockWorkerInterface
      */
     private function getStockItem(BuyableInterface $buyable): StockItem
     {
-        return StockItem::one('
+        return StockItem::one(
+            '
             WHERE stock = ?
             AND item_class = ?
             AND item_id = ?
-        ', $this->stock->id, get_class($buyable), $buyable->getId());
+        ',
+            $this->stock->id,
+            get_class($buyable),
+            $buyable->getId()
+        );
     }
 
     /**
@@ -51,13 +56,13 @@ class StockWorker implements StockWorkerInterface
      * @param float $quantity
      * @return bool
      */
-    public function isAvailable(BuyableInterface $buyable, float $quantity = 1): bool
-    {
+    public function isAvailable(
+        BuyableInterface $buyable,
+        float $quantity = 1
+    ): bool {
         try {
-
             $stockItem = $this->getStockItem($buyable);
-            return ($stockItem->quantity >= $quantity);
-
+            return $stockItem->quantity >= $quantity;
         } catch (FetchException $e) {
             //
         }
@@ -73,14 +78,11 @@ class StockWorker implements StockWorkerInterface
     public function increment(BuyableInterface $buyable, float $quantity = 1)
     {
         try {
-
             $stockItem = $this->getStockItem($buyable);
             $stockItem->updated = time();
             $stockItem->quantity = $stockItem->quantity + $quantity;
             $stockItem->save();
-
         } catch (FetchException $e) {
-
             $stockItem = new StockItem();
             $stockItem->created = time();
             $stockItem->updated = time();
@@ -91,7 +93,10 @@ class StockWorker implements StockWorkerInterface
             $stockItem->save();
         }
 
-        Dispatcher::dispatch(Incremented::class, new Incremented($this, $buyable, $quantity));
+        Dispatcher::dispatch(
+            Incremented::class,
+            new Incremented($this, $buyable, $quantity)
+        );
     }
 
     /**
@@ -102,14 +107,15 @@ class StockWorker implements StockWorkerInterface
     public function decrement(BuyableInterface $buyable, float $quantity = 1)
     {
         try {
-
             $stockItem = $this->getStockItem($buyable);
             $stockItem->updated = time();
             $stockItem->quantity = $stockItem->quantity - $quantity; // @TODO call isAvailable()
             $stockItem->save();
 
-            Dispatcher::dispatch(Decremented::class, new Decremented($this, $buyable, $quantity));
-
+            Dispatcher::dispatch(
+                Decremented::class,
+                new Decremented($this, $buyable, $quantity)
+            );
         } catch (FetchException $e) {
             //
         }
@@ -122,10 +128,8 @@ class StockWorker implements StockWorkerInterface
     public function getQuantity(BuyableInterface $buyable): int
     {
         try {
-
             $stockItem = $this->getStockItem($buyable);
             return $stockItem->quantity;
-
         } catch (FetchException $e) {
             //
         }

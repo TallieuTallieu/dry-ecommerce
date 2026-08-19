@@ -2,7 +2,4 @@
 
 namespace Tnt\Ecommerce\Events\Stock;
 
-class Incremented extends StockEvent
-{
-
-}
+class Incremented extends StockEvent {}
