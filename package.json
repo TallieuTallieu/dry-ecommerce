@@ -1,0 +1,14 @@
+{
+  "name": "dry-ecommerce",
+  "version": "3.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "format": "prettier --write --ignore-unknown src tests"
+  },
+  "devDependencies": {
+    "@prettier/plugin-php": "^0.22.4",
+    "prettier": "^3.5.3"
+  },
+  "packageManager": "yarn@4.9.1"
+}
