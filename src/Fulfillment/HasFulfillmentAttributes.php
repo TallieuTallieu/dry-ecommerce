@@ -16,7 +16,7 @@ trait HasFulfillmentAttributes
      */
     private function restoreSessionAttributes()
     {
-        if (! Session::get('fulfillmentAttributes')) {
+        if (!Session::get('fulfillmentAttributes')) {
             $this->saveSessionAttributes();
         }
 
@@ -42,7 +42,7 @@ trait HasFulfillmentAttributes
         $this->restoreSessionAttributes();
         $reqAttrs = $this->requireAttributes();
 
-        if (! $this->hasAttribute($name)) {
+        if (!$this->hasAttribute($name)) {
             if (in_array($name, $reqAttrs)) {
                 throw new MissingAttribute($name);
             }
@@ -79,7 +79,7 @@ trait HasFulfillmentAttributes
     public function hasAttribute(string $name): bool
     {
         $this->restoreSessionAttributes();
-        return (isset($this->attributes[$name]));
+        return isset($this->attributes[$name]);
     }
 
     /**
@@ -90,7 +90,7 @@ trait HasFulfillmentAttributes
         $this->restoreSessionAttributes();
 
         foreach ($this->requireAttributes() as $reqAttr) {
-            if (! $this->hasAttribute($reqAttr)) {
+            if (!$this->hasAttribute($reqAttr)) {
                 return false;
             }
         }

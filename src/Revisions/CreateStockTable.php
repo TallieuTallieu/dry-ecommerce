@@ -9,13 +9,15 @@ class CreateStockTable extends DatabaseRevision implements RevisionInterface
 {
     public function up()
     {
-        $this->queryBuilder->table('ecommerce_stock')->create(function(TableBuilder $table) {
-            $table->addColumn('id', 'int')->length(11)->primaryKey();
-            $table->addColumn('created', 'int')->length(11);
-            $table->addColumn('updated', 'int')->length(11);
-            $table->addColumn('title', 'varchar')->length(255);
-            $table->addColumn('hid', 'varchar')->length(255);
-        });
+        $this->queryBuilder
+            ->table('ecommerce_stock')
+            ->create(function (TableBuilder $table) {
+                $table->addColumn('id', 'int')->length(11)->primaryKey();
+                $table->addColumn('created', 'int')->length(11);
+                $table->addColumn('updated', 'int')->length(11);
+                $table->addColumn('title', 'varchar')->length(255);
+                $table->addColumn('hid', 'varchar')->length(255);
+            });
 
         $this->execute();
     }

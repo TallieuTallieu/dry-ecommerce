@@ -9,24 +9,31 @@ class CreateOrderTable extends DatabaseRevision implements RevisionInterface
 {
     public function up()
     {
-        $this->queryBuilder->table('ecommerce_order')->create(function(TableBuilder $table) {
-            $table->addColumn('id', 'int')->length(11)->primaryKey();
-            $table->addColumn('created', 'int')->length(11);
-            $table->addColumn('updated', 'int')->length(11);
-            $table->addColumn('order_id', 'varchar')->length(255);
-            $table->addColumn('payment_id', 'varchar')->length(255);
-            $table->addColumn('total', 'decimal')->length('10,2');
-            $table->addColumn('subtotal', 'decimal')->length('10,2');
-            $table->addColumn('reduction', 'decimal')->length('10,2');
-            $table->addColumn('fulfillment_cost', 'decimal')->length('10,2');
-            $table->addColumn('payment_status', 'varchar')->length(255);
-            $table->addColumn('fulfillment_method', 'varchar')->length(255)->null();
-            $table->addColumn('discount', 'int')->length(11)->null();
-            $table->addColumn('customer', 'int')->length(11);
+        $this->queryBuilder
+            ->table('ecommerce_order')
+            ->create(function (TableBuilder $table) {
+                $table->addColumn('id', 'int')->length(11)->primaryKey();
+                $table->addColumn('created', 'int')->length(11);
+                $table->addColumn('updated', 'int')->length(11);
+                $table->addColumn('order_id', 'varchar')->length(255);
+                $table->addColumn('payment_id', 'varchar')->length(255);
+                $table->addColumn('total', 'decimal')->length('10,2');
+                $table->addColumn('subtotal', 'decimal')->length('10,2');
+                $table->addColumn('reduction', 'decimal')->length('10,2');
+                $table
+                    ->addColumn('fulfillment_cost', 'decimal')
+                    ->length('10,2');
+                $table->addColumn('payment_status', 'varchar')->length(255);
+                $table
+                    ->addColumn('fulfillment_method', 'varchar')
+                    ->length(255)
+                    ->null();
+                $table->addColumn('discount', 'int')->length(11)->null();
+                $table->addColumn('customer', 'int')->length(11);
 
-            $table->addForeignKey('discount', 'ecommerce_discount_code');
-            $table->addForeignKey('customer', 'ecommerce_customer');
-        });
+                $table->addForeignKey('discount', 'ecommerce_discount_code');
+                $table->addForeignKey('customer', 'ecommerce_customer');
+            });
 
         $this->execute();
     }

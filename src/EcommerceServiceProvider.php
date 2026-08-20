@@ -34,7 +34,6 @@ class EcommerceServiceProvider extends ServiceProvider
         $this->bootEventListeners($app);
 
         if ($app->isRunningInConsole()) {
-
             $migrator = $app->getWith(Migrator::class, [
                 'name' => 'ecommerce',
             ]);
@@ -51,8 +50,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 CreateStockItemTable::class,
             ]);
 
-            $app->get(MigrationManager::class)
-                ->addMigrator($migrator);
+            $app->get(MigrationManager::class)->addMigrator($migrator);
         }
     }
 
@@ -60,7 +58,12 @@ class EcommerceServiceProvider extends ServiceProvider
     {
         $app->singleton(ShopInterface::class, Shop::class);
         $app->singleton(CartInterface::class, Cart::class);
-        $app->singleton(PaymentInterface::class, $app->get(RepositoryInterface::class)->get('ecommerce.payment', NullPayment::class));
+        $app->singleton(
+            PaymentInterface::class,
+            $app
+                ->get(RepositoryInterface::class)
+                ->get('ecommerce.payment', NullPayment::class)
+        );
         $app->set(StockWorkerInterface::class, StockWorker::class);
     }
 
@@ -68,8 +71,7 @@ class EcommerceServiceProvider extends ServiceProvider
     {
         $dispatcher = $app->get(DispatcherInterface::class);
 
-        $dispatcher->addListener(Paid::class, function($paidEvent) {
-
+        $dispatcher->addListener(Paid::class, function ($paidEvent) {
             $order = $paidEvent->getOrder();
             $discount = $order->discount;
             $coupon = null;

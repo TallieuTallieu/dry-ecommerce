@@ -61,9 +61,12 @@ class Cart implements CartInterface, TotalingInterface
     {
         if (Session::has('cart')) {
             try {
-                $this->cart = \Tnt\Ecommerce\Model\Cart::load(Session::get('cart'));
+                $this->cart = \Tnt\Ecommerce\Model\Cart::load(
+                    Session::get('cart')
+                );
                 return;
-            } catch (FetchException $e) {}
+            } catch (FetchException $e) {
+            }
         }
 
         $cart = new \Tnt\Ecommerce\Model\Cart();
@@ -94,9 +97,7 @@ class Cart implements CartInterface, TotalingInterface
             ]);
 
             $cart_item->setQuantity($cart_item->getQuantity() + $quantity);
-
         } catch (FetchException $e) {
-
             $cart_item = new CartItem();
             $cart_item->created = time();
             $cart_item->updated = time();
@@ -124,7 +125,6 @@ class Cart implements CartInterface, TotalingInterface
             ]);
 
             $cart_item->delete();
-
         } catch (FetchException $e) {
             //
         }
@@ -157,7 +157,7 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function setFulfillment(FulfillmentInterface $fulfillment)
     {
-        if (! $this->shop->hasFulfillment($fulfillment->getId())) {
+        if (!$this->shop->hasFulfillment($fulfillment->getId())) {
             return;
         }
 
@@ -172,7 +172,7 @@ class Cart implements CartInterface, TotalingInterface
     {
         $id = $this->cart->fulfillment_method;
 
-        if (! $id || ! $this->shop->hasFulfillment($id)) {
+        if (!$id || !$this->shop->hasFulfillment($id)) {
             return null;
         }
 
@@ -202,7 +202,6 @@ class Cart implements CartInterface, TotalingInterface
         $coupon = $discount->coupon;
 
         if ($coupon && $coupon->isRedeemable()) {
-
             $this->cart->discount = $discount;
             $this->cart->save();
         }
@@ -215,13 +214,13 @@ class Cart implements CartInterface, TotalingInterface
     {
         $discount = $this->cart->discount;
 
-        if (! $discount) {
+        if (!$discount) {
             return null;
         }
 
         $coupon = $discount->coupon;
 
-        if (! $coupon || ! $coupon->isRedeemable($this)) {
+        if (!$coupon || !$coupon->isRedeemable($this)) {
             return null;
         }
 
@@ -249,7 +248,7 @@ class Cart implements CartInterface, TotalingInterface
     {
         $total = $this->getSubTotal() + $this->getFulfillmentCost();
 
-        if (($discount = $this->getDiscount())) {
+        if ($discount = $this->getDiscount()) {
             $total = $total - $discount->coupon->getReduction($this);
         }
 
@@ -263,7 +262,7 @@ class Cart implements CartInterface, TotalingInterface
     {
         $total = $this->getSubTotal() + $this->getFulfillmentCost();
 
-        if (($discount = $this->getDiscount())) {
+        if ($discount = $this->getDiscount()) {
             return $discount->coupon->getReduction($this);
         }
 
@@ -274,8 +273,10 @@ class Cart implements CartInterface, TotalingInterface
      * @param CustomerInterface $customer
      * @return OrderInterface
      */
-    public function checkout(CustomerInterface $customer, ?Closure $callback = null): OrderInterface
-    {
+    public function checkout(
+        CustomerInterface $customer,
+        ?Closure $callback = null
+    ): OrderInterface {
         // Create the order
         $order = new Order();
         $order->created = time();
@@ -284,7 +285,9 @@ class Cart implements CartInterface, TotalingInterface
         $order->subtotal = $this->getSubTotal();
         $order->reduction = $this->getReduction();
         $order->fulfillment_cost = $this->getFulfillmentCost();
-        $order->fulfillment_method = ($this->getFulfillment() ? $this->getFulfillment()->getId() : null);
+        $order->fulfillment_method = $this->getFulfillment()
+            ? $this->getFulfillment()->getId()
+            : null;
         $order->discount = $this->getDiscount();
         $order->customer = $customer;
         $order->save();
@@ -293,7 +296,8 @@ class Cart implements CartInterface, TotalingInterface
         $start = rand(5, 8);
         $rest = 8 - $start;
 
-        $order->order_id = $order->id.'-'.Str::random($start).'_'.Str::random($rest);
+        $order->order_id =
+            $order->id . '-' . Str::random($start) . '_' . Str::random($rest);
         $order->save();
 
         // Add all items to the order
@@ -304,7 +308,7 @@ class Cart implements CartInterface, TotalingInterface
         // Dispatch an order created event
         Dispatcher::dispatch(Created::class, new Created($order));
 
-        if($callback){
+        if ($callback) {
             call_user_func($callback, $order);
         }
 

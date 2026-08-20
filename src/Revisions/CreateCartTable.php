@@ -9,16 +9,20 @@ class CreateCartTable extends DatabaseRevision implements RevisionInterface
 {
     public function up()
     {
-        $this->queryBuilder->table('ecommerce_cart')->create(function (TableBuilder $table) {
+        $this->queryBuilder
+            ->table('ecommerce_cart')
+            ->create(function (TableBuilder $table) {
+                $table->addColumn('id', 'int')->length(11)->primaryKey();
+                $table->addColumn('created', 'int')->length(11);
+                $table->addColumn('updated', 'int')->length(11);
+                $table
+                    ->addColumn('fulfillment_method', 'varchar')
+                    ->length(255)
+                    ->null();
+                $table->addColumn('discount', 'int')->length(11)->null();
 
-            $table->addColumn('id', 'int')->length(11)->primaryKey();
-            $table->addColumn('created', 'int')->length(11);
-            $table->addColumn('updated', 'int')->length(11);
-            $table->addColumn('fulfillment_method', 'varchar')->length(255)->null();
-            $table->addColumn('discount', 'int')->length(11)->null();
-
-            $table->addForeignKey('discount', 'ecommerce_discount_code');
-        });
+                $table->addForeignKey('discount', 'ecommerce_discount_code');
+            });
 
         $this->execute();
     }

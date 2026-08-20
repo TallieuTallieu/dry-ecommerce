@@ -7,8 +7,10 @@ use Tnt\Ecommerce\Contracts\StockWorkerInterface;
 
 class NullStockWorker implements StockWorkerInterface
 {
-    public function isAvailable(BuyableInterface $buyable, float $quantity = 1): bool
-    {
+    public function isAvailable(
+        BuyableInterface $buyable,
+        float $quantity = 1
+    ): bool {
         return true;
     }
 

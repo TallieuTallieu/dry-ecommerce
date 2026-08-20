@@ -1,2 +1,16 @@
 .idea
+.DS_Store
 .wakatime-project
+/vendor/
+.php-cs-fixer.cache
+
+docker/xdebug/log/**
+!docker/xdebug/log/.gitkeep
+docker/db/**
+!docker/db/.gitkeep
+
+# Development notes and todos
+TODO.md
+node_modules
+.yarn
+.env

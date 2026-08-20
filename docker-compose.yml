@@ -1,0 +1,58 @@
+networks:
+  dev:
+    external: true
+
+services:
+  dry-ecommerce-adminer:
+    image: adminer
+    environment:
+      ADMINER_DESIGN: nette
+      ADMINER_DEFAULT_SERVER: 'dry-ecommerce-db'
+    ports:
+      - '8080'
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.dry-ecommerce.entrypoints=http'
+      - 'traefik.http.routers.dry-ecommerce.rule=Host(`adminer.dry-ecommerce.localhost`)'
+    networks:
+      - dev
+    command:
+      [
+        'php',
+        '-d',
+        'upload_max_filesize = 10G',
+        '-d',
+        'post_max_size = 10G',
+        '-S',
+        '[::]:8080',
+        '-t',
+        '/var/www/html',
+      ]
+
+  dry-ecommerce-db:
+    image: mysql:8.0.34
+    depends_on:
+      - dry-ecommerce-adminer
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - ./docker/db_init:/docker-entrypoint-initdb.d:ro
+      - ./docker/db:/var/lib/mysql
+    ports:
+      - '3306'
+    networks:
+      - dev
+    command: --sql-mode=ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+
+  dry-ecommerce-dev:
+    build: https://github.com/TallieuTallieu/dry-docker.git#php8.4
+    hostname: docker_app
+    volumes:
+      - .:/var/www/html
+      - ./docker/xdebug/xdebug.ini:/usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini:ro
+      - ./docker/xdebug/error_reporting.ini:/usr/local/etc/php/conf.d/error_reporting.ini:ro
+      - ./docker/xdebug/log:/tmp/xdebug
+      - ~/.ssh:/root/.ssh:ro
+    ports:
+      - "80"
+    command: ["sh", "-c", "eval `ssh-agent -s` && ssh-add && composer install && apache2ctl -D FOREGROUND"]

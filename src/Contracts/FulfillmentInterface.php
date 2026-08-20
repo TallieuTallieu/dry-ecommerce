@@ -48,7 +48,6 @@ interface FulfillmentInterface
      */
     public function validateAttributes(): bool;
 
-
     /**
      * @return array
      */

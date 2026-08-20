@@ -9,18 +9,20 @@ class CreateOrderItemTable extends DatabaseRevision implements RevisionInterface
 {
     public function up()
     {
-        $this->queryBuilder->table('ecommerce_order_item')->create(function(TableBuilder $table) {
-            $table->addColumn('id', 'int')->length(11)->primaryKey();
-            $table->addColumn('created', 'int')->length(11);
-            $table->addColumn('updated', 'int')->length(11);
-            $table->addColumn('order', 'int')->length(11);
-            $table->addColumn('item_id', 'int')->length(11);
-            $table->addColumn('item_class', 'varchar')->length(255);
-            $table->addColumn('price', 'decimal')->length('10,2');
-            $table->addColumn('quantity', 'int')->length(11);
+        $this->queryBuilder
+            ->table('ecommerce_order_item')
+            ->create(function (TableBuilder $table) {
+                $table->addColumn('id', 'int')->length(11)->primaryKey();
+                $table->addColumn('created', 'int')->length(11);
+                $table->addColumn('updated', 'int')->length(11);
+                $table->addColumn('order', 'int')->length(11);
+                $table->addColumn('item_id', 'int')->length(11);
+                $table->addColumn('item_class', 'varchar')->length(255);
+                $table->addColumn('price', 'decimal')->length('10,2');
+                $table->addColumn('quantity', 'int')->length(11);
 
-            $table->addForeignKey('order', 'ecommerce_order', 'id');
-        });
+                $table->addForeignKey('order', 'ecommerce_order', 'id');
+            });
 
         $this->execute();
     }
