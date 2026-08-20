@@ -5,7 +5,7 @@
   "license": "proprietary",
   "minimum-stability": "beta",
   "require": {
-    "php": "^8.2",
+    "php": ">=8.4",
     "tallieutallieu/dry": "^4.0",
     "tallieutallieu/dry-dbi": "^3.0",
     "tallieutallieu/oak": "^3.0"
