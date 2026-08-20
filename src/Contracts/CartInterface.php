@@ -24,7 +24,7 @@ interface CartInterface
     public function remove(BuyableInterface $buyable);
 
     /**
-     * @return array
+     * @return array<int, CartItemInterface>
      */
     public function items(): array;
 

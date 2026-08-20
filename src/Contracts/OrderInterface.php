@@ -15,7 +15,7 @@ interface OrderInterface
     public function add(CartItemInterface $cartItem);
 
     /**
-     * @return array
+     * @return iterable<int, OrderItemInterface>
      */
     public function getItems();
 

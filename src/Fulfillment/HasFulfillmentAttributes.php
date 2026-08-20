@@ -2,70 +2,69 @@
 
 namespace Tnt\Ecommerce\Fulfillment;
 
-use Oak\Session\Facade\Session;
+use Tnt\Ecommerce\Contracts\AttributeStorageInterface;
 
+/**
+ * The attribute half of {@see \Tnt\Ecommerce\Contracts\FulfillmentInterface}.
+ *
+ * A class using this trait should also declare
+ * {@see \Tnt\Ecommerce\Contracts\AttributeStorageAwareInterface}; that is the
+ * signal {@see \Tnt\Ecommerce\Shop\Shop::addFulfillment()} looks for before
+ * handing it the shop's storage. Without the declaration the method still
+ * works, but its attributes last only for the current request.
+ */
 trait HasFulfillmentAttributes
 {
-    /**
-     * @var array $attributes
-     */
-    private $attributes = [];
+    private ?AttributeStorageInterface $attributeStorage = null;
 
     /**
-     * @param string $name
+     * @param AttributeStorageInterface $storage
+     * @return void
      */
-    private function restoreSessionAttributes()
-    {
-        if (!Session::get('fulfillmentAttributes')) {
-            $this->saveSessionAttributes();
-        }
-
-        $this->attributes = Session::get('fulfillmentAttributes');
+    public function setAttributeStorage(
+        AttributeStorageInterface $storage
+    ): void {
+        $this->attributeStorage = $storage;
     }
 
     /**
-     *
+     * @return AttributeStorageInterface
      */
-    private function saveSessionAttributes()
+    private function attributeStorage(): AttributeStorageInterface
     {
-        Session::set('fulfillmentAttributes', $this->attributes);
-        Session::save();
+        return $this->attributeStorage ??= new InMemoryAttributeStorage();
     }
 
     /**
      * @param string $name
-     * @return null
+     * @return mixed
      * @throws MissingAttribute
      */
     public function getAttribute(string $name)
     {
-        $this->restoreSessionAttributes();
-        $reqAttrs = $this->requireAttributes();
-
         if (!$this->hasAttribute($name)) {
-            if (in_array($name, $reqAttrs)) {
+            if (in_array($name, $this->requireAttributes(), true)) {
                 throw new MissingAttribute($name);
             }
+
             return null;
         }
 
-        return $this->attributes[$name];
+        return $this->attributeStorage()->get($name);
     }
 
     /**
      * @param string $name
-     * @param $value
-     * @return mixed
+     * @param mixed $value
+     * @return void
      */
     public function setAttribute(string $name, $value)
     {
-        $this->restoreSessionAttributes();
-        $this->attributes[$name] = $value;
-        $this->saveSessionAttributes();
+        $this->attributeStorage()->set($name, $value);
     }
 
     /**
-     * @return array
+     * @return array<int, string>
      */
     public function requireAttributes(): array
     {
@@ -78,8 +77,7 @@ trait HasFulfillmentAttributes
      */
     public function hasAttribute(string $name): bool
     {
-        $this->restoreSessionAttributes();
-        return isset($this->attributes[$name]);
+        return $this->attributeStorage()->has($name);
     }
 
     /**
@@ -87,8 +85,6 @@ trait HasFulfillmentAttributes
      */
     public function validateAttributes(): bool
     {
-        $this->restoreSessionAttributes();
-
         foreach ($this->requireAttributes() as $reqAttr) {
             if (!$this->hasAttribute($reqAttr)) {
                 return false;
