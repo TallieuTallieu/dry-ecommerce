@@ -78,9 +78,11 @@ class CartItem extends Model implements CartItemInterface
     }
 
     /**
-     * @return float
+     * The line total, in cents.
+     *
+     * @return int
      */
-    public function getPrice(): float
+    public function getPrice(): int
     {
         return $this->getBuyable()->getPrice() * $this->getQuantity();
     }

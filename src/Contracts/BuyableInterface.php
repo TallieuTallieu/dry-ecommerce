@@ -24,9 +24,12 @@ interface BuyableInterface
     public function getDescription(): string;
 
     /**
-     * @return float
+     * The unit price, in cents.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
      */
-    public function getPrice(): float;
+    public function getPrice(): int;
 
     /**
      * @return string

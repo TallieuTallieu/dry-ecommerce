@@ -16,7 +16,7 @@ use Tnt\Ecommerce\Fulfillment\MissingAttribute;
 use Tnt\Ecommerce\Shop\Shop;
 
 it('stores and reads back an attribute', function (): void {
-    $fulfillment = new FakeFulfillment('post', 4.75);
+    $fulfillment = new FakeFulfillment('post', 475);
 
     expect($fulfillment->hasAttribute('pickup_point'))->toBeFalse();
     expect($fulfillment->getAttribute('pickup_point'))->toBeNull();
@@ -31,7 +31,7 @@ it('is handed the shop storage when it is registered', function (): void {
     $storage = new InMemoryAttributeStorage();
     $shop = new Shop($storage);
 
-    $fulfillment = new FakeFulfillment('post', 4.75);
+    $fulfillment = new FakeFulfillment('post', 475);
     $shop->addFulfillment($fulfillment);
 
     $fulfillment->setAttribute('pickup_point', 42);
@@ -44,8 +44,8 @@ it('is handed the shop storage when it is registered', function (): void {
 it('shares one bag of attributes across methods', function (): void {
     $shop = new Shop(new InMemoryAttributeStorage());
 
-    $post = new FakeFulfillment('post', 4.75);
-    $pickup = new FakeFulfillment('pickup', 0.0);
+    $post = new FakeFulfillment('post', 475);
+    $pickup = new FakeFulfillment('pickup', 0);
 
     $shop->addFulfillment($post);
     $shop->addFulfillment($pickup);
@@ -58,17 +58,17 @@ it('shares one bag of attributes across methods', function (): void {
 });
 
 it('falls back to its own storage when nothing wires it', function (): void {
-    $loose = new FakeFulfillment('post', 4.75);
+    $loose = new FakeFulfillment('post', 475);
     $loose->setAttribute('note', 'kept for this request only');
 
     expect($loose->getAttribute('note'))->toBe('kept for this request only');
     expect(
-        (new FakeFulfillment('post', 4.75))->getAttribute('note')
+        (new FakeFulfillment('post', 475))->getAttribute('note')
     )->toBeNull();
 });
 
 it('refuses to read a missing required attribute', function (): void {
-    $fulfillment = new FakeFulfillment('pickup', 0.0, ['pickup_point']);
+    $fulfillment = new FakeFulfillment('pickup', 0, ['pickup_point']);
 
     expect($fulfillment->validateAttributes())->toBeFalse();
     expect(fn() => $fulfillment->getAttribute('pickup_point'))->toThrow(
@@ -77,7 +77,7 @@ it('refuses to read a missing required attribute', function (): void {
 });
 
 it('validates once every required attribute is set', function (): void {
-    $fulfillment = new FakeFulfillment('pickup', 0.0, ['pickup_point', 'date']);
+    $fulfillment = new FakeFulfillment('pickup', 0, ['pickup_point', 'date']);
 
     $fulfillment->setAttribute('pickup_point', 42);
     expect($fulfillment->validateAttributes())->toBeFalse();

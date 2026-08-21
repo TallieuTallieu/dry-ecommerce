@@ -42,17 +42,26 @@ interface OrderInterface
     public function getFulfillment(): FulfillmentInterface;
 
     /**
-     * @return float
+     * The subtotal frozen onto the order at checkout, in cents.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
      */
-    public function getSubTotal(): float;
+    public function getSubTotal(): int;
 
     /**
-     * @return float
+     * The total frozen onto the order at checkout, in cents.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
      */
-    public function getTotal(): float;
+    public function getTotal(): int;
 
     /**
-     * @return float
+     * The reduction frozen onto the order at checkout, in cents.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
      */
-    public function getReduction(): float;
+    public function getReduction(): int;
 }

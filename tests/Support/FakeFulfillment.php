@@ -10,8 +10,8 @@ use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Fulfillment\HasFulfillmentAttributes;
 
 /**
- * A fulfillment method with a flat cost, and one required attribute so that the
- * attribute seam gets exercised too.
+ * A fulfillment method with a flat cost in cents, and one required attribute so
+ * that the attribute seam gets exercised too.
  */
 final class FakeFulfillment implements
     FulfillmentInterface,
@@ -21,12 +21,12 @@ final class FakeFulfillment implements
 
     /**
      * @param string|int $id
-     * @param float $cost
+     * @param int $cost The cost of the method, in cents.
      * @param array<int, string> $required
      */
     public function __construct(
         private readonly string|int $id,
-        private readonly float $cost,
+        private readonly int $cost,
         private readonly array $required = []
     ) {}
 
@@ -35,7 +35,7 @@ final class FakeFulfillment implements
         return $this->id;
     }
 
-    public function getCost(CartInterface $cart): float
+    public function getCost(CartInterface $cart): int
     {
         return $this->cost;
     }

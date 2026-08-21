@@ -17,10 +17,13 @@ interface FulfillmentInterface
     public function getId();
 
     /**
+     * What this method costs for the given cart, in cents.
+     *
+     * @see \Tnt\Ecommerce\Money
      * @param CartInterface $cart
-     * @return float
+     * @return int
      */
-    public function getCost(CartInterface $cart): float;
+    public function getCost(CartInterface $cart): int;
 
     /**
      * @return string

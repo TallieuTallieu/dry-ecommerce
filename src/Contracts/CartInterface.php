@@ -45,9 +45,13 @@ interface CartInterface
     public function getFulfillment(): ?FulfillmentInterface;
 
     /**
-     * @return float
+     * The cost of the chosen fulfillment method, in cents, or 0 when none is
+     * chosen.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
      */
-    public function getFulfillmentCost(): float;
+    public function getFulfillmentCost(): int;
 
     /**
      * @param DiscountCode $discount
@@ -67,17 +71,26 @@ interface CartInterface
     public function checkout(CustomerInterface $customer): OrderInterface;
 
     /**
-     * @return float
+     * The sum of the line totals, in cents.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
      */
-    public function getSubTotal(): float;
+    public function getSubTotal(): int;
 
     /**
-     * @return float
+     * Subtotal plus fulfillment cost minus reduction, in cents.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
      */
-    public function getTotal(): float;
+    public function getTotal(): int;
 
     /**
-     * @return float
+     * What the coupon in force takes off, in cents, or 0 when there is none.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
      */
-    public function getReduction(): float;
+    public function getReduction(): int;
 }

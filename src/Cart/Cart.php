@@ -114,9 +114,9 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
-     * @return float
+     * @return int
      */
-    public function getFulfillmentCost(): float
+    public function getFulfillmentCost(): int
     {
         $fulfill = $this->getFulfillment();
 
@@ -179,9 +179,14 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
-     * @return float
+     * The sum of the line totals, in cents.
+     *
+     * Every term is an integer, so the accumulation below is exact however many
+     * lines it runs over — which is the reason money is not a float here.
+     *
+     * @return int
      */
-    public function getSubTotal(): float
+    public function getSubTotal(): int
     {
         $cost = 0;
 
@@ -193,9 +198,9 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
-     * @return float
+     * @return int
      */
-    public function getTotal(): float
+    public function getTotal(): int
     {
         return $this->getSubTotal() +
             $this->getFulfillmentCost() -
@@ -203,9 +208,9 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
-     * @return float
+     * @return int
      */
-    public function getReduction(): float
+    public function getReduction(): int
     {
         $coupon = $this->getCoupon();
 

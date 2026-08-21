@@ -31,3 +31,7 @@ it('autoloads every public contract', function (string $contract): void {
     Tnt\Ecommerce\Contracts\TaxRateInterface::class,
     Tnt\Ecommerce\Contracts\TotalingInterface::class,
 ]);
+
+it('autoloads the money helper', function (): void {
+    expect(class_exists(Tnt\Ecommerce\Money::class))->toBeTrue();
+});

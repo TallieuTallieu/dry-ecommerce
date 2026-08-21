@@ -17,12 +17,15 @@ class CreateOrderTable extends DatabaseRevision implements RevisionInterface
                 $table->addColumn('updated', 'int')->length(11);
                 $table->addColumn('order_id', 'varchar')->length(255);
                 $table->addColumn('payment_id', 'varchar')->length(255);
-                $table->addColumn('total', 'decimal')->length('10,2');
-                $table->addColumn('subtotal', 'decimal')->length('10,2');
-                $table->addColumn('reduction', 'decimal')->length('10,2');
-                $table
-                    ->addColumn('fulfillment_cost', 'decimal')
-                    ->length('10,2');
+                // Money is integer cents, and bigint is the only integer
+                // width that holds every value a PHP int can carry: an int(11)
+                // would stop at 2,147,483,647 cents (€21,474,836.47), which is
+                // narrower than the decimal(10,2) it replaces and would
+                // truncate a large order rather than refuse it.
+                $table->addColumn('total', 'bigint')->length(20);
+                $table->addColumn('subtotal', 'bigint')->length(20);
+                $table->addColumn('reduction', 'bigint')->length(20);
+                $table->addColumn('fulfillment_cost', 'bigint')->length(20);
                 $table->addColumn('payment_status', 'varchar')->length(255);
                 $table
                     ->addColumn('fulfillment_method', 'varchar')
