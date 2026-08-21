@@ -13,14 +13,20 @@ use Tnt\Ecommerce\TaxRate\NullTaxRate;
 /**
  * Something sellable that is not a database row.
  *
- * `BuyableInterface` is deliberately not touched by this ticket, so this
- * implements it as it stands today, fat contract and all.
+ * `BuyableInterface`'s shape is deliberately not touched by this ticket, so
+ * this implements it as it stands today, fat contract and all. Only the price
+ * changed: it is integer cents now, so `1225` is €12.25.
  */
 final class FakeBuyable implements BuyableInterface
 {
+    /**
+     * @param string $id
+     * @param int $price The unit price, in cents.
+     * @param string $title
+     */
     public function __construct(
         private readonly string $id,
-        private readonly float $price,
+        private readonly int $price,
         private readonly string $title = 'A thing'
     ) {}
 
@@ -39,7 +45,7 @@ final class FakeBuyable implements BuyableInterface
         return 'Description of ' . $this->title;
     }
 
-    public function getPrice(): float
+    public function getPrice(): int
     {
         return $this->price;
     }

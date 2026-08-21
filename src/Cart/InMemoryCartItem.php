@@ -78,9 +78,11 @@ class InMemoryCartItem implements CartItemInterface
      * The line total, not the unit price — the same thing
      * {@see \Tnt\Ecommerce\Model\CartItem::getPrice()} returns.
      *
-     * @return float
+     * In cents.
+     *
+     * @return int
      */
-    public function getPrice(): float
+    public function getPrice(): int
     {
         return $this->buyable->getPrice() * $this->quantity;
     }

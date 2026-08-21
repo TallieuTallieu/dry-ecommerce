@@ -15,19 +15,21 @@ use Tnt\Ecommerce\Model\DiscountCode;
 /**
  * Static access to the visitor's cart.
  *
+ * Every amount below is integer cents; see {@see \Tnt\Ecommerce\Money}.
+ *
  * @method static mixed add(BuyableInterface $buyable, int $quantity = 1)
  * @method static mixed remove(BuyableInterface $buyable)
  * @method static array<int, CartItemInterface> items()
  * @method static mixed clear()
  * @method static mixed setFulfillment(FulfillmentInterface $fulfillment)
  * @method static FulfillmentInterface|null getFulfillment()
- * @method static float getFulfillmentCost()
+ * @method static int getFulfillmentCost()
  * @method static mixed addDiscount(DiscountCode $discount)
  * @method static DiscountCode|null getDiscount()
  * @method static OrderInterface checkout(CustomerInterface $customer, (Closure(OrderInterface): void)|null $callback = null)
- * @method static float getSubTotal()
- * @method static float getTotal()
- * @method static float getReduction()
+ * @method static int getSubTotal()
+ * @method static int getTotal()
+ * @method static int getReduction()
  *
  * @extends Facade<CartInterface>
  */

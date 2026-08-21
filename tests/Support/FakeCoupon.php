@@ -9,15 +9,21 @@ use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Model\Order;
 
 /**
- * A coupon that takes a fixed amount off, and can be told to stop being
- * redeemable.
+ * A coupon that takes a fixed number of cents off, and can be told to stop
+ * being redeemable.
+ *
+ * See {@see PercentageCoupon} for the case where rounding actually happens.
  */
 final class FakeCoupon implements CouponInterface
 {
     public int $redeemCount = 0;
 
+    /**
+     * @param int $reduction The amount off, in cents.
+     * @param bool $redeemable
+     */
     public function __construct(
-        private readonly float $reduction,
+        private readonly int $reduction,
         private bool $redeemable = true
     ) {}
 
@@ -31,7 +37,7 @@ final class FakeCoupon implements CouponInterface
         return $this->redeemable;
     }
 
-    public function getReduction(TotalingInterface $totalingItem): float
+    public function getReduction(TotalingInterface $totalingItem): int
     {
         return $this->reduction;
     }

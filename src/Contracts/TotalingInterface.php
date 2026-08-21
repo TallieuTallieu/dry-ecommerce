@@ -2,20 +2,27 @@
 
 namespace Tnt\Ecommerce\Contracts;
 
+/**
+ * Something that adds up to a total — a cart, or the order it became.
+ *
+ * All three amounts are integer cents.
+ *
+ * @see \Tnt\Ecommerce\Money
+ */
 interface TotalingInterface
 {
     /**
-     * @return float
+     * @return int
      */
-    public function getSubTotal(): float;
+    public function getSubTotal(): int;
 
     /**
-     * @return float
+     * @return int
      */
-    public function getTotal(): float;
+    public function getTotal(): int;
 
     /**
-     * @return float
+     * @return int
      */
-    public function getReduction(): float;
+    public function getReduction(): int;
 }

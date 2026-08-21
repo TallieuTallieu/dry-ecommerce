@@ -18,7 +18,9 @@ class CreateOrderItemTable extends DatabaseRevision implements RevisionInterface
                 $table->addColumn('order', 'int')->length(11);
                 $table->addColumn('item_id', 'int')->length(11);
                 $table->addColumn('item_class', 'varchar')->length(255);
-                $table->addColumn('price', 'decimal')->length('10,2');
+                // The frozen line total, in integer cents. See
+                // CreateOrderTable for why this is a bigint.
+                $table->addColumn('price', 'bigint')->length(20);
                 $table->addColumn('quantity', 'int')->length(11);
 
                 $table->addForeignKey('order', 'ecommerce_order', 'id');

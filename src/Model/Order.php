@@ -16,17 +16,19 @@ use Tnt\Ecommerce\Facade\Shop;
  *
  * Totals are frozen onto the row at checkout rather than recomputed, so an
  * order still reads back the way it was placed after prices, coupons or
- * fulfillment costs change.
+ * fulfillment costs change. All four money columns are integer cents.
+ *
+ * @see \Tnt\Ecommerce\Money
  *
  * @property int|null $id
  * @property int $created
  * @property int $updated
  * @property string $order_id
  * @property string $payment_id
- * @property float $total
- * @property float $subtotal
- * @property float $reduction
- * @property float $fulfillment_cost
+ * @property int $total
+ * @property int $subtotal
+ * @property int $reduction
+ * @property int $fulfillment_cost
  * @property string $payment_status
  * @property string|int|null $fulfillment_method
  * @property DiscountCode|null $discount
@@ -114,25 +116,25 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
-     * @return float
+     * @return int
      */
-    public function getTotal(): float
+    public function getTotal(): int
     {
         return $this->total;
     }
 
     /**
-     * @return float
+     * @return int
      */
-    public function getSubTotal(): float
+    public function getSubTotal(): int
     {
         return $this->subtotal;
     }
 
     /**
-     * @return float
+     * @return int
      */
-    public function getReduction(): float
+    public function getReduction(): int
     {
         return $this->reduction;
     }

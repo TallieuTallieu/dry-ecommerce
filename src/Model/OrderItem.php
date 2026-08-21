@@ -9,8 +9,8 @@ use Tnt\Ecommerce\Contracts\OrderItemInterface;
 /**
  * One line of a placed order, as stored in `ecommerce_order_item`.
  *
- * The price is the frozen line total from the cart, not the buyable's current
- * price.
+ * The price is the frozen line total from the cart, in cents, not the
+ * buyable's current price.
  *
  * @property int|null $id
  * @property int $created
@@ -18,7 +18,7 @@ use Tnt\Ecommerce\Contracts\OrderItemInterface;
  * @property Order|null $order
  * @property int $item_id
  * @property string $item_class
- * @property float $price
+ * @property int $price
  * @property int $quantity
  */
 class OrderItem extends Model implements OrderItemInterface

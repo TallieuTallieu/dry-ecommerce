@@ -35,9 +35,12 @@ interface CartItemInterface
     public function getDescription(): string;
 
     /**
-     * @return float
+     * The line total — quantity times unit price — in cents.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
      */
-    public function getPrice(): float;
+    public function getPrice(): int;
 
     /**
      * @return int
