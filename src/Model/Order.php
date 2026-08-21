@@ -7,13 +7,39 @@ use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
+use Tnt\Ecommerce\Contracts\OrderItemInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Facade\Shop;
 
+/**
+ * A placed order, as stored in `ecommerce_order`.
+ *
+ * Totals are frozen onto the row at checkout rather than recomputed, so an
+ * order still reads back the way it was placed after prices, coupons or
+ * fulfillment costs change.
+ *
+ * @property int|null $id
+ * @property int $created
+ * @property int $updated
+ * @property string $order_id
+ * @property string $payment_id
+ * @property float $total
+ * @property float $subtotal
+ * @property float $reduction
+ * @property float $fulfillment_cost
+ * @property string $payment_status
+ * @property string|int|null $fulfillment_method
+ * @property DiscountCode|null $discount
+ * @property CustomerInterface $customer
+ * @property-read \dry\orm\relationship\HasMany $items
+ */
 class Order extends Model implements OrderInterface, TotalingInterface
 {
     const TABLE = 'ecommerce_order';
 
+    /**
+     * @var array<string, string>
+     */
     public static $special_fields = [
         'customer' => Customer::class,
         'discount' => DiscountCode::class,
@@ -29,16 +55,17 @@ class Order extends Model implements OrderInterface, TotalingInterface
         $item->order = $this;
         $item->quantity = $cartItem->getQuantity();
         $item->price = $cartItem->getPrice();
-        $item->item_id = $cartItem->getBuyable()->getId();
+        $item->item_id = (int) $cartItem->getBuyable()->getId();
         $item->item_class = get_class($cartItem->getBuyable());
         $item->save();
     }
 
     /**
-     * @return array|mixed
+     * @return iterable<int, OrderItemInterface>
      */
     public function getItems()
     {
+        /** @var iterable<int, OrderItemInterface> */
         return $this->items;
     }
 
@@ -75,7 +102,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
      */
     public function getFulfillment(): FulfillmentInterface
     {
-        return Shop::getFulfillment($this->fulfillment_method);
+        return Shop::getFulfillment($this->fulfillment_method ?? '');
     }
 
     /**

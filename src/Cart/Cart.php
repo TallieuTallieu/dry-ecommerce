@@ -4,80 +4,51 @@ namespace Tnt\Ecommerce\Cart;
 
 use Closure;
 use dry\util\Str;
-use dry\db\FetchException;
 use Tnt\Ecommerce\Model\Order;
-use Oak\Session\Facade\Session;
-use Tnt\Ecommerce\Model\CartItem;
 use Oak\Dispatcher\Facade\Dispatcher;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Events\Order\Created;
 use Tnt\Ecommerce\Contracts\CartInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
+use Tnt\Ecommerce\Contracts\CouponInterface;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
-use Oak\Contracts\Container\ContainerInterface;
+use Tnt\Ecommerce\Contracts\CartStorageInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 
 /**
- * Class Cart
- * @package Tnt\Ecommerce\Cart
+ * The shop's cart: what is in it, what it costs, and turning it into an order.
+ *
+ * Everything it knows about its own contents comes from a
+ * {@see CartStorageInterface}, and nothing happens in its constructor. Between
+ * them those two facts are what let a cart be built and exercised in a unit
+ * test — hand it {@see InMemoryCartStorage} and the arithmetic below runs with
+ * no session and no database anywhere near it.
  */
 class Cart implements CartInterface, TotalingInterface
 {
-    /**
-     * @var ContainerInterface $app
-     */
-    private $app;
+    private ShopInterface $shop;
+
+    private CartStorageInterface $storage;
+
+    private PaymentInterface $payment;
 
     /**
-     * @var ShopInterface $shop
-     */
-    private $shop;
-
-    /**
-     * @var \Tnt\Ecommerce\Model\Cart $cart
-     */
-    private $cart;
-
-    /**
-     * Cart constructor.
-     * @param ContainerInterface $app
      * @param ShopInterface $shop
+     * @param CartStorageInterface $storage
+     * @param PaymentInterface $payment
      */
-    public function __construct(ContainerInterface $app, ShopInterface $shop)
-    {
-        $this->app = $app;
+    public function __construct(
+        ShopInterface $shop,
+        CartStorageInterface $storage,
+        PaymentInterface $payment
+    ) {
         $this->shop = $shop;
-        $this->restore();
-    }
-
-    /**
-     * Restores the cart
-     */
-    private function restore()
-    {
-        if (Session::has('cart')) {
-            try {
-                $this->cart = \Tnt\Ecommerce\Model\Cart::load(
-                    Session::get('cart')
-                );
-                return;
-            } catch (FetchException $e) {
-            }
-        }
-
-        $cart = new \Tnt\Ecommerce\Model\Cart();
-        $cart->created = time();
-        $cart->updated = time();
-        $cart->save();
-
-        Session::set('cart', $cart->id);
-        Session::save();
-
-        $this->cart = $cart;
+        $this->storage = $storage;
+        $this->payment = $payment;
     }
 
     /**
@@ -87,26 +58,7 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function add(BuyableInterface $buyable, int $quantity = 1)
     {
-        $item_class = get_class($buyable);
-
-        try {
-            $cart_item = CartItem::load_by([
-                'cart' => $this->cart->id,
-                'item_id' => $buyable->getId(),
-                'item_class' => $item_class,
-            ]);
-
-            $cart_item->setQuantity($cart_item->getQuantity() + $quantity);
-        } catch (FetchException $e) {
-            $cart_item = new CartItem();
-            $cart_item->created = time();
-            $cart_item->updated = time();
-            $cart_item->cart = $this->cart->id;
-            $cart_item->item_id = $buyable->getId();
-            $cart_item->item_class = $item_class;
-            $cart_item->quantity = $quantity;
-            $cart_item->save();
-        }
+        $this->storage->add($buyable, $quantity);
     }
 
     /**
@@ -115,27 +67,15 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function remove(BuyableInterface $buyable)
     {
-        $item_class = get_class($buyable);
-
-        try {
-            $cart_item = CartItem::load_by([
-                'cart' => $this->cart->id,
-                'item_id' => $buyable->getId(),
-                'item_class' => $item_class,
-            ]);
-
-            $cart_item->delete();
-        } catch (FetchException $e) {
-            //
-        }
+        $this->storage->remove($buyable);
     }
 
     /**
-     * @return array
+     * @return array<int, \Tnt\Ecommerce\Contracts\CartItemInterface>
      */
     public function items(): array
     {
-        return $this->cart->items->to_array();
+        return $this->storage->items();
     }
 
     /**
@@ -143,12 +83,7 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function clear()
     {
-        if ($this->cart) {
-            $this->cart->delete();
-        }
-
-        Session::set('cart', null);
-        Session::save();
+        $this->storage->clear();
     }
 
     /**
@@ -161,8 +96,7 @@ class Cart implements CartInterface, TotalingInterface
             return;
         }
 
-        $this->cart->fulfillment_method = $fulfillment->getId();
-        $this->cart->save();
+        $this->storage->setFulfillmentId($fulfillment->getId());
     }
 
     /**
@@ -170,7 +104,7 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function getFulfillment(): ?FulfillmentInterface
     {
-        $id = $this->cart->fulfillment_method;
+        $id = $this->storage->getFulfillmentId();
 
         if (!$id || !$this->shop->hasFulfillment($id)) {
             return null;
@@ -201,10 +135,35 @@ class Cart implements CartInterface, TotalingInterface
     {
         $coupon = $discount->coupon;
 
-        if ($coupon && $coupon->isRedeemable()) {
-            $this->cart->discount = $discount;
-            $this->cart->save();
+        if ($coupon && $coupon->isRedeemable($this)) {
+            $this->storage->setDiscount($discount);
         }
+    }
+
+    /**
+     * The coupon actually in force, or null.
+     *
+     * A code can be applied and then stop being redeemable — it expires, it
+     * runs out, the cart drops below its threshold — so the stored code is
+     * re-checked on every read rather than trusted.
+     *
+     * @return CouponInterface|null
+     */
+    private function getCoupon(): ?CouponInterface
+    {
+        $discount = $this->storage->getDiscount();
+
+        if ($discount === null) {
+            return null;
+        }
+
+        $coupon = $discount->coupon;
+
+        if ($coupon === null || !$coupon->isRedeemable($this)) {
+            return null;
+        }
+
+        return $coupon;
     }
 
     /**
@@ -212,19 +171,11 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function getDiscount(): ?DiscountCode
     {
-        $discount = $this->cart->discount;
-
-        if (!$discount) {
+        if ($this->getCoupon() === null) {
             return null;
         }
 
-        $coupon = $discount->coupon;
-
-        if (!$coupon || !$coupon->isRedeemable($this)) {
-            return null;
-        }
-
-        return $this->cart->discount;
+        return $this->storage->getDiscount();
     }
 
     /**
@@ -246,13 +197,9 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function getTotal(): float
     {
-        $total = $this->getSubTotal() + $this->getFulfillmentCost();
-
-        if ($discount = $this->getDiscount()) {
-            $total = $total - $discount->coupon->getReduction($this);
-        }
-
-        return $total;
+        return $this->getSubTotal() +
+            $this->getFulfillmentCost() -
+            $this->getReduction();
     }
 
     /**
@@ -260,23 +207,26 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function getReduction(): float
     {
-        $total = $this->getSubTotal() + $this->getFulfillmentCost();
+        $coupon = $this->getCoupon();
 
-        if ($discount = $this->getDiscount()) {
-            return $discount->coupon->getReduction($this);
+        if ($coupon === null) {
+            return 0;
         }
 
-        return 0;
+        return $coupon->getReduction($this);
     }
 
     /**
      * @param CustomerInterface $customer
+     * @param (Closure(OrderInterface): void)|null $callback
      * @return OrderInterface
      */
     public function checkout(
         CustomerInterface $customer,
         ?Closure $callback = null
     ): OrderInterface {
+        $fulfillment = $this->getFulfillment();
+
         // Create the order
         $order = new Order();
         $order->created = time();
@@ -285,9 +235,7 @@ class Cart implements CartInterface, TotalingInterface
         $order->subtotal = $this->getSubTotal();
         $order->reduction = $this->getReduction();
         $order->fulfillment_cost = $this->getFulfillmentCost();
-        $order->fulfillment_method = $this->getFulfillment()
-            ? $this->getFulfillment()->getId()
-            : null;
+        $order->fulfillment_method = $fulfillment?->getId();
         $order->discount = $this->getDiscount();
         $order->customer = $customer;
         $order->save();
@@ -313,7 +261,7 @@ class Cart implements CartInterface, TotalingInterface
         }
 
         // Pay
-        $this->app->get(PaymentInterface::class)->pay($order);
+        $this->payment->pay($order);
 
         return $order;
     }

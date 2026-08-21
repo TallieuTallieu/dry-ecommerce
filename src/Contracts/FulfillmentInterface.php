@@ -9,7 +9,10 @@ namespace Tnt\Ecommerce\Contracts;
 interface FulfillmentInterface
 {
     /**
-     * @return mixed
+     * The id the shop registers this method under, and the cart and order
+     * store. Both tables hold it as a string, but integer ids are common.
+     *
+     * @return string|int
      */
     public function getId();
 
@@ -32,7 +35,7 @@ interface FulfillmentInterface
 
     /**
      * @param string $name
-     * @param $value
+     * @param mixed $value
      * @return mixed
      */
     public function setAttribute(string $name, $value);
@@ -49,7 +52,10 @@ interface FulfillmentInterface
     public function validateAttributes(): bool;
 
     /**
-     * @return array
+     * The names of the attributes that must be set before this method can be
+     * used.
+     *
+     * @return array<int, string>
      */
     public function requireAttributes(): array;
 }
