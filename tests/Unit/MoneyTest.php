@@ -26,6 +26,7 @@ declare(strict_types=1);
 use Tests\Support\PercentageTaxRate;
 use Tnt\Ecommerce\AmountTooLarge;
 use Tnt\Ecommerce\Money;
+use Tnt\Ecommerce\NotAnAmount;
 use Tnt\Ecommerce\UnsupportedRate;
 
 it('rounds a half cent away from zero', function (): void {
@@ -268,4 +269,92 @@ it('gives back no thousands separator and no symbol', function (): void {
     // Deliberately not a currency format: displaying money is the project's
     // job, and this is only the way out of cents that does not use a float.
     expect(Money::toDecimal(123456789))->toBe('1234567.89');
+});
+
+it('reads an amount of units back into cents', function (): void {
+    expect(Money::fromDecimal('12.25'))->toBe(1225);
+});
+
+it('reads an amount written short', function (): void {
+    // What a config value or an admin field holds, rather than what
+    // toDecimal() writes: one decimal place, or none at all.
+    expect(Money::fromDecimal('12.5'))->toBe(1250);
+    expect(Money::fromDecimal('12'))->toBe(1200);
+    expect(Money::fromDecimal('0.05'))->toBe(5);
+});
+
+it('reads the sign of a negative amount', function (): void {
+    expect(Money::fromDecimal('-12.25'))->toBe(-1225);
+
+    // The one the units alone cannot carry: -0 is 0, so the minus has to be
+    // read off the amount rather than off the number in front of the point.
+    expect(Money::fromDecimal('-0.05'))->toBe(-5);
+});
+
+it('reads an amount with space around it', function (): void {
+    // Config values and pasted admin input carry it, and it says nothing about
+    // the amount either way.
+    expect(Money::fromDecimal('  12.25  '))->toBe(1225);
+    expect(Money::fromDecimal("12.25\n"))->toBe(1225);
+});
+
+it('refuses what is not an amount at all', function (string $text): void {
+    // Every one of these is 0 cents to a plain (int) cast, and 0 is a
+    // believable amount, so none of them can be allowed to parse.
+    expect(fn() => Money::fromDecimal($text))->toThrow(NotAnAmount::class);
+})->with(['', 'abc', '12.2.5', '.', '-', '12abc', '1e3']);
+
+it('refuses an amount finer than a cent', function (): void {
+    expect(fn() => Money::fromDecimal('12.255'))->toThrow(NotAnAmount::class);
+});
+
+it('refuses an amount too large to be cents', function (): void {
+    // One cent past PHP_INT_MAX, and one past PHP_INT_MIN. Reading these is
+    // where a float last got into the money path: the multiplication overflowed
+    // and PHP turned the result into a float without saying so.
+    expect(fn() => Money::fromDecimal('92233720368547758.08'))->toThrow(
+        NotAnAmount::class
+    );
+    expect(fn() => Money::fromDecimal('-92233720368547758.09'))->toThrow(
+        NotAnAmount::class
+    );
+});
+
+it('reads the largest amounts there are without a float', function (): void {
+    // The cents either side of the refusals above still have to parse, and
+    // parse to an int rather than to a float that rounds to one.
+    expect(Money::fromDecimal('92233720368547758.07'))->toBe(PHP_INT_MAX);
+    expect(Money::fromDecimal('-92233720368547758.08'))->toBe(PHP_INT_MIN);
+});
+
+it('reads back exactly what toDecimal wrote', function (int $cents): void {
+    // The pair has one job between them, and this is it. Whatever the amount,
+    // writing it out and reading it back has to be the amount again — at both
+    // ends of an int, where a float would have given up long before.
+    expect(Money::fromDecimal(Money::toDecimal($cents)))->toBe($cents);
+})->with([
+    [0],
+    [5],
+    [-5],
+    [1225],
+    [-1225],
+    [9007199254740993],
+    [PHP_INT_MAX],
+    [PHP_INT_MIN],
+]);
+
+it('says a sub-cent amount is not merely unreadable', function (): void {
+    // Two different problems reach the same class, and the message is the only
+    // thing that tells a developer which one they have. '12.255' is a
+    // well-formed amount that this package will not round on their behalf.
+    try {
+        Money::fromDecimal('12.255');
+    } catch (NotAnAmount $refused) {
+        expect($refused->getText())->toBe('12.255');
+        expect($refused->getMessage())->toContain('finer than a cent');
+
+        return;
+    }
+
+    throw new Exception('The amount was not refused.');
 });

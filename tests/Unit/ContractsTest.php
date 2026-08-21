@@ -43,5 +43,6 @@ it('autoloads what the money helper throws', function (string $class): void {
     expect(is_a($class, InvalidArgumentException::class, true))->toBeTrue();
 })->with([
     Tnt\Ecommerce\AmountTooLarge::class,
+    Tnt\Ecommerce\NotAnAmount::class,
     Tnt\Ecommerce\UnsupportedRate::class,
 ]);

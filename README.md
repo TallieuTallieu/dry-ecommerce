@@ -132,6 +132,38 @@ What `toDecimal()` is for is getting out of cents without a `float` doing it.
 `$cents / 100` is the thing it replaces — that one expression puts back, on the
 very last step, the representation the rest of this package works to keep out.
 
+#### Reading an amount in
+
+`Money::fromDecimal()` is the same boundary the other way, and the more
+important of the two. Money leaves this package as a figure on a page, but it
+*enters* it as text — an admin field, a config value, a price import — and that
+is where a wrong amount gets in.
+
+```php
+Money::fromDecimal('12.25'); // 1225
+Money::fromDecimal('12.5'); // 1250, the way a person types it
+Money::fromDecimal('12'); // 1200
+Money::fromDecimal('  -0.05  '); // -5, space ignored
+```
+
+Anything else raises `Tnt\Ecommerce\NotAnAmount`, for one of three reasons:
+
+| Text | Why it is refused |
+|---|---|
+| `''`, `'abc'`, `'12.2.5'`, `'1e3'` | Not an amount. A plain `(int)` cast reads every one of these as `0`, and `0` is a believable price. |
+| `'12.255'` | Finer than a cent. `Money` could round it and will not: that changes a price nobody asked to change. Round it where the extra precision came from. |
+| `'92233720368547758.08'` | In cents, past what a PHP `int` holds. |
+
+`'12,25'`, `'1,234.56'` and `'€ 12,25'` are refused too, symmetrically with
+`toDecimal()` emitting none of those. Whatever formats an amount for a person
+is what unformats it again.
+
+The pair round-trips exactly, across the whole range of an `int`:
+
+```php
+Money::fromDecimal(Money::toDecimal($cents)) === $cents; // always
+```
+
 #### Where the exactness stops
 
 Integer cents are exact over a range, not everywhere, and `Money` refuses the

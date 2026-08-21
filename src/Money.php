@@ -55,12 +55,18 @@ namespace Tnt\Ecommerce;
  * $off = Money::percentageOf($cart->getSubTotal(), 10); // 10% off the cart
  * $line = Money::lineTotal($buyable->getPrice(), 3); // three of something
  * $shown = Money::toDecimal($cart->getTotal()); // 5250 -> '52.50'
+ * $price = Money::fromDecimal($input); // '12.25' -> 1225
  * ```
  *
  * {@see toDecimal()} is as far as this class goes towards display. It writes
  * cents out exactly, so that nobody reaches for `$cents / 100` and lets a
  * `float` back in on the last step. A currency symbol, a comma for a decimal
  * point and a thousands separator are the project's to add.
+ *
+ * {@see fromDecimal()} is the same boundary in the other direction, and the
+ * more important of the two: money leaves this package as a figure on a page,
+ * but it *enters* it as text from an admin field, a config value or a price
+ * import, and that is where a wrong amount gets in.
  *
  * # What it refuses
  *
@@ -198,6 +204,69 @@ final class Money
             $units < 0 ? -$units : $units,
             $hundredths < 0 ? -$hundredths : $hundredths
         );
+    }
+
+    /**
+     * An amount written in units, read back into cents.
+     *
+     * The inverse of {@see toDecimal()}, and the door money comes in through.
+     * An admin field, a config value, a price import: money arrives as text,
+     * and text is where a wrong amount is easiest to introduce and hardest to
+     * see. `'12.25'` becomes `1225`.
+     *
+     * Reads what `toDecimal()` writes, and the shorter forms a person types —
+     * `'12.5'` is 1250 and `'12'` is 1200 — with surrounding space ignored.
+     * Everything else raises {@see NotAnAmount}, for one of three reasons:
+     *
+     * - it is not an amount at all, which a plain `(int)` cast would have read
+     *   as `0` — and `0` is a believable price;
+     * - it is finer than a cent, like `'12.255'`, which this class could round
+     *   but will not, because rounding it would change a price nobody asked to
+     *   change;
+     * - in cents it is past what an `int` holds.
+     *
+     * Symmetrically with `toDecimal()`, no locale is understood: `'12,25'`,
+     * `'1,234.56'` and `'€ 12,25'` are all refused. Whatever formats an amount
+     * for a person is what unformats it again.
+     *
+     * No arithmetic happens below, only text, which is what keeps the last
+     * `float` out of the money path — see the comment on the concatenation.
+     *
+     * @param string $amount
+     * @return int The amount, in cents.
+     *
+     * @throws NotAnAmount If the text is not an exact amount of cents.
+     */
+    public static function fromDecimal(string $amount): int
+    {
+        $trimmed = trim($amount);
+
+        if (preg_match('/^(-?)(\d+)(?:\.(\d+))?$/', $trimmed, $parts) !== 1) {
+            throw NotAnAmount::unreadable($amount);
+        }
+
+        $decimals = $parts[3] ?? '';
+
+        if (strlen($decimals) > 2) {
+            throw NotAnAmount::finerThanACent($amount);
+        }
+
+        // Appending two decimal places to the units *is* the multiplication by
+        // 100, done in text. Nothing is added or multiplied here, so nothing
+        // can overflow into a float on the way: the only question left is
+        // whether the figure fits in an int, which is the one filter_var()
+        // answers.
+        $digits = ltrim($parts[2] . str_pad($decimals, 2, '0'), '0');
+        $cents = filter_var(
+            $parts[1] . ($digits === '' ? '0' : $digits),
+            FILTER_VALIDATE_INT
+        );
+
+        if ($cents === false) {
+            throw NotAnAmount::tooLarge($amount);
+        }
+
+        return $cents;
     }
 
     /**
