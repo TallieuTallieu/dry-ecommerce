@@ -102,6 +102,25 @@ Money::percentageOf(4999, 10); // 499.9 cents -> 500
 Rates are honoured to four decimal places of a percent, so `21`, `21.5` and
 `0.0625` all land where they should.
 
+#### Where the exactness stops
+
+Integer cents are exact over a range, not everywhere, and `Money` refuses the
+two ways out of that range rather than answering approximately:
+
+| Raises | When |
+|---|---|
+| `Tnt\Ecommerce\AmountTooLarge` | The amount is past the ceiling for its rate. The amount is multiplied twice on the way to an answer — once by the rate, once by 2 to round the half — so at 21% the largest exact amount is 219,604,096,115,589,897 cents. `getMaximumAmount()` reports the ceiling for the rate that was used. |
+| `Tnt\Ecommerce\UnsupportedRate` | The rate is finer than `0.0001%`, or is too large to scale, or is `INF` or `NAN`. A rate of exactly `0` is fine and takes nothing off. |
+
+Both extend `InvalidArgumentException`, so one `catch` covers the pair.
+
+Neither is reachable with a real order at a real VAT rate — the ceiling is
+around €2.19 quadrillion. They are reachable by passing something that is not
+cents, or not a percentage, which is when an exception is worth more than an
+amount. Before these existed, an amount over the ceiling raised a `TypeError`
+from inside `intdiv()`, and a rate of `0.000004`, `INF` or `NAN` quietly
+returned `0` cents behind a PHP warning.
+
 ### Buyable
 Documentation coming soon
 

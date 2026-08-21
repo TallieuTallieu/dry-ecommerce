@@ -54,6 +54,16 @@ namespace Tnt\Ecommerce;
  * $vat = Money::percentageOf($line->getPrice(), 21); // 21% VAT on one line
  * $off = Money::percentageOf($cart->getSubTotal(), 10); // 10% off the cart
  * ```
+ *
+ * # What it refuses
+ *
+ * The exactness above is a promise, so the two ways of losing it are refused
+ * rather than approximated: an amount past the ceiling for its rate raises
+ * {@see AmountTooLarge}, and a rate finer or larger than the scale can hold —
+ * or `INF`, or `NAN` — raises {@see UnsupportedRate}. Neither is reachable
+ * with a real order and a real VAT rate. Both are reachable by handing this
+ * class something that is not cents, or not a percentage, which is exactly
+ * when an exception beats an answer.
  */
 final class Money
 {
@@ -63,7 +73,9 @@ final class Money
      * A rate is turned into this many integer steps per percent before it is
      * multiplied, so the arithmetic below is integer throughout and a rate is
      * exact to four decimal places of a percent — 21, 21.5 and 0.0625 all land
-     * where they should.
+     * where they should. 0.0001% is therefore the finest rate there is; a
+     * non-zero rate below it raises {@see UnsupportedRate} rather than
+     * collapsing to 0% and taking nothing off.
      */
     private const RATE_SCALE = 10000;
 
@@ -81,17 +93,74 @@ final class Money
      *
      * The rate is reduced to its smallest whole fraction before the amount is
      * multiplied by it — 21% becomes 21/100, not 210000/1000000 — which keeps
-     * the intermediate product small enough that amounts up to roughly 4×10^17
-     * cents stay exact. Real orders are nowhere near that; the reduction is
-     * what makes the guarantee unqualified rather than approximate.
+     * the intermediate product small. Even so the arithmetic has a ceiling, and
+     * the amount is multiplied twice on the way to an answer: once by the rate,
+     * and once more by 2 inside the rounding. At 21% that puts the largest
+     * exact amount at 219,604,096,115,589,897 cents, roughly 2.19×10^17 — half
+     * of what the rate alone would suggest, and still far past any real order.
+     *
+     * Nothing is approximated past that point. An amount over the ceiling
+     * raises {@see AmountTooLarge}, and a rate the scale cannot hold raises
+     * {@see UnsupportedRate}, rather than either one silently leaving `int`
+     * behind for a `float` and answering with money that is merely close.
      *
      * @param int $amount The amount the rate applies to, in cents.
      * @param int|float $percentage The rate, as a percentage: 21 means 21%.
      * @return int The rounded result, in cents.
+     *
+     * @throws AmountTooLarge If the amount is over the ceiling for this rate.
+     * @throws UnsupportedRate If the rate is finer, or larger, than the scale
+     *                         can hold, or is not a finite percentage.
      */
     public static function percentageOf(int $amount, int|float $percentage): int
     {
-        $numerator = (int) round($percentage * self::RATE_SCALE);
+        [$rateNumerator, $rateDenominator] = self::reduceRate($percentage);
+
+        self::refuseAnAmountOverTheCeiling(
+            $amount,
+            $percentage,
+            $rateNumerator,
+            $rateDenominator
+        );
+
+        return self::divideRoundingHalfAwayFromZero(
+            $amount * $rateNumerator,
+            $rateDenominator
+        );
+    }
+
+    /**
+     * A rate as a whole fraction, reduced, or an exception if it is not one.
+     *
+     * Scaling happens in `float`, because a rate is allowed to arrive as one;
+     * this is the boundary where that `float` is checked and turned into the
+     * pair of integers the rest of the arithmetic runs on. A rate that does not
+     * survive the trip is refused here rather than carried forward, so no
+     * caller downstream has to wonder whether it did.
+     *
+     * @param int|float $percentage The rate, as a percentage.
+     * @return array{int, int} The numerator, which carries the sign, and the
+     *                         denominator, which is positive.
+     *
+     * @throws UnsupportedRate
+     */
+    private static function reduceRate(int|float $percentage): array
+    {
+        $scaled = round((float) $percentage * self::RATE_SCALE);
+
+        // `(float) PHP_INT_MAX` rounds up to 2^63, one past the largest int, so
+        // `>=` is what keeps the cast below inside the range PHP guarantees.
+        // `is_finite()` covers NAN and INF, which no comparison would catch.
+        if (!is_finite($scaled) || abs($scaled) >= (float) PHP_INT_MAX) {
+            throw UnsupportedRate::notRepresentable($percentage);
+        }
+
+        $numerator = (int) $scaled;
+
+        if ($numerator === 0 && (float) $percentage !== 0.0) {
+            throw UnsupportedRate::tooFine($percentage, 1 / self::RATE_SCALE);
+        }
+
         $denominator = 100 * self::RATE_SCALE;
 
         $divisor = self::greatestCommonDivisor(
@@ -99,10 +168,48 @@ final class Money
             $denominator
         );
 
-        return self::divideRoundingHalfAwayFromZero(
-            $amount * intdiv($numerator, $divisor),
-            intdiv($denominator, $divisor)
+        return [intdiv($numerator, $divisor), intdiv($denominator, $divisor)];
+    }
+
+    /**
+     * Refuses an amount this rate cannot be applied to exactly.
+     *
+     * {@see divideRoundingHalfAwayFromZero()} works on `2 * amount * rate +
+     * denominator`, so that whole expression is what has to fit in an `int`.
+     * The ceiling is therefore derived by dividing rather than by multiplying —
+     * working out the limit must not overflow the very thing it is checking
+     * for.
+     *
+     * @param int $amount The amount the rate applies to, in cents.
+     * @param int|float $percentage The rate, for the exception to report.
+     * @param int $rateNumerator
+     * @param int $rateDenominator Positive.
+     * @return void
+     *
+     * @throws AmountTooLarge
+     */
+    private static function refuseAnAmountOverTheCeiling(
+        int $amount,
+        int|float $percentage,
+        int $rateNumerator,
+        int $rateDenominator
+    ): void {
+        $magnitude = $rateNumerator < 0 ? -$rateNumerator : $rateNumerator;
+
+        // A rate of 0% multiplies everything down to nothing; no amount of
+        // cents can overflow that.
+        if ($magnitude === 0) {
+            return;
+        }
+
+        $maximumAmount = intdiv(
+            intdiv(PHP_INT_MAX - $rateDenominator, 2),
+            $magnitude
         );
+
+        if ($amount > $maximumAmount || $amount < -$maximumAmount) {
+            throw new AmountTooLarge($amount, $percentage, $maximumAmount);
+        }
     }
 
     /**

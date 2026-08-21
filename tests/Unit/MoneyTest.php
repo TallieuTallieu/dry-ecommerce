@@ -15,10 +15,18 @@ declare(strict_types=1);
  *   2. the rate is applied, and rounded, on the amount it covers — so a
  *      per-line rate is rounded per line, and the total is the sum of the
  *      already-rounded lines rather than the rate applied to the total.
+ *
+ * The last group pins down where the arithmetic stops. Integer cents are exact
+ * over a range rather than everywhere, and both of its edges used to be answers
+ * instead of errors: an amount over the ceiling gave a TypeError from deep
+ * inside intdiv(), and a rate of 0.000004, INF or NAN gave 0 cents behind a PHP
+ * warning. Those are the cases below, held at the exact cent they turn over.
  */
 
 use Tests\Support\PercentageTaxRate;
+use Tnt\Ecommerce\AmountTooLarge;
 use Tnt\Ecommerce\Money;
+use Tnt\Ecommerce\UnsupportedRate;
 
 it('rounds a half cent away from zero', function (): void {
     // 6% of 25 is exactly 1.5 cents.
@@ -113,3 +121,107 @@ it(
         expect($total)->toBe(300);
     }
 );
+
+it('is exact right up to the ceiling for the rate', function (): void {
+    // The amount is multiplied twice before an answer comes back — once by 21,
+    // once by 2 to round the half — so the ceiling at 21% is PHP_INT_MAX / 42,
+    // not / 21. This is that cent exactly.
+    $largest = 219604096115589897;
+
+    expect(Money::percentageOf($largest, 21))->toBe(46116860184273878);
+    expect(Money::percentageOf(-$largest, 21))->toBe(-46116860184273878);
+});
+
+it('refuses an amount one cent past the ceiling', function (): void {
+    $tooLarge = 219604096115589898;
+
+    expect(fn() => Money::percentageOf($tooLarge, 21))->toThrow(
+        AmountTooLarge::class
+    );
+    expect(fn() => Money::percentageOf(-$tooLarge, 21))->toThrow(
+        AmountTooLarge::class
+    );
+});
+
+it('says which amount it refused and what it can hold', function (): void {
+    try {
+        Money::percentageOf(219604096115589898, 21);
+    } catch (AmountTooLarge $refused) {
+        expect($refused->getAmount())->toBe(219604096115589898);
+        expect($refused->getPercentage())->toBe(21);
+        expect($refused->getMaximumAmount())->toBe(219604096115589897);
+        expect($refused->getMessage())->toContain('219604096115589897 cents');
+
+        return;
+    }
+
+    throw new Exception('The amount was not refused.');
+});
+
+it('lets a small rate raise the ceiling it sets', function (): void {
+    // The ceiling is the rate's, not the class's: at 1% it is 21 times the
+    // amount that 21% allows, and 100% divides down to 1/1 and allows the most
+    // of all.
+    expect(Money::percentageOf(4000000000000000000, 1))->toBe(
+        40000000000000000
+    );
+    expect(fn() => Money::percentageOf(4611686018427387904, 100))->toThrow(
+        AmountTooLarge::class
+    );
+});
+
+it('honours the finest rate there is', function (): void {
+    // 0.0001% of €1,000,000.00 is exactly 100 cents.
+    expect(Money::percentageOf(100000000, 0.0001))->toBe(100);
+});
+
+it('refuses a rate finer than that', function (): void {
+    // This used to be 0 cents off an amount of €1,000,000.00, when the true
+    // answer is 4, and nothing said so.
+    expect(fn() => Money::percentageOf(100000000, 0.000004))->toThrow(
+        UnsupportedRate::class
+    );
+    expect(fn() => Money::percentageOf(1000, -0.00001))->toThrow(
+        UnsupportedRate::class
+    );
+});
+
+it('still takes a rate of exactly zero', function (): void {
+    // 0% is not too fine to hold; it is a rate that takes nothing off, and the
+    // refusal above must not swallow it.
+    expect(Money::percentageOf(123456, 0))->toBe(0);
+    expect(Money::percentageOf(123456, 0.0))->toBe(0);
+});
+
+it('refuses a rate that is not a finite percentage', function (): void {
+    // Each of these gave 0 cents behind a PHP warning, except 1e18, which gave
+    // 186471204942302 cents — an int that had wrapped.
+    expect(fn() => Money::percentageOf(100, INF))->toThrow(
+        UnsupportedRate::class
+    );
+    expect(fn() => Money::percentageOf(100, -INF))->toThrow(
+        UnsupportedRate::class
+    );
+    expect(fn() => Money::percentageOf(100, NAN))->toThrow(
+        UnsupportedRate::class
+    );
+    expect(fn() => Money::percentageOf(100, 1e300))->toThrow(
+        UnsupportedRate::class
+    );
+    expect(fn() => Money::percentageOf(100, 1e18))->toThrow(
+        UnsupportedRate::class
+    );
+});
+
+it('names the rate it refused, NAN and all', function (): void {
+    try {
+        Money::percentageOf(100, NAN);
+    } catch (UnsupportedRate $refused) {
+        expect($refused->getPercentage())->toBeNan();
+        expect($refused->getMessage())->toContain('NAN');
+
+        return;
+    }
+
+    throw new Exception('The rate was not refused.');
+});
