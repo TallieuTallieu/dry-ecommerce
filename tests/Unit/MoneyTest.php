@@ -225,3 +225,47 @@ it('names the rate it refused, NAN and all', function (): void {
 
     throw new Exception('The rate was not refused.');
 });
+
+it('multiplies a line out by its quantity', function (): void {
+    expect(Money::lineTotal(1250, 2))->toBe(2500);
+    expect(Money::lineTotal(325, 3))->toBe(975);
+    expect(Money::lineTotal(999, 1))->toBe(999);
+    expect(Money::lineTotal(1250, 0))->toBe(0);
+});
+
+it('writes cents out as units and hundredths', function (): void {
+    expect(Money::toDecimal(1225))->toBe('12.25');
+    expect(Money::toDecimal(5250))->toBe('52.50');
+    expect(Money::toDecimal(100))->toBe('1.00');
+    expect(Money::toDecimal(0))->toBe('0.00');
+});
+
+it('pads a hundredth that would otherwise read wrong', function (): void {
+    // 5 cents is 0.05 and not 0.5, and 50 cents is 0.50 and not 0.5. Both
+    // halves are padded, so neither can be read as the other.
+    expect(Money::toDecimal(5))->toBe('0.05');
+    expect(Money::toDecimal(50))->toBe('0.50');
+    expect(Money::toDecimal(1205))->toBe('12.05');
+});
+
+it('keeps the sign in front of a negative amount', function (): void {
+    // A reduction is the amount that comes off, not a negative, but a total can
+    // go below zero and the minus belongs at the front of the whole figure.
+    expect(Money::toDecimal(-1225))->toBe('-12.25');
+    expect(Money::toDecimal(-5))->toBe('-0.05');
+    expect(Money::toDecimal(-100))->toBe('-1.00');
+});
+
+it('writes out amounts a float could not hold', function (): void {
+    // A string, not a float, so the whole range of an int survives — including
+    // the end of it, where negating the amount as a whole would overflow.
+    expect(Money::toDecimal(9007199254740993))->toBe('90071992547409.93');
+    expect(Money::toDecimal(PHP_INT_MAX))->toBe('92233720368547758.07');
+    expect(Money::toDecimal(PHP_INT_MIN))->toBe('-92233720368547758.08');
+});
+
+it('gives back no thousands separator and no symbol', function (): void {
+    // Deliberately not a currency format: displaying money is the project's
+    // job, and this is only the way out of cents that does not use a float.
+    expect(Money::toDecimal(123456789))->toBe('1234567.89');
+});

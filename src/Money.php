@@ -53,7 +53,14 @@ namespace Tnt\Ecommerce;
  * ```php
  * $vat = Money::percentageOf($line->getPrice(), 21); // 21% VAT on one line
  * $off = Money::percentageOf($cart->getSubTotal(), 10); // 10% off the cart
+ * $line = Money::lineTotal($buyable->getPrice(), 3); // three of something
+ * $shown = Money::toDecimal($cart->getTotal()); // 5250 -> '52.50'
  * ```
+ *
+ * {@see toDecimal()} is as far as this class goes towards display. It writes
+ * cents out exactly, so that nobody reaches for `$cents / 100` and lets a
+ * `float` back in on the last step. A currency symbol, a comma for a decimal
+ * point and a thousands separator are the project's to add.
  *
  * # What it refuses
  *
@@ -126,6 +133,70 @@ final class Money
         return self::divideRoundingHalfAwayFromZero(
             $amount * $rateNumerator,
             $rateDenominator
+        );
+    }
+
+    /**
+     * What a line of a cart or an order comes to, in cents.
+     *
+     * A quantity of something at a price each. Both cart item implementations
+     * answer `getPrice()` with this, so the two multiplications that used to
+     * sit apart in {@see \Tnt\Ecommerce\Model\CartItem} and
+     * {@see \Tnt\Ecommerce\Cart\InMemoryCartItem} are one multiplication here.
+     * The rounding rule owns one operation on money; this is the other one, and
+     * it belongs in the same class.
+     *
+     * There is no ceiling to trip over, unlike {@see percentageOf()}: a line
+     * total is a plain product of a price and a quantity the shop itself sets,
+     * with no rate and no rounding in it.
+     *
+     * @param int $unitPrice The price of one, in cents.
+     * @param int $quantity How many.
+     * @return int The line total, in cents.
+     */
+    public static function lineTotal(int $unitPrice, int $quantity): int
+    {
+        return $unitPrice * $quantity;
+    }
+
+    /**
+     * An amount of cents written out in units, exactly.
+     *
+     * `1225` becomes `'12.25'`. Two decimal places always, a full stop between
+     * them, a leading `-` when the amount is negative, and no separator between
+     * thousands.
+     *
+     * This is deliberately not a currency format. There is no symbol, no
+     * comma-for-a-decimal-point, no thousands separator and no locale, because
+     * those differ per shop and per template and would drag `ext-intl` into a
+     * package that does not otherwise need it. Displaying money is the
+     * project's job; the job here is to get out of cents without a `float`
+     * doing it. `$cents / 100` is the thing this exists to replace — it puts
+     * back, at the very last step, the representation the rest of the package
+     * spends its time keeping out.
+     *
+     * A `string` and not a `float` for the same reason. The whole range of an
+     * `int` survives this, down to `PHP_INT_MIN`.
+     *
+     * @param int $cents
+     * @return string
+     */
+    public static function toDecimal(int $cents): string
+    {
+        $sign = $cents < 0 ? '-' : '';
+
+        // intdiv() and % both truncate towards zero and both keep the sign, so
+        // each part is negated on its own rather than the amount as a whole.
+        // Negating the amount would overflow on PHP_INT_MIN; negating a
+        // hundredth of it cannot.
+        $units = intdiv($cents, 100);
+        $hundredths = $cents % 100;
+
+        return sprintf(
+            '%s%d.%02d',
+            $sign,
+            $units < 0 ? -$units : $units,
+            $hundredths < 0 ? -$hundredths : $hundredths
         );
     }
 

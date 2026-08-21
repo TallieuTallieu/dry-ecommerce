@@ -99,8 +99,38 @@ Money::percentageOf(25, 6); // 1.5 cents -> 2
 Money::percentageOf(4999, 10); // 499.9 cents -> 500
 ```
 
+`Money::lineTotal()` is the other operation on money, and the one every cart
+line goes through:
+
+```php
+Money::lineTotal(1250, 3); // three at €12.50 -> 3750
+```
+
 Rates are honoured to four decimal places of a percent, so `21`, `21.5` and
 `0.0625` all land where they should.
+
+#### Showing an amount
+
+`Money::toDecimal()` writes cents out in units, exactly:
+
+```php
+Money::toDecimal(1225); // '12.25'
+Money::toDecimal(5); // '0.05'
+Money::toDecimal(-1225); // '-12.25'
+```
+
+Two decimal places always, a full stop between them, a `-` in front of a
+negative amount, and no thousands separator. It returns a `string`, so the
+whole range of an `int` survives it.
+
+**It is not a currency format, and it is not meant to become one.** There is no
+symbol, no comma for the decimal point and no locale, because those differ per
+shop and per template, and supporting them would pull `ext-intl` into a package
+that does not otherwise need it. Displaying an amount is the project's job.
+
+What `toDecimal()` is for is getting out of cents without a `float` doing it.
+`$cents / 100` is the thing it replaces — that one expression puts back, on the
+very last step, the representation the rest of this package works to keep out.
 
 #### Where the exactness stops
 
