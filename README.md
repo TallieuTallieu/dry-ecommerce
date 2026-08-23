@@ -99,8 +99,89 @@ Money::percentageOf(25, 6); // 1.5 cents -> 2
 Money::percentageOf(4999, 10); // 499.9 cents -> 500
 ```
 
+`Money::lineTotal()` is the other operation on money, and the one every cart
+line goes through:
+
+```php
+Money::lineTotal(1250, 3); // three at €12.50 -> 3750
+```
+
 Rates are honoured to four decimal places of a percent, so `21`, `21.5` and
 `0.0625` all land where they should.
+
+#### Showing an amount
+
+`Money::toDecimal()` writes cents out in units, exactly:
+
+```php
+Money::toDecimal(1225); // '12.25'
+Money::toDecimal(5); // '0.05'
+Money::toDecimal(-1225); // '-12.25'
+```
+
+Two decimal places always, a full stop between them, a `-` in front of a
+negative amount, and no thousands separator. It returns a `string`, so the
+whole range of an `int` survives it.
+
+**It is not a currency format, and it is not meant to become one.** There is no
+symbol, no comma for the decimal point and no locale, because those differ per
+shop and per template, and supporting them would pull `ext-intl` into a package
+that does not otherwise need it. Displaying an amount is the project's job.
+
+What `toDecimal()` is for is getting out of cents without a `float` doing it.
+`$cents / 100` is the thing it replaces — that one expression puts back, on the
+very last step, the representation the rest of this package works to keep out.
+
+#### Reading an amount in
+
+`Money::fromDecimal()` is the same boundary the other way, and the more
+important of the two. Money leaves this package as a figure on a page, but it
+*enters* it as text — an admin field, a config value, a price import — and that
+is where a wrong amount gets in.
+
+```php
+Money::fromDecimal('12.25'); // 1225
+Money::fromDecimal('12.5'); // 1250, the way a person types it
+Money::fromDecimal('12'); // 1200
+Money::fromDecimal('  -0.05  '); // -5, space ignored
+```
+
+Anything else raises `Tnt\Ecommerce\NotAnAmount`, for one of three reasons:
+
+| Text | Why it is refused |
+|---|---|
+| `''`, `'abc'`, `'12.2.5'`, `'1e3'` | Not an amount. A plain `(int)` cast reads every one of these as `0`, and `0` is a believable price. |
+| `'12.255'` | Finer than a cent. `Money` could round it and will not: that changes a price nobody asked to change. Round it where the extra precision came from. |
+| `'92233720368547758.08'` | In cents, past what a PHP `int` holds. |
+
+`'12,25'`, `'1,234.56'` and `'€ 12,25'` are refused too, symmetrically with
+`toDecimal()` emitting none of those. Whatever formats an amount for a person
+is what unformats it again.
+
+The pair round-trips exactly, across the whole range of an `int`:
+
+```php
+Money::fromDecimal(Money::toDecimal($cents)) === $cents; // always
+```
+
+#### Where the exactness stops
+
+Integer cents are exact over a range, not everywhere, and `Money` refuses the
+two ways out of that range rather than answering approximately:
+
+| Raises | When |
+|---|---|
+| `Tnt\Ecommerce\AmountTooLarge` | The amount is past the ceiling for its rate. The amount is multiplied twice on the way to an answer — once by the rate, once by 2 to round the half — so at 21% the largest exact amount is 219,604,096,115,589,897 cents. `getMaximumAmount()` reports the ceiling for the rate that was used. |
+| `Tnt\Ecommerce\UnsupportedRate` | The rate is finer than `0.0001%`, or is too large to scale, or is `INF` or `NAN`. A rate of exactly `0` is fine and takes nothing off. |
+
+Both extend `InvalidArgumentException`, so one `catch` covers the pair.
+
+Neither is reachable with a real order at a real VAT rate — the ceiling is
+around €2.19 quadrillion. They are reachable by passing something that is not
+cents, or not a percentage, which is when an exception is worth more than an
+amount. Before these existed, an amount over the ceiling raised a `TypeError`
+from inside `intdiv()`, and a rate of `0.000004`, `INF` or `NAN` quietly
+returned `0` cents behind a PHP warning.
 
 ### Buyable
 Documentation coming soon

@@ -35,3 +35,14 @@ it('autoloads every public contract', function (string $contract): void {
 it('autoloads the money helper', function (): void {
     expect(class_exists(Tnt\Ecommerce\Money::class))->toBeTrue();
 });
+
+it('autoloads what the money helper throws', function (string $class): void {
+    // Published surface as much as the contracts are: a caller catches these
+    // by name, so renaming one silently is the same kind of break.
+    expect(class_exists($class))->toBeTrue();
+    expect(is_a($class, InvalidArgumentException::class, true))->toBeTrue();
+})->with([
+    Tnt\Ecommerce\AmountTooLarge::class,
+    Tnt\Ecommerce\NotAnAmount::class,
+    Tnt\Ecommerce\UnsupportedRate::class,
+]);

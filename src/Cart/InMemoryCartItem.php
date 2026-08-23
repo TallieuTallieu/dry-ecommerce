@@ -4,6 +4,7 @@ namespace Tnt\Ecommerce\Cart;
 
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
+use Tnt\Ecommerce\Money;
 
 /**
  * A cart line that exists only in memory.
@@ -84,7 +85,7 @@ class InMemoryCartItem implements CartItemInterface
      */
     public function getPrice(): int
     {
-        return $this->buyable->getPrice() * $this->quantity;
+        return Money::lineTotal($this->buyable->getPrice(), $this->quantity);
     }
 
     /**

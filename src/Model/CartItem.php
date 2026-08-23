@@ -5,6 +5,7 @@ namespace Tnt\Ecommerce\Model;
 use dry\orm\Model;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
+use Tnt\Ecommerce\Money;
 
 /**
  * One line of a cart, as stored in `ecommerce_cart_item`.
@@ -84,7 +85,10 @@ class CartItem extends Model implements CartItemInterface
      */
     public function getPrice(): int
     {
-        return $this->getBuyable()->getPrice() * $this->getQuantity();
+        return Money::lineTotal(
+            $this->getBuyable()->getPrice(),
+            $this->getQuantity()
+        );
     }
 
     /**
