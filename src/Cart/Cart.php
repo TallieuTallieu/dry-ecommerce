@@ -3,7 +3,6 @@
 namespace Tnt\Ecommerce\Cart;
 
 use Closure;
-use dry\util\Str;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Model\Customer;
 use Oak\Dispatcher\Facade\Dispatcher;
@@ -74,6 +73,22 @@ use Tnt\Ecommerce\Contracts\UserResolverInterface;
  */
 class Cart implements CartInterface, TotalingInterface
 {
+    /**
+     * The characters an order reference is built from.
+     *
+     * Crockford's base 32: the digits and the letters, less `I`, `L`, `O` and
+     * `U`. See {@see newOrderReference()} for why a reference avoids them.
+     */
+    private const REFERENCE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+    /**
+     * How many of those characters follow the row id.
+     *
+     * Ten of thirty-two is about 10^15 references per order id, which is far
+     * past worth guessing at while still being short enough to read aloud.
+     */
+    private const REFERENCE_LENGTH = 10;
+
     private ShopInterface $shop;
 
     private CartStorageInterface $storage;
@@ -416,11 +431,7 @@ class Cart implements CartInterface, TotalingInterface
         $order->save();
 
         // Generate an order id
-        $start = rand(5, 8);
-        $rest = 8 - $start;
-
-        $order->order_id =
-            $order->id . '-' . Str::random($start) . '_' . Str::random($rest);
+        $order->order_id = $this->newOrderReference((int) $order->id);
         $order->save();
 
         // Add all items to the order
@@ -468,5 +479,59 @@ class Cart implements CartInterface, TotalingInterface
     protected function newOrder(): Order
     {
         return new Order();
+    }
+
+    /**
+     * The reference a customer quotes when they mean this order.
+     *
+     * The row id, then a dash, then {@see REFERENCE_LENGTH} characters drawn
+     * from {@see REFERENCE_ALPHABET} — `12-K4M7QX9RTB`. The id makes it unique
+     * without a lookup; the rest makes it not worth guessing at.
+     *
+     * # It is a reference, not a key to the order
+     *
+     * Knowing it must not be enough to see an order. It is unguessable so that
+     * a shop's orders cannot be walked through one after another, not so that
+     * it can stand in for signing in. A page that shows an order still has to
+     * establish who is asking, exactly as it would if the reference were `1`,
+     * `2`, `3`. Anything else makes every email that quotes it a credential.
+     *
+     * # Why it is drawn the way it is
+     *
+     * `random_int()` rather than `rand()`. `rand()` is a Mersenne Twister, and
+     * its next output can be worked out from enough of its previous ones, so a
+     * reference built from it is predictable to somebody who has placed a few
+     * orders of their own — no guessing required. That, rather than the number
+     * of characters, was what was actually wrong with the old references.
+     *
+     * One segment of a fixed length. The generator this replaces split eight
+     * characters as `rand(5, 8)` and the remainder, which added no randomness
+     * at all: it only moved the underscore, and left the tail empty roughly one
+     * order in four, so those references ended on a bare `_` and looked
+     * truncated to whoever read them.
+     *
+     * An alphabet without `I`, `L`, `O` or `U`. A reference gets read down a
+     * telephone and copied off a printed invoice, so a `0` that might be an `O`
+     * costs somebody a support call. `U` is left out too, which is what keeps
+     * a random string from occasionally spelling something regrettable.
+     *
+     * @param int $orderId The row id the first save handed back.
+     * @return string
+     *
+     * @throws \Random\RandomException If the system has no source of secure
+     *                                 randomness. Deliberately not caught:
+     *                                 falling back to a predictable reference
+     *                                 would defeat the point of this method.
+     */
+    private function newOrderReference(int $orderId): string
+    {
+        $reference = '';
+        $last = strlen(self::REFERENCE_ALPHABET) - 1;
+
+        for ($i = 0; $i < self::REFERENCE_LENGTH; $i++) {
+            $reference .= self::REFERENCE_ALPHABET[random_int(0, $last)];
+        }
+
+        return $orderId . '-' . $reference;
     }
 }

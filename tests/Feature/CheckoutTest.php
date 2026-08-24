@@ -146,13 +146,86 @@ it('builds an order id on the id the first save gave it', function (): void {
     expect($order->saveCount)->toBe(2);
     expect($order->order_id)->toStartWith($order->id . '-');
 
-    // The trailing `*` is deliberate and should not be tightened to `+`.
-    // `checkout()` splits eight random characters as rand(5, 8) and 8 minus
-    // that, so the tail is empty roughly one order in four and the id ends on a
-    // bare underscore. That is a known quirk with a ticket of its own; a `+`
-    // here would pass most runs and fail the rest, which is worse than
-    // describing what the code actually does.
-    expect($order->order_id)->toMatch('/^\d+-[a-zA-Z0-9]+_[a-zA-Z0-9]*$/');
+    // One fixed shape, every time. The `+` and the exact count are the point:
+    // the generator this replaced varied the split and left the tail empty
+    // roughly one order in four, so a quarter of references ended on a bare
+    // underscore and read as truncated.
+    expect($order->order_id)->toMatch('/^\d+-[0-9A-HJKMNP-TV-Z]{10}$/');
+});
+
+it(
+    'never puts a letter that reads as a digit in a reference',
+    function (): void {
+        // A reference is read down a telephone and copied off a printed invoice,
+        // so the pairs that get confused there are left out of the alphabet
+        // entirely: I and 1, O and 0, L and 1. U goes too, which is what stops a
+        // random string spelling something a customer would rather not read out.
+        $references = [];
+
+        for ($i = 0; $i < 200; $i++) {
+            [$cart] = makeCheckoutCart();
+            $cart->add(new FakeBuyable('1', 2000));
+            $cart->checkout(new UnsavedCustomer());
+
+            $references[] = $cart->placed()->order_id;
+        }
+
+        foreach ($references as $reference) {
+            expect($reference)->not->toMatch('/[ILOU]/');
+            expect($reference)->toMatch('/^\d+-[0-9A-HJKMNP-TV-Z]{10}$/');
+        }
+    }
+);
+
+it('does not hand two orders the same reference', function (): void {
+    // Every order here is row 1, so the id prefix is identical and only the
+    // random part can tell them apart — which is the part that has to be
+    // doing the work. Duplicates at this sample size would mean the source is
+    // not varying, the failure the old rand() would eventually have produced.
+    $references = [];
+
+    for ($i = 0; $i < 200; $i++) {
+        [$cart] = makeCheckoutCart();
+        $cart->add(new FakeBuyable('1', 2000));
+        $cart->checkout(new UnsavedCustomer());
+
+        $references[] = $cart->placed()->order_id;
+    }
+
+    expect(array_unique($references))->toHaveCount(200);
+});
+
+it('draws a reference from a source worth trusting', function (): void {
+    // The one thing about this fix that no behavioural test can see. A
+    // reference built from rand() looks perfectly random from out here and
+    // passes every assertion above; what is wrong with it is that Mersenne
+    // Twister's next output can be worked out from its previous ones, so
+    // somebody who has placed a few orders can predict other people's
+    // references without guessing. The only way to hold that is to say which
+    // functions the cart is not allowed to reach for.
+    $source = file_get_contents(dirname(__DIR__, 2) . '/src/Cart/Cart.php');
+    expect($source)->not->toBeFalse();
+
+    // Comments stripped first. The docblock on newOrderReference() explains at
+    // length why rand() is the wrong source, and a check that read the prose
+    // would trip over the explanation for the rule it is enforcing.
+    $code = '';
+
+    foreach (token_get_all((string) $source) as $token) {
+        if (
+            is_array($token) &&
+            in_array($token[0], [T_COMMENT, T_DOC_COMMENT], true)
+        ) {
+            continue;
+        }
+
+        $code .= is_array($token) ? $token[1] : $token;
+    }
+
+    expect($code)->toContain('random_int(');
+    expect($code)->not->toMatch('/\brand\(/');
+    expect($code)->not->toMatch('/\bmt_rand\(/');
+    expect($code)->not->toContain('Str::random(');
 });
 
 it('announces the order once it is whole', function (): void {

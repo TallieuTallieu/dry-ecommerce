@@ -30,8 +30,13 @@ class OrderRepository extends Repository
     }
 
     /**
-     * Filter by the public order reference (`12-A1B2C3D4_E5F6`), not the
-     * primary key.
+     * Filter by the public order reference (`12-K4M7QX9RTB`), not the primary
+     * key.
+     *
+     * The reference is unguessable so that a shop's orders cannot be walked
+     * through one by one, but it is **not** a credential: finding an order by
+     * it does not establish that the person asking is entitled to see it. See
+     * {@see \Tnt\Ecommerce\Cart\Cart::newOrderReference()}.
      *
      * @param string $orderId
      * @return static
