@@ -64,4 +64,16 @@ interface OrderInterface
      * @return int
      */
     public function getReduction(): int;
+
+    /**
+     * The tax frozen onto the order at checkout, in cents.
+     *
+     * Whether it is contained in {@see getTotal()} or was added to it depends
+     * on the convention the order was placed under; see
+     * {@see \Tnt\Ecommerce\Tax\PriceConvention}.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
+     */
+    public function getTax(): int;
 }

@@ -9,6 +9,7 @@ use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
 use Tnt\Ecommerce\Shop\Shop;
+use Tnt\Ecommerce\Tax\TaxPolicy;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,11 +46,13 @@ uses(Tests\TestCase::class)->in('Feature', 'Unit');
  *
  * @param array<int, FulfillmentInterface> $fulfillments
  * @param UserResolverInterface|null $users Who is signed in; guest by default.
+ * @param TaxPolicy|null $tax
  * @return array{0: Cart, 1: InMemoryCartStorage, 2: Shop}
  */
 function makeCart(
     array $fulfillments = [],
-    ?UserResolverInterface $users = null
+    ?UserResolverInterface $users = null,
+    ?TaxPolicy $tax = null
 ): array {
     $shop = new Shop(new InMemoryAttributeStorage());
 
@@ -62,7 +65,8 @@ function makeCart(
         $shop,
         $storage,
         new FakePayment(),
-        $users ?? new GuestUserResolver()
+        $users ?? new GuestUserResolver(),
+        $tax
     );
 
     return [$cart, $storage, $shop];
@@ -82,11 +86,13 @@ function makeCart(
  *
  * @param array<int, FulfillmentInterface> $fulfillments
  * @param UserResolverInterface|null $users
+ * @param TaxPolicy|null $tax
  * @return array{InMemoryOrderCart, InMemoryCartStorage, FakePayment, Shop}
  */
 function makeCheckoutCart(
     array $fulfillments = [],
-    ?UserResolverInterface $users = null
+    ?UserResolverInterface $users = null,
+    ?TaxPolicy $tax = null
 ): array {
     $shop = new Shop(new InMemoryAttributeStorage());
 
@@ -100,7 +106,8 @@ function makeCheckoutCart(
         $shop,
         $storage,
         $payment,
-        $users ?? new GuestUserResolver()
+        $users ?? new GuestUserResolver(),
+        $tax
     );
 
     return [$cart, $storage, $payment, $shop];

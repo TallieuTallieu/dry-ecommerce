@@ -5,21 +5,20 @@ declare(strict_types=1);
 namespace Tests\Support;
 
 use Tnt\Ecommerce\Contracts\TaxRateInterface;
-use Tnt\Ecommerce\Money;
 
 /**
  * VAT at a percentage — 6, 12 or 21 in Belgium.
  *
- * The package ships no rate of its own — the one it used to ship taxed nothing,
- * and existed only to satisfy a contract that has stopped asking — so this is
- * what a project's own rate is expected to look like: the rate is applied to the
- * amount it was handed, once, through {@see Money::percentageOf()}.
+ * The package ships no rate of its own, so this is what a project's own rate
+ * looks like: it states the percentage and stops. Working out what that comes
+ * to belongs to {@see \Tnt\Ecommerce\Money}, and whether the amount already
+ * contains it belongs to {@see \Tnt\Ecommerce\Tax\PriceConvention} — neither
+ * is a decision a rate is in any position to make.
  *
- * It taxes the amount *on top of* it, which is the reading a shop quoting prices
- * without VAT wants. A shop quoting VAT-inclusive consumer prices writes a rate
- * that extracts instead, and that choice being the rate's rather than the cart's
- * is why {@see \Tnt\Ecommerce\Cart\Cart::getTax()} reports a figure and does not
- * touch a total.
+ * This used to compute the tax itself, with `Money::percentageOf()`. That was
+ * only ever correct for a shop quoting net prices, and every implementation
+ * would have had to learn the shop's convention to fix it. Stating the rate is
+ * the whole job now.
  */
 final class PercentageTaxRate implements TaxRateInterface
 {
@@ -29,11 +28,10 @@ final class PercentageTaxRate implements TaxRateInterface
     public function __construct(private readonly int|float $percentage) {}
 
     /**
-     * @param int $amount
-     * @return int
+     * @return int|float
      */
-    public function getTax(int $amount): int
+    public function getPercentage(): int|float
     {
-        return Money::percentageOf($amount, $this->percentage);
+        return $this->percentage;
     }
 }

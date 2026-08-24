@@ -22,6 +22,8 @@ use Tnt\Ecommerce\Contracts\HasStockInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
+use Tnt\Ecommerce\Money;
+use Tnt\Ecommerce\Tax\TaxPolicy;
 
 /**
  * The shop's cart: what is in it, what it costs, and turning it into an order.
@@ -58,19 +60,21 @@ use Tnt\Ecommerce\Contracts\UserResolverInterface;
  *
  * # Reporting, not deciding
  *
- * Both capabilities stop at reporting. {@see canAdd()} says whether the stock
- * covers a quantity and {@see add()} adds regardless; {@see getTax()} says what
- * the tax comes to and {@see getTotal()} is untouched by it.
- *
- * Neither stopping point is an oversight, and this is the one place the reason
- * is set out. Refusing a sale the stock cannot fill today, taking it as a
+ * {@see canAdd()} says whether the stock covers a quantity, and {@see add()}
+ * adds regardless. Refusing a sale the stock cannot fill today, taking it as a
  * backorder, and overselling on purpose to reconcile later are all real ways to
- * run a shop; so is quoting prices with tax in them, and so is quoting them
- * without. Which applies turns on facts a shop has and this package has never
- * been told, and a package that picked one would be quietly wrong for everyone
- * it picked against, with no way for them to say so. So both figures are
- * reported and the shop acts on them. The methods below say what they report
- * and point back here for why they stop there.
+ * run a shop, and which one applies turns on facts a shop has and this package
+ * has never been told. A package that picked one would be quietly wrong for
+ * everyone it picked against, with no way for them to say so. So the figure is
+ * reported and the shop acts on it.
+ *
+ * Tax used to stop in the same place, for the same reason, and it no longer
+ * has to: a shop now *tells* this package the fact that was missing. See
+ * {@see TaxPolicy} — with `ecommerce.prices` answered, {@see getTax()} is
+ * exact rather than a guess, and {@see getTotal()} carries it when the
+ * convention says the customer has not paid it yet. Nothing is inferred; a
+ * shop that has said nothing gets inclusive prices and untaxed delivery, and
+ * its totals do not move.
  */
 class Cart implements CartInterface, TotalingInterface
 {
@@ -82,22 +86,29 @@ class Cart implements CartInterface, TotalingInterface
 
     private UserResolverInterface $users;
 
+    private TaxPolicy $tax;
+
     /**
      * @param ShopInterface $shop
      * @param CartStorageInterface $storage
      * @param PaymentInterface $payment
      * @param UserResolverInterface $users
+     * @param TaxPolicy|null $tax How the shop taxes. Defaults to prices that
+     *                            contain their tax and untaxed delivery, which
+     *                            leaves an existing shop's totals unmoved.
      */
     public function __construct(
         ShopInterface $shop,
         CartStorageInterface $storage,
         PaymentInterface $payment,
-        UserResolverInterface $users
+        UserResolverInterface $users,
+        ?TaxPolicy $tax = null
     ) {
         $this->shop = $shop;
         $this->storage = $storage;
         $this->payment = $payment;
         $this->users = $users;
+        $this->tax = $tax ?? new TaxPolicy();
     }
 
     /**
@@ -295,9 +306,19 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function getTotal(): int
     {
-        return $this->getSubTotal() +
+        $total =
+            $this->getSubTotal() +
             $this->getFulfillmentCost() -
             $this->getReduction();
+
+        // Only when the prices it is built from are net. Under inclusive
+        // pricing the tax is already inside every one of those figures, and
+        // adding it here would charge the customer for it twice.
+        if ($this->tax->convention()->addsTaxToTheTotal()) {
+            $total += $this->getTax();
+        }
+
+        return $total;
     }
 
     /**
@@ -310,51 +331,64 @@ class Cart implements CartInterface, TotalingInterface
      * not implement {@see TaxableInterface} contribute nothing, and a cart of
      * nothing but those answers 0.
      *
-     * # The base is the line total, before any discount
+     * # The base is what is left after the discount
      *
-     * {@see getReduction()} does not enter this. A coupon comes off the cart, at
-     * the cart's level, and nothing in {@see CouponInterface} says which lines
-     * it came off — so there is no honest way to restate a line total after one.
-     * A cart of one taxable line of 10000 at 21% with 1000 off reports 2100, not
-     * 1890.
+     * A coupon comes off the cart, and tax is worked out per line, so the
+     * reduction has to reach the lines before any of them is taxed. It is
+     * spread across them in proportion to their totals, by
+     * {@see \Tnt\Ecommerce\Money::apportion()}, so that the shares add back
+     * up to it exactly — a cart discounted by 250 whose lines only lose 249
+     * between them is a cent of tax charged on money nobody paid.
      *
-     * Which of those a shop wants is the same unanswered question as below: to
-     * one quoting tax-inclusive prices this is a breakdown of a total the
-     * discount has already moved, and to one quoting prices without tax in them
-     * it is an amount to charge on top, where the discounted base is the honest
-     * one. A shop needing the second has {@see getSubTotal()} and
-     * {@see getReduction()} to work it out with.
+     * Across *every* line, including the untaxed ones. The discount belongs to
+     * the cart, so a share of it belongs to a line that pays no tax, and
+     * charging the taxable lines with all of it would tax them on less than
+     * the customer paid for them.
      *
-     * # It does not move the total
+     * # Whether it is in the total or on top of it
      *
-     * {@see getTotal()} is untouched by this, and no tax is written to an order
-     * at checkout — the reporting stopping point described on this class, and
-     * this is the fact it turns on. Whether tax is *contained in* the prices, as
-     * a Belgian consumer price contains its VAT, or *added to* them decides
-     * whether this figure is a breakdown of the total or an addition to it, and
-     * the two answers differ by the whole amount. Nothing in this package has
-     * ever recorded which a shop means, there is no column to record it in, and
-     * guessing would silently restate every existing total by 21%. Wiring tax
-     * into totals and onto the order needs that question answered first.
+     * That is the shop's {@see \Tnt\Ecommerce\Tax\PriceConvention}, and the
+     * one fact this package cannot work out for itself. Under inclusive prices
+     * this figure is a breakdown of {@see getTotal()} and the total does not
+     * move; under exclusive prices it is an amount the customer has not paid
+     * yet, and the total carries it.
+     *
+     * Delivery is taxed at the shop's own rate rather than the cart's — see
+     * {@see TaxPolicy::taxOnDelivery()} for where that stops being exact.
      *
      * @see \Tnt\Ecommerce\Money
      * @return int
      */
     public function getTax(): int
     {
+        $items = $this->items();
+
+        // The coupon comes off the cart, and tax is worked out per line, so
+        // the reduction has to reach the lines before any of them is taxed.
+        // Spread across *every* line and not only the taxable ones: a discount
+        // applies to the whole cart, and charging the taxable lines with all of
+        // it would tax them on less than the customer paid for them.
+        $shares = Money::apportion(
+            $this->getReduction(),
+            array_map(static fn($item): int => $item->getPrice(), $items)
+        );
+
         $tax = 0;
 
-        foreach ($this->items() as $item) {
+        foreach ($items as $index => $item) {
             $buyable = $item->getBuyable();
 
             if (!($buyable instanceof TaxableInterface)) {
                 continue;
             }
 
-            $tax += $buyable->getTaxRate()->getTax($item->getPrice());
+            $tax += $this->tax->taxOn(
+                $item->getPrice() - $shares[$index],
+                $buyable->getTaxRate()
+            );
         }
 
-        return $tax;
+        return $tax + $this->tax->taxOnDelivery($this->getFulfillmentCost());
     }
 
     /**
@@ -410,6 +444,14 @@ class Cart implements CartInterface, TotalingInterface
         $order->subtotal = $this->getSubTotal();
         $order->reduction = $this->getReduction();
         $order->fulfillment_cost = $this->getFulfillmentCost();
+        $order->tax = $this->getTax();
+
+        // The convention travels with the order, not just the figures it
+        // produced. A shop that switches from inclusive to exclusive prices
+        // next year must still be able to reprint this invoice as it was
+        // charged, and "was this total gross or net" is not recoverable from
+        // the numbers alone.
+        $order->prices = $this->tax->convention()->value;
         $order->fulfillment_method = $fulfillment?->getId();
         $order->discount = $this->getDiscount();
         $order->customer = $customer;

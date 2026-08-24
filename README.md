@@ -27,6 +27,8 @@ Name | Default
 ---- | -------
 payment | \Tnt\Ecommerce\Payment\NullPayment::class
 user_resolver | \Tnt\Ecommerce\Account\GuestUserResolver::class
+prices | `inclusive`
+delivery_tax_rate | *(none — delivery is untaxed)*
 
 **Careful!** Payment can be set from configuration. the default value of the "payment" config property provides a default NullPayment which basically gives everything away for free. For more info on payments check out the topic payments below.
 
@@ -455,26 +457,28 @@ sensible to resolve. Buyables hand one over themselves.
 
 ### Tax
 
-Optional, and currently a **reporting** seam rather than a charging one.
+Optional. A buyable that carries tax implements `TaxableInterface` and returns a
+rate; one that does not contributes no tax and is asked nothing.
 
-A buyable that carries tax implements `TaxableInterface` and returns a rate. The
-package ships no rate — the one it used to ship taxed nothing — because a rate
-is where the one decision that matters lives:
+#### A rate states the rate
+
+The package ships no rate of its own. Yours states a percentage and stops —
+working out what that comes to belongs to `Money`, and whether the amount
+already contains it belongs to the shop:
 
 ```php
 <?php
 
 use Tnt\Ecommerce\Contracts\TaxableInterface;
 use Tnt\Ecommerce\Contracts\TaxRateInterface;
-use Tnt\Ecommerce\Money;
 
 final class Vat implements TaxRateInterface
 {
     public function __construct(private readonly float $percentage) {}
 
-    public function getTax(int $amount): int
+    public function getPercentage(): int|float
     {
-        return Money::percentageOf($amount, $this->percentage);
+        return $this->percentage;
     }
 }
 
@@ -489,27 +493,69 @@ class Product extends \dry\orm\Model implements TaxableInterface
 }
 ```
 
-`Cart::getTax()` then sums the tax on the lines whose buyable is taxable,
-applying each rate to that line's total and rounding it there — the per-line half
-of [the rounding rule](#the-rounding-rule). Lines whose buyable is not taxable
-contribute nothing.
+#### Do your prices include tax?
 
-```php
-$cart->getTax(); // cents
+**This is the one thing you have to tell the package**, because it cannot be
+inferred and everything else follows from it. Set `ecommerce.prices` to
+`inclusive` or `exclusive`.
+
+A price of `1250` at 21% is either €12.50 *of which* €2.17 is VAT, or €12.50
+*plus* €2.63 of VAT. The two differ by the whole tax amount:
+
+| | `inclusive` | `exclusive` |
+|---|---|---|
+| subtotal | 2500 | 2500 |
+| VAT | *434, contained* | **526, added** |
+| delivery | 475 | 475 |
+| **total** | **2975** | **3501** |
+
+Under `inclusive` — the Belgian consumer norm, and the default — the tax is a
+figure to **report**: `getTotal()` is exactly what it always was, and
+`getTax()` tells you how much of it was VAT. Under `exclusive` it is an amount
+to **charge**, and it lands in the total.
+
+The default is `inclusive` precisely because it leaves an upgrading shop's
+totals untouched. Anything unrecognised reads as `inclusive` too, so a typo
+costs you a wrong tax figure rather than 21% on every total in the shop.
+
+Each order **records the convention it was placed under**, in
+`ecommerce_order.prices`. That is not bookkeeping: without it, a shop that
+switches convention would reprint every old invoice with a total it never
+charged.
+
+#### The coupon reduces what is taxed
+
+A coupon comes off the cart, and tax is worked out per line, so the reduction is
+spread across the lines in proportion to their totals — largest remainder, so
+the parts sum to the reduction exactly — and each line is taxed on what is left
+of it.
+
+```
+2000 at 21%, 500 at 6%, coupon 250 off
+
+  line A: 250 x 2000/2500 = 200  ->  (2000-200) at 21% = 378
+  line B: 250 x  500/2500 =  50  ->  ( 500- 50) at  6% =  27
 ```
 
-Each line is taxed on its **full line total**: a coupon does not reduce the base.
-`getReduction()` comes off the cart rather than off any line in particular, and
-nothing in `CouponInterface` says which lines it came off, so there is no honest
-way to restate a line total after one. A €100 taxable line with €10 off reports
-`2100`, not `1890`. If your prices are quoted without tax, that is the figure to
-check before printing it — `getSubTotal()` and `getReduction()` are there to work
-out a discounted base with.
+It is spread over *every* line, including untaxed ones. A discount applies to
+the whole cart, so charging the taxable lines with all of it would tax them on
+less than the customer paid.
 
-> **It does not enter `getTotal()`, and no tax is written to the order.** That is
-> a stopping point on purpose. Whether a price is quoted with tax already in it —
-> as a Belgian consumer price is — or without it decides whether this figure is a
-> *breakdown* of the total or an *addition* to it, and the two answers differ by
-> the whole amount. This package has never recorded which a shop means and has no
-> column to record it in, so guessing would silently restate every existing total
-> by 21%. Print the figure; charging it needs that question answered first.
+Per-line rounding still holds: a line is the figure that gets printed, so the
+total is the sum of the printed lines. See [the rounding
+rule](#the-rounding-rule).
+
+#### Delivery
+
+Set `ecommerce.delivery_tax_rate` to a percentage and the fulfillment cost is
+taxed at it. Leave it unset and delivery is untaxed — which is different from
+setting it to `0`, a zero-rated supply that prints as one.
+
+> [!warning] One rate for the whole shop
+> Belgian VAT treats delivery as ancillary to what is being delivered, so a
+> cart of 6% goods should carry 6% on its delivery and a mixed cart should
+> apportion it across the rates in it. A single shop-wide rate reports the same
+> figure whatever is in the cart: exact for a shop selling at one rate,
+> approximate for a shop selling at several. Delivery is small beside the
+> goods, so the error is small — but if you cannot accept it, this package does
+> not apportion delivery and you will need to.

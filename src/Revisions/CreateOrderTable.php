@@ -26,6 +26,13 @@ class CreateOrderTable extends DatabaseRevision implements RevisionInterface
                 $table->addColumn('subtotal', 'bigint')->length(20);
                 $table->addColumn('reduction', 'bigint')->length(20);
                 $table->addColumn('fulfillment_cost', 'bigint')->length(20);
+                $table->addColumn('tax', 'bigint')->length(20);
+
+                // Which convention the amounts above were quoted under, so an
+                // order can still be reprinted as it was charged after the
+                // shop changes how it quotes prices. See
+                // Tnt\Ecommerce\Tax\PriceConvention.
+                $table->addColumn('prices', 'varchar')->length(255);
                 $table->addColumn('payment_status', 'varchar')->length(255);
                 $table
                     ->addColumn('fulfillment_method', 'varchar')

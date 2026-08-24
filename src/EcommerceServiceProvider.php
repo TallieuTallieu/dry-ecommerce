@@ -24,6 +24,8 @@ use Tnt\Ecommerce\Payment\NullPayment;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
 use Tnt\Ecommerce\Shop\Shop;
+use Tnt\Ecommerce\Tax\PriceConvention;
+use Tnt\Ecommerce\Tax\TaxPolicy;
 use Tnt\Ecommerce\Revisions\CreateCartTable;
 use Tnt\Ecommerce\Revisions\CreateOrderItemTable;
 use Tnt\Ecommerce\Revisions\CreateOrderTable;
@@ -104,6 +106,18 @@ class EcommerceServiceProvider extends ServiceProvider
             )
         );
 
+        // How the shop taxes, as one value rather than two loose settings.
+        // Both halves default to leaving an existing shop exactly where it
+        // was: prices that already contain their tax, so getTotal() does not
+        // move, and delivery untaxed, so no figure appears that the shop never
+        // asked for.
+        $app->singleton(TaxPolicy::class, function () use ($config): TaxPolicy {
+            return new TaxPolicy(
+                self::configuredConvention($config),
+                self::configuredRate($config, 'ecommerce.delivery_tax_rate')
+            );
+        });
+
         // StockWorkerInterface is deliberately not bound. A worker counts one
         // named stock and cannot be built without being told which one, so the
         // binding that used to sit here could never have been resolved. A
@@ -130,6 +144,53 @@ class EcommerceServiceProvider extends ServiceProvider
      * @param class-string $default
      * @return string
      */
+    /**
+     * The convention a shop quotes its prices under.
+     *
+     * Anything unset, or set to a word this package does not know, is read as
+     * inclusive. That is the reading that leaves an existing shop's totals
+     * where they are, so a typo costs a wrong tax figure rather than silently
+     * adding tax to every total in the shop.
+     *
+     * @param RepositoryInterface $config
+     * @return PriceConvention
+     */
+    private static function configuredConvention(
+        RepositoryInterface $config
+    ): PriceConvention {
+        $configured = $config->get('ecommerce.prices');
+
+        if (!is_string($configured)) {
+            return PriceConvention::Inclusive;
+        }
+
+        return PriceConvention::tryFrom($configured) ??
+            PriceConvention::Inclusive;
+    }
+
+    /**
+     * A rate from configuration, or null when the shop has not set one.
+     *
+     * Distinguishes "no rate" from "a rate of zero" deliberately. An unset
+     * delivery rate means delivery is not taxed and no figure is reported for
+     * it; a rate of 0 means it is taxed, at nothing, which is what a
+     * zero-rated supply is. The two print differently on an invoice.
+     *
+     * @param RepositoryInterface $config
+     * @param string $key
+     * @return int|float|null
+     */
+    private static function configuredRate(
+        RepositoryInterface $config,
+        string $key
+    ): int|float|null {
+        $configured = $config->get($key);
+
+        return is_int($configured) || is_float($configured)
+            ? $configured
+            : null;
+    }
+
     private static function configuredClass(
         RepositoryInterface $config,
         string $key,

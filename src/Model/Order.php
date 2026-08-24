@@ -10,6 +10,7 @@ use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\OrderItemInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Facade\Shop;
+use Tnt\Ecommerce\Tax\PriceConvention;
 
 /**
  * A placed order, as stored in `ecommerce_order`.
@@ -29,6 +30,8 @@ use Tnt\Ecommerce\Facade\Shop;
  * @property int $subtotal
  * @property int $reduction
  * @property int $fulfillment_cost
+ * @property int $tax
+ * @property string $prices
  * @property string $payment_status
  * @property string|int|null $fulfillment_method
  * @property DiscountCode|null $discount
@@ -137,5 +140,35 @@ class Order extends Model implements OrderInterface, TotalingInterface
     public function getReduction(): int
     {
         return $this->reduction;
+    }
+
+    /**
+     * The tax frozen onto the order at checkout, in cents.
+     *
+     * Whether the customer paid this on top of {@see getTotal()} or inside it
+     * is what {@see getPriceConvention()} records.
+     *
+     * @return int
+     */
+    public function getTax(): int
+    {
+        return $this->tax;
+    }
+
+    /**
+     * Whether the amounts on this order contain their tax.
+     *
+     * Frozen at checkout rather than read from configuration, so that an order
+     * still reads back the way it was placed after the shop changes how it
+     * quotes prices. A row written before this column existed has no answer
+     * and reports the inclusive convention, which is the one whose totals
+     * match what those rows already hold.
+     *
+     * @return PriceConvention
+     */
+    public function getPriceConvention(): PriceConvention
+    {
+        return PriceConvention::tryFrom((string) $this->prices) ??
+            PriceConvention::Inclusive;
     }
 }
