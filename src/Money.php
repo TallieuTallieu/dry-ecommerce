@@ -143,6 +143,129 @@ final class Money
     }
 
     /**
+     * The part of an amount that *is* the percentage, rounded half away from
+     * zero.
+     *
+     * The other direction from {@see percentageOf()}, and the one a shop
+     * quoting tax-inclusive prices needs. `percentageOf(1250, 21)` answers "21%
+     * added to €12.50 is 263 cents". This answers "of €12.50 that already has
+     * 21% in it, 217 cents is the 21%".
+     *
+     * The two are not the same sum and neither is a rounding of the other:
+     * `amount x r/100` against `amount x r/(100 + r)`. Using the first where
+     * the second belongs over-reports the tax on every line by the rate itself
+     * — 21% too much at 21% — which is silently wrong on an invoice rather
+     * than obviously wrong.
+     *
+     * A Belgian consumer price includes its VAT, so this is the operation that
+     * turns a shelf price into the "of which VAT" line beneath it. Which of the
+     * two applies is not something this package can infer; see
+     * {@see \Tnt\Ecommerce\Tax\PriceConvention}.
+     *
+     * @param int $amount The amount with the percentage already in it, in cents.
+     * @param int|float $percentage The rate, as a percentage: 21 means 21%.
+     * @return int The part of it that is the rate, in cents.
+     *
+     * @throws AmountTooLarge If the amount is over the ceiling for this rate.
+     * @throws UnsupportedRate If the rate is one the scale cannot hold, or is
+     *                         -100% or below, at which point an amount cannot
+     *                         contain it.
+     */
+    public static function percentageIn(int $amount, int|float $percentage): int
+    {
+        [$rateNumerator, $rateDenominator] = self::reduceRate($percentage);
+
+        // The whole of the amount is 100% *plus* the rate, rather than 100%, so
+        // the denominator carries the rate as well. Reducing again keeps the
+        // pair as small as the fraction allows: 21/121 rather than 21/121 over
+        // a common scale.
+        $whole = $rateDenominator + $rateNumerator;
+
+        if ($whole <= 0) {
+            throw UnsupportedRate::cannotBeContained($percentage);
+        }
+
+        $divisor = self::greatestCommonDivisor(
+            $rateNumerator < 0 ? -$rateNumerator : $rateNumerator,
+            $whole
+        );
+
+        $numerator = intdiv($rateNumerator, $divisor);
+        $denominator = intdiv($whole, $divisor);
+
+        self::refuseAnAmountOverTheCeiling(
+            $amount,
+            $percentage,
+            $numerator,
+            $denominator
+        );
+
+        return self::divideRoundingHalfAwayFromZero(
+            $amount * $numerator,
+            $denominator
+        );
+    }
+
+    /**
+     * Split an amount across weights so the parts add back up to it exactly.
+     *
+     * Dividing money proportionally leaves fractions of a cent, and dropping
+     * them loses money while rounding them all up invents it. So the shares are
+     * floored, and the cents left over are handed out one each to the shares
+     * whose fraction was largest — the largest remainder method. Whatever the
+     * weights, `array_sum($result) === $amount`.
+     *
+     * A cart-level coupon is the reason this exists. The discount comes off the
+     * cart, but tax is worked out per line, so the reduction has to reach the
+     * lines somehow, and it has to arrive complete: a cart discounted by 250
+     * that only takes 249 off the lines is a cent of tax computed on money
+     * nobody paid.
+     *
+     * Ties go to the earlier weight, so the same input always gives the same
+     * split. Two lines with equal weights and one cent to spare — the first
+     * line gets it, every time, rather than it depending on sort order.
+     *
+     * @param int $amount The amount to split, in cents. Not negative.
+     * @param array<int, int> $weights What to split it in proportion to. Not
+     *                                 negative.
+     * @return array<int, int> One share per weight, in the same order, summing
+     *                         to `$amount`. All zero when the weights are.
+     */
+    public static function apportion(int $amount, array $weights): array
+    {
+        $total = array_sum($weights);
+
+        if ($total <= 0) {
+            return array_fill_keys(array_keys($weights), 0);
+        }
+
+        $shares = [];
+        $remainders = [];
+
+        foreach ($weights as $index => $weight) {
+            $product = $amount * $weight;
+
+            $shares[$index] = intdiv($product, $total);
+            $remainders[$index] = $product % $total;
+        }
+
+        // What flooring every share left behind, handed out a cent at a time.
+        // The count cannot exceed the number of weights: each share was short
+        // of the exact figure by less than one cent.
+        $left = $amount - array_sum($shares);
+
+        if ($left > 0) {
+            arsort($remainders);
+
+            foreach (array_slice(array_keys($remainders), 0, $left) as $index) {
+                $shares[$index]++;
+            }
+        }
+
+        return $shares;
+    }
+
+    /**
      * What a line of a cart or an order comes to, in cents.
      *
      * A quantity of something at a price each. Both cart item implementations

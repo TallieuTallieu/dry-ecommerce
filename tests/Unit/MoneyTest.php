@@ -23,7 +23,6 @@ declare(strict_types=1);
  * warning. Those are the cases below, held at the exact cent they turn over.
  */
 
-use Tests\Support\PercentageTaxRate;
 use Tnt\Ecommerce\AmountTooLarge;
 use Tnt\Ecommerce\Money;
 use Tnt\Ecommerce\NotAnAmount;
@@ -92,14 +91,12 @@ it('stays exact on amounts far past float precision', function (): void {
 });
 
 it('rounds per line rather than on the total', function (): void {
-    $vat = new PercentageTaxRate(21);
-
     // Two identical lines of €12.50. 21% of each is exactly 2.625 euro, a tie
     // at the cent, so each line rounds up to 263.
-    $perLine = $vat->getTax(1250) + $vat->getTax(1250);
-    $onTheTotal = $vat->getTax(2500);
+    $perLine = Money::percentageOf(1250, 21) + Money::percentageOf(1250, 21);
+    $onTheTotal = Money::percentageOf(2500, 21);
 
-    expect($vat->getTax(1250))->toBe(263);
+    expect(Money::percentageOf(1250, 21))->toBe(263);
     expect($perLine)->toBe(526);
 
     // The two answers genuinely differ — this is the choice, not a detail.
@@ -110,13 +107,11 @@ it('rounds per line rather than on the total', function (): void {
 it(
     'sums already-rounded lines exactly, however many there are',
     function (): void {
-        $vat = new PercentageTaxRate(21);
-
         $total = 0;
 
         // A hundred lines of €0.12: 21% of 12 is 2.52, so 3 a line.
         for ($i = 0; $i < 100; $i++) {
-            $total += $vat->getTax(12);
+            $total += Money::percentageOf(12, 21);
         }
 
         expect($total)->toBe(300);
@@ -357,4 +352,100 @@ it('says a sub-cent amount is not merely unreadable', function (): void {
     }
 
     throw new Exception('The amount was not refused.');
+});
+
+/*
+ * The tax already inside an amount, and splitting an amount up without losing
+ * any of it. Both arrived with sc-11195, and both exist because a shop quoting
+ * tax-inclusive prices needs arithmetic the package did not have.
+ */
+
+it('finds the rate already inside an amount', function (): void {
+    // €12.50 with 21% in it: the VAT is 1250 x 21/121 = 216.94, not 262.50.
+    expect(Money::percentageIn(1250, 21))->toBe(217);
+
+    // The three Belgian rates on €19.99 inclusive.
+    expect(Money::percentageIn(1999, 6))->toBe(113); // 113.15
+    expect(Money::percentageIn(1999, 12))->toBe(214); // 214.18
+    expect(Money::percentageIn(1999, 21))->toBe(347); // 346.98
+});
+
+it('is not the same sum as adding the rate on', function (): void {
+    // The distinction the whole convention rests on. Using one where the other
+    // belongs over-reports by the rate itself, which on an invoice is wrong
+    // without looking wrong.
+    expect(Money::percentageIn(10_000, 21))->toBe(1736);
+    expect(Money::percentageOf(10_000, 21))->toBe(2100);
+});
+
+it('leaves an amount whole once the rate is taken out', function (): void {
+    // What makes it the right formula: the net plus the tax is the price the
+    // customer was quoted, to the cent, with nothing left over.
+    foreach ([1250, 1999, 4999, 7, 33, 100_000] as $gross) {
+        $tax = Money::percentageIn($gross, 21);
+
+        expect(Money::percentageOf($gross - $tax, 21))->toBe($tax);
+    }
+});
+
+it('finds nothing inside an amount at no rate', function (): void {
+    expect(Money::percentageIn(1250, 0))->toBe(0);
+    expect(Money::percentageIn(0, 21))->toBe(0);
+});
+
+it('refuses a rate an amount cannot contain', function (): void {
+    // Dividing by 100 plus the rate leaves nothing to divide by at -100%.
+    expect(fn() => Money::percentageIn(1250, -100))->toThrow(
+        UnsupportedRate::class
+    );
+    expect(fn() => Money::percentageIn(1250, -150))->toThrow(
+        UnsupportedRate::class
+    );
+});
+
+it('splits an amount so the parts add back up to it', function (): void {
+    // 250 across 2000 and 500: exactly 200 and 50.
+    expect(Money::apportion(250, [2000, 500]))->toBe([200, 50]);
+
+    // And where it does not divide evenly, the cents left over are handed out
+    // rather than dropped.
+    $shares = Money::apportion(100, [1, 1, 1]);
+
+    expect(array_sum($shares))->toBe(100);
+    expect($shares)->toBe([34, 33, 33]);
+});
+
+it('never loses or invents a cent, whatever the weights', function (): void {
+    // The property that matters. A reduction that does not arrive at the lines
+    // complete is tax charged on money nobody paid.
+    $cases = [
+        [250, [2000, 500]],
+        [1, [1, 1, 1, 1, 1]],
+        [999, [333, 333, 334]],
+        [7, [1000]],
+        [12_345, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]],
+        [0, [500, 500]],
+    ];
+
+    foreach ($cases as [$amount, $weights]) {
+        expect(array_sum(Money::apportion($amount, $weights)))->toBe($amount);
+    }
+});
+
+it(
+    'gives the odd cent to the largest remainder, then the earliest',
+    function (): void {
+        // Deterministic, so the same cart always splits the same way. Equal
+        // weights with one cent spare give it to the first line every time rather
+        // than to whichever the sort happened to reach.
+        expect(Money::apportion(3, [1, 1]))->toBe([2, 1]);
+        expect(Money::apportion(3, [1, 1]))->toBe([2, 1]);
+    }
+);
+
+it('apportions nothing across nothing', function (): void {
+    // An empty cart, or a cart of free things, has no weights to spread a
+    // reduction over. Zero shares rather than a division by zero.
+    expect(Money::apportion(500, [0, 0]))->toBe([0, 0]);
+    expect(Money::apportion(500, []))->toBe([]);
 });
