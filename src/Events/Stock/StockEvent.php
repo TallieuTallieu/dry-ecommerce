@@ -6,25 +6,24 @@ use Oak\Dispatcher\Event;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\StockWorkerInterface;
 
+/**
+ * Something happened to a stock line.
+ *
+ * The quantity is the amount that moved, not the amount left — a listener that
+ * wants the new count asks the worker for it.
+ */
 abstract class StockEvent extends Event
 {
-    /**
-     * @var $quantity
-     */
-    private $quantity;
+    private StockWorkerInterface $stockWorker;
+
+    private BuyableInterface $buyable;
 
     /**
-     * @var StockWorkerInterface $stockWorker
+     * How many moved.
      */
-    private $stockWorker;
+    private int $quantity;
 
     /**
-     * @var BuyableInterface $buyable
-     */
-    private $buyable;
-
-    /**
-     * Incremented constructor.
      * @param StockWorkerInterface $stockWorker
      * @param BuyableInterface $buyable
      * @param int $quantity

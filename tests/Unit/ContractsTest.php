@@ -23,11 +23,13 @@ it('autoloads every public contract', function (string $contract): void {
     Tnt\Ecommerce\Contracts\CouponInterface::class,
     Tnt\Ecommerce\Contracts\CustomerInterface::class,
     Tnt\Ecommerce\Contracts\FulfillmentInterface::class,
+    Tnt\Ecommerce\Contracts\HasStockInterface::class,
     Tnt\Ecommerce\Contracts\OrderInterface::class,
     Tnt\Ecommerce\Contracts\OrderItemInterface::class,
     Tnt\Ecommerce\Contracts\PaymentInterface::class,
     Tnt\Ecommerce\Contracts\ShopInterface::class,
     Tnt\Ecommerce\Contracts\StockWorkerInterface::class,
+    Tnt\Ecommerce\Contracts\TaxableInterface::class,
     Tnt\Ecommerce\Contracts\TaxRateInterface::class,
     Tnt\Ecommerce\Contracts\TotalingInterface::class,
 ]);

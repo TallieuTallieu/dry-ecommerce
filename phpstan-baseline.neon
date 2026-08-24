@@ -37,18 +37,6 @@ parameters:
 			path: src/Events/Order/OrderEvent.php
 
 		-
-			message: '#^PHPDoc tag @var has invalid value \(\$quantity\)\: Unexpected token "\$quantity", expected type at offset 16 on line 2$#'
-			identifier: phpDoc.parseError
-			count: 1
-			path: src/Events/Stock/StockEvent.php
-
-		-
-			message: '#^Property Tnt\\Ecommerce\\Events\\Stock\\StockEvent\:\:\$quantity has no type specified\.$#'
-			identifier: missingType.property
-			count: 1
-			path: src/Events/Stock/StockEvent.php
-
-		-
 			message: '#^Method Tnt\\Ecommerce\\Fulfillment\\MissingAttribute\:\:getAttributeName\(\) has no return type specified\.$#'
 			identifier: missingType.return
 			count: 1
@@ -185,15 +173,3 @@ parameters:
 			identifier: missingType.return
 			count: 1
 			path: src/Revisions/DatabaseRevision.php
-
-		-
-			message: '#^Parameter \#3 \$quantity of class Tnt\\Ecommerce\\Events\\Stock\\Decremented constructor expects int, float given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Stock/StockWorker.php
-
-		-
-			message: '#^Parameter \#3 \$quantity of class Tnt\\Ecommerce\\Events\\Stock\\Incremented constructor expects int, float given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Stock/StockWorker.php

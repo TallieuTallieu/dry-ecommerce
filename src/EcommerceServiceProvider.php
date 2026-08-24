@@ -15,7 +15,6 @@ use Tnt\Ecommerce\Contracts\CartInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
-use Tnt\Ecommerce\Contracts\StockWorkerInterface;
 use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Fulfillment\SessionAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
@@ -23,7 +22,6 @@ use Tnt\Ecommerce\Payment\NullPayment;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
 use Tnt\Ecommerce\Shop\Shop;
-use Tnt\Ecommerce\Stock\StockWorker;
 use Tnt\Ecommerce\Revisions\CreateCartTable;
 use Tnt\Ecommerce\Revisions\CreateOrderItemTable;
 use Tnt\Ecommerce\Revisions\CreateOrderTable;
@@ -79,7 +77,12 @@ class EcommerceServiceProvider extends ServiceProvider
                 ->get(RepositoryInterface::class)
                 ->get('ecommerce.payment', NullPayment::class)
         );
-        $app->set(StockWorkerInterface::class, StockWorker::class);
+
+        // StockWorkerInterface is deliberately not bound. A worker counts one
+        // named stock and cannot be built without being told which one, so the
+        // binding that used to sit here could never have been resolved. A
+        // buyable that has stock now hands a worker over itself, through
+        // HasStockInterface.
     }
 
     private function bootEventListeners(ContainerInterface $app)

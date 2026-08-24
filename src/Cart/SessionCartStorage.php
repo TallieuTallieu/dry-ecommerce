@@ -168,6 +168,28 @@ class SessionCartStorage implements CartStorageInterface
     }
 
     /**
+     * One indexed lookup on `(cart, item_class, item_id)` — the same query
+     * {@see add()} uses to find the line to merge into, which is what keeps the
+     * two agreeing on what "the same buyable" means.
+     *
+     * @param BuyableInterface $buyable
+     * @return int
+     */
+    public function quantityOf(BuyableInterface $buyable): int
+    {
+        $cart = $this->existingCart();
+
+        if ($cart === null) {
+            return 0;
+        }
+
+        return CartItemRepository::create()
+            ->forBuyable($cart, $buyable)
+            ->firstOrNull()
+            ?->getQuantity() ?? 0;
+    }
+
+    /**
      * @param BuyableInterface $buyable
      * @return void
      */

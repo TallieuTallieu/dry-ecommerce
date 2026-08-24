@@ -69,6 +69,16 @@ class InMemoryCartStorage implements CartStorageInterface
 
     /**
      * @param BuyableInterface $buyable
+     * @return int
+     */
+    public function quantityOf(BuyableInterface $buyable): int
+    {
+        return ($this->items[$this->key($buyable)] ?? null)?->getQuantity() ??
+            0;
+    }
+
+    /**
+     * @param BuyableInterface $buyable
      * @return void
      */
     public function remove(BuyableInterface $buyable): void

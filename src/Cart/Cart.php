@@ -14,8 +14,10 @@ use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\CouponInterface;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
+use Tnt\Ecommerce\Contracts\TaxableInterface;
 use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
+use Tnt\Ecommerce\Contracts\HasStockInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 
@@ -27,6 +29,38 @@ use Tnt\Ecommerce\Contracts\FulfillmentInterface;
  * them those two facts are what let a cart be built and exercised in a unit
  * test — hand it {@see InMemoryCartStorage} and the arithmetic below runs with
  * no session and no database anywhere near it.
+ *
+ * # Capabilities
+ *
+ * The cart is the one place that asks a buyable what it is capable of. Two
+ * questions, one interface each, both answered by absence when the buyable does
+ * not implement them:
+ *
+ * - {@see HasStockInterface} — {@see canAdd()} consults the buyable's stock;
+ * - {@see TaxableInterface} — {@see getTax()} adds up the lines that carry a
+ *   rate.
+ *
+ * Both checks are `instanceof`, deliberately, rather than a flag method on every
+ * buyable. A buyable that has no stock and no tax implements neither and is
+ * asked neither question — which is the whole point of the two interfaces, and
+ * of retiring the `NullStockWorker` and `NullTaxRate` that used to stand in for
+ * the answers.
+ *
+ * # Reporting, not deciding
+ *
+ * Both capabilities stop at reporting. {@see canAdd()} says whether the stock
+ * covers a quantity and {@see add()} adds regardless; {@see getTax()} says what
+ * the tax comes to and {@see getTotal()} is untouched by it.
+ *
+ * Neither stopping point is an oversight, and this is the one place the reason
+ * is set out. Refusing a sale the stock cannot fill today, taking it as a
+ * backorder, and overselling on purpose to reconcile later are all real ways to
+ * run a shop; so is quoting prices with tax in them, and so is quoting them
+ * without. Which applies turns on facts a shop has and this package has never
+ * been told, and a package that picked one would be quietly wrong for everyone
+ * it picked against, with no way for them to say so. So both figures are
+ * reported and the shop acts on them. The methods below say what they report
+ * and point back here for why they stop there.
  */
 class Cart implements CartInterface, TotalingInterface
 {
@@ -52,6 +86,12 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
+     * Put a buyable in the cart, merging into the line it already has.
+     *
+     * Adds what it is asked to add; stock does not veto it. {@see canAdd()} is
+     * how a shop asks first, and the note on this class is why that is an ask
+     * rather than a gate.
+     *
      * @param BuyableInterface $buyable
      * @param int $quantity
      * @return mixed|void
@@ -59,6 +99,44 @@ class Cart implements CartInterface, TotalingInterface
     public function add(BuyableInterface $buyable, int $quantity = 1)
     {
         $this->storage->add($buyable, $quantity);
+    }
+
+    /**
+     * Whether the stock would cover this buyable in this quantity.
+     *
+     * Always true for a buyable that is not counted: no stock means no limit,
+     * and asking is the cart's job rather than the buyable's.
+     *
+     * For one that is, the figure checked is what the cart would *hold* — what
+     * is already on its line plus what is being added — not the addition on its
+     * own. Three added to a line of two is a request for five, and a stock of
+     * four cannot fill it however the request was split up. What is already on
+     * the line comes from {@see CartStorageInterface::quantityOf()}, so it is
+     * the storage's idea of "the same buyable" that decides, which is the one
+     * {@see add()} merges on.
+     *
+     * This reports; it does not gate — {@see add()} adds either way, for the
+     * reason set out on this class. One thing worth knowing before acting on a
+     * false: selling anyway is something the stock has to have been told about
+     * too, because a {@see \Tnt\Ecommerce\Stock\StockWorker} refuses to go
+     * below zero unless it was built to allow it.
+     *
+     * @param BuyableInterface $buyable
+     * @param int $quantity
+     * @return bool
+     */
+    public function canAdd(BuyableInterface $buyable, int $quantity = 1): bool
+    {
+        if (!($buyable instanceof HasStockInterface)) {
+            return true;
+        }
+
+        return $buyable
+            ->getStockWorker()
+            ->isAvailable(
+                $buyable,
+                $this->storage->quantityOf($buyable) + $quantity
+            );
     }
 
     /**
@@ -205,6 +283,63 @@ class Cart implements CartInterface, TotalingInterface
         return $this->getSubTotal() +
             $this->getFulfillmentCost() -
             $this->getReduction();
+    }
+
+    /**
+     * The tax on the lines that carry a rate, in cents.
+     *
+     * Each taxable line is taxed on its own line total and rounded there, which
+     * is the per-line half of the rounding rule in {@see \Tnt\Ecommerce\Money}:
+     * every figure below is one a customer could see printed against a line, so
+     * the sum has to be the sum of the printed figures. Lines whose buyable does
+     * not implement {@see TaxableInterface} contribute nothing, and a cart of
+     * nothing but those answers 0.
+     *
+     * # The base is the line total, before any discount
+     *
+     * {@see getReduction()} does not enter this. A coupon comes off the cart, at
+     * the cart's level, and nothing in {@see CouponInterface} says which lines
+     * it came off — so there is no honest way to restate a line total after one.
+     * A cart of one taxable line of 10000 at 21% with 1000 off reports 2100, not
+     * 1890.
+     *
+     * Which of those a shop wants is the same unanswered question as below: to
+     * one quoting tax-inclusive prices this is a breakdown of a total the
+     * discount has already moved, and to one quoting prices without tax in them
+     * it is an amount to charge on top, where the discounted base is the honest
+     * one. A shop needing the second has {@see getSubTotal()} and
+     * {@see getReduction()} to work it out with.
+     *
+     * # It does not move the total
+     *
+     * {@see getTotal()} is untouched by this, and no tax is written to an order
+     * at checkout — the reporting stopping point described on this class, and
+     * this is the fact it turns on. Whether tax is *contained in* the prices, as
+     * a Belgian consumer price contains its VAT, or *added to* them decides
+     * whether this figure is a breakdown of the total or an addition to it, and
+     * the two answers differ by the whole amount. Nothing in this package has
+     * ever recorded which a shop means, there is no column to record it in, and
+     * guessing would silently restate every existing total by 21%. Wiring tax
+     * into totals and onto the order needs that question answered first.
+     *
+     * @see \Tnt\Ecommerce\Money
+     * @return int
+     */
+    public function getTax(): int
+    {
+        $tax = 0;
+
+        foreach ($this->items() as $item) {
+            $buyable = $item->getBuyable();
+
+            if (!($buyable instanceof TaxableInterface)) {
+                continue;
+            }
+
+            $tax += $buyable->getTaxRate()->getTax($item->getPrice());
+        }
+
+        return $tax;
     }
 
     /**
