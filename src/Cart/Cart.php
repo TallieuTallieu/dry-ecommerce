@@ -403,7 +403,7 @@ class Cart implements CartInterface, TotalingInterface
         $fulfillment = $this->getFulfillment();
 
         // Create the order
-        $order = new Order();
+        $order = $this->newOrder();
         $order->created = time();
         $order->updated = time();
         $order->total = $this->getTotal();
@@ -439,5 +439,33 @@ class Cart implements CartInterface, TotalingInterface
         $this->payment->pay($order);
 
         return $order;
+    }
+
+    /**
+     * The empty order {@see checkout()} is about to fill in.
+     *
+     * The one thing in `checkout()` that reaches for the database before it has
+     * done any of its own work, and therefore the smallest place to stand a test
+     * on. Override it with an {@see Order} whose `save()` and `add()` keep to
+     * memory, and everything after this line — the six money fields, the
+     * fulfillment method, the discount, the customer, the lines, the event, the
+     * payment — runs for real with no connection anywhere near it.
+     *
+     * Deliberately below the assignment rather than above it. A seam that
+     * handed back a *finished* order would be the easier thing to write and
+     * would test nothing: the code it replaced is the code worth checking.
+     * `checkout()` freezes six money values onto a row by hand, and if two of
+     * them were transposed no other test in this package would notice.
+     *
+     * Deliberately `protected`, and deliberately not an interface. Nothing has
+     * asked to swap order creation in a running shop, and inventing a public
+     * seam for a need nobody has is how a package grows surface it then has to
+     * keep. If a real one ever turns up, this is where it starts.
+     *
+     * @return Order
+     */
+    protected function newOrder(): Order
+    {
+        return new Order();
     }
 }
