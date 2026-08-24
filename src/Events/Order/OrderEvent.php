@@ -8,7 +8,7 @@ use Tnt\Ecommerce\Contracts\OrderInterface;
 abstract class OrderEvent extends Event
 {
     /**
-     * @var OrderInterface $user
+     * @var OrderInterface $order
      */
     private $order;
 
