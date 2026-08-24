@@ -16,39 +16,18 @@ declare(strict_types=1);
  * deterministic; with integers that crutch is gone and the assertions are the
  * plain arithmetic they always wanted to be. The rounding rule itself lives in
  * Tnt\Ecommerce\Money and is pinned down in MoneyTest.
+ *
+ * What a cart does with a buyable's optional stock and tax is its own file,
+ * BuyableCapabilitiesTest; the buyables below have neither, which is what keeps
+ * the arithmetic here about arithmetic. makeCart() is shared between the two and
+ * lives in tests/Pest.php.
  */
 
 use Tests\Support\FakeBuyable;
 use Tests\Support\FakeCoupon;
 use Tests\Support\FakeDiscountCode;
 use Tests\Support\FakeFulfillment;
-use Tests\Support\FakePayment;
 use Tests\Support\PercentageCoupon;
-use Tnt\Ecommerce\Cart\Cart;
-use Tnt\Ecommerce\Cart\InMemoryCartStorage;
-use Tnt\Ecommerce\Contracts\FulfillmentInterface;
-use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
-use Tnt\Ecommerce\Shop\Shop;
-
-/**
- * A cart, the storage behind it and the shop it belongs to.
- *
- * @param array<int, FulfillmentInterface> $fulfillments
- * @return array{0: Cart, 1: InMemoryCartStorage, 2: Shop}
- */
-function makeCart(array $fulfillments = []): array
-{
-    $shop = new Shop(new InMemoryAttributeStorage());
-
-    foreach ($fulfillments as $fulfillment) {
-        $shop->addFulfillment($fulfillment);
-    }
-
-    $storage = new InMemoryCartStorage();
-    $cart = new Cart($shop, $storage, new FakePayment());
-
-    return [$cart, $storage, $shop];
-}
 
 it('constructs without a session or a database', function (): void {
     [$cart] = makeCart();
@@ -306,6 +285,44 @@ it('drops the discount when the cart is cleared', function (): void {
     expect($cart->getDiscount())->toBeNull();
     expect($cart->getReduction())->toBe(0);
     expect($cart->getTotal())->toBe(0);
+});
+
+it('counts how many of one buyable it holds', function (): void {
+    [$cart, $storage] = makeCart();
+
+    $cart->add(new FakeBuyable('1', 1000), 2);
+    $cart->add(new FakeBuyable('1', 1000), 3);
+    $cart->add(new FakeBuyable('2', 500), 7);
+
+    // Keyed the same way add() merges, so a second instance of the same
+    // buyable answers for the line the first one made. A cart line reloads its
+    // buyable from the database and is never the instance the caller holds, so
+    // matching on identity would answer 0 for everything in a real shop.
+    expect($storage->quantityOf(new FakeBuyable('1', 1000)))->toBe(5);
+    expect($storage->quantityOf(new FakeBuyable('2', 500)))->toBe(7);
+});
+
+it('counts nothing for a buyable it does not hold', function (): void {
+    [$cart, $storage] = makeCart();
+
+    $cart->add(new FakeBuyable('1', 1000), 2);
+
+    expect($storage->quantityOf(new FakeBuyable('2', 1000)))->toBe(0);
+});
+
+it('stops counting a buyable once it is removed', function (): void {
+    [$cart, $storage] = makeCart();
+    $buyable = new FakeBuyable('1', 1000);
+
+    $cart->add($buyable, 4);
+    expect($storage->quantityOf($buyable))->toBe(4);
+
+    $cart->remove($buyable);
+    expect($storage->quantityOf($buyable))->toBe(0);
+
+    $cart->add($buyable, 2);
+    $cart->clear();
+    expect($storage->quantityOf($buyable))->toBe(0);
 });
 
 it('prices a line at quantity times unit price', function (): void {

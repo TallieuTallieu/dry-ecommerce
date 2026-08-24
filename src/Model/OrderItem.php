@@ -33,6 +33,13 @@ class OrderItem extends Model implements OrderItemInterface
     ];
 
     /**
+     * The buyable this line points at, once something has asked for it.
+     *
+     * @see getBuyable()
+     */
+    private ?BuyableInterface $buyable = null;
+
+    /**
      * @return int
      */
     public function getQuantity(): int
@@ -41,13 +48,25 @@ class OrderItem extends Model implements OrderItemInterface
     }
 
     /**
+     * The buyable this line points at, loaded once, as on
+     * {@see CartItem::getBuyable()}.
+     *
+     * Less is riding on it here — the price is frozen on the row, so nothing on
+     * this class needs the buyable to answer a question about the order. It is
+     * a template asking twice that pays, and it pays the same `SELECT` each
+     * time without this.
+     *
      * @return BuyableInterface
      */
     public function getBuyable(): BuyableInterface
     {
+        if ($this->buyable !== null) {
+            return $this->buyable;
+        }
+
         /** @var class-string<Model&BuyableInterface> $item_class */
         $item_class = $this->item_class;
 
-        return $item_class::load($this->item_id);
+        return $this->buyable = $item_class::load($this->item_id);
     }
 }

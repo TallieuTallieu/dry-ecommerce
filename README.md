@@ -184,7 +184,50 @@ from inside `intdiv()`, and a rate of `0.000004`, `INF` or `NAN` quietly
 returned `0` cents behind a PHP warning.
 
 ### Buyable
-Documentation coming soon
+
+A buyable is anything your shop sells. `BuyableInterface` asks for five things,
+all of which any model that is for sale can answer:
+
+```php
+<?php
+
+use Tnt\Ecommerce\Contracts\BuyableInterface;
+
+class Product extends \dry\orm\Model implements BuyableInterface
+{
+    public function getId(): string { return (string) $this->id; }
+    public function getTitle(): string { return $this->title; }
+    public function getDescription(): string { return $this->description; }
+    public function getPrice(): int { return $this->price; } // cents
+    public function getThumbnailSource(): string { return $this->image->src; }
+}
+```
+
+That is a complete buyable. It has no stock and no tax, and it does not need
+any: both are **capabilities you opt into**, one interface each.
+
+| Implement | To get |
+|---|---|
+| `HasStockInterface` | `getStockWorker()`. `Cart::canAdd()` reports whether the stock covers a quantity. |
+| `TaxableInterface` | `getTaxRate()`. The buyable's lines count towards `Cart::getTax()`. |
+
+Neither, either or both. The cart checks with `instanceof` and asks a buyable
+nothing it has not offered to answer.
+
+> **Upgrading.** `getStockWorker()` and `getTaxRate()` used to be mandatory on
+> every buyable, so anything with no stock concept and no VAT rate had to invent
+> answers — and the package shipped the inventions, `NullStockWorker` and
+> `NullTaxRate`, so that it could. Both are gone. Move the two methods onto the
+> matching capability interface, or delete them: a buyable that returned a null
+> implementation was saying it had neither, and now says so by implementing
+> neither.
+
+#### About the id
+
+`getId()` returns a `string`, but the value has to be an integer written as one.
+Cart lines and order lines reference their buyable by class name plus `item_id`,
+and both `item_id` columns are `int(11)`; a buyable answering `'sku-a'` would be
+stored, and read back, as item 0. A model returns `(string) $this->id`.
 
 ### Cart
 
@@ -208,9 +251,29 @@ $discountCode = $cart->getDiscount();
 $subTotal = $cart->getSubTotal();
 $total = $cart->getTotal();
 $reduction = $cart->getReduction();
+$tax = $cart->getTax();
 
 $order = $cart->checkout($customer);
 ```
+
+`add()` adds what you ask it to. **Stock does not veto it**, and `canAdd()` is how
+you ask:
+
+```php
+if (! $cart->canAdd($buyable, 2)) {
+    // out of stock, or not stocked at all — your call what happens next
+}
+
+$cart->add($buyable, 2); // adds either way
+```
+
+That split is deliberate. Whether a shop refuses a sale it cannot fill today,
+takes it as a backorder, or oversells on purpose and reconciles later is trade
+policy, and two shops selling the same thing answer it differently. This package
+does not know which shop it is in, so it reports what the stock says and leaves
+the decision where the knowledge to make it lives.
+
+`Cart::getTax()` draws the same line, for the same reason.
 
 ### Discount & Coupon
 Documentation coming soon
@@ -231,7 +294,143 @@ Available payment packages:
 * Mollie: https://github.com/reinvanoyen/dry-mollie
 
 ### Stock
-Documentation coming soon
+
+Optional. A buyable that is counted implements `HasStockInterface` and names the
+stock it is counted in:
+
+```php
+<?php
+
+use Tnt\Ecommerce\Contracts\HasStockInterface;
+use Tnt\Ecommerce\Contracts\StockWorkerInterface;
+use Tnt\Ecommerce\Stock\StockWorker;
+
+class Product extends \dry\orm\Model implements HasStockInterface
+{
+    // ... the five BuyableInterface methods ...
+
+    private ?StockWorkerInterface $stockWorker = null;
+
+    public function getStockWorker(): StockWorkerInterface
+    {
+        // Held rather than rebuilt: a worker looks its stock row up on first
+        // use and then remembers it, and `Cart::canAdd()` asks for one on
+        // every call. Returning a new worker each time throws that away.
+        return $this->stockWorker ??= new StockWorker('warehouse');
+    }
+}
+```
+
+A shop can keep several stocks — a warehouse, a shop floor — as rows in
+`ecommerce_stock`, addressed by `hid`. `StockWorker` counts one of them, looking
+the row up on first use, so building one costs nothing.
+
+```php
+$worker->getQuantity($buyable);              // how many there are
+$worker->isAvailable($buyable, 3);           // are there three?
+$worker->increment($buyable, 10);            // stock arrived
+$worker->decrement($buyable, 1);             // one went out
+```
+
+Quantities are whole. They were `float` in these signatures and `int` in the
+column, which meant half a thing was expressible and not storable; a shop that
+sells by weight counts in grams, exactly as its money is in cents. `increment()`
+and `decrement()` dispatch `Events\Stock\Incremented` and `Decremented` with the
+amount that moved. A stock with no line for a buyable reports 0 and refuses it —
+never stocked is not the same as unlimited.
+
+#### Taking out more than there is
+
+Your call, made once when you build the worker:
+
+```php
+new StockWorker('warehouse');                       // refuses
+new StockWorker('warehouse', allowNegative: true);  // backorders
+```
+
+By default `decrement()` refuses to take a stock below zero and throws
+`Stock\StockWouldGoNegative`, which carries the buyable, what the stock held,
+what was asked for and the shortfall. Nothing is written when it refuses — the
+count is left exactly as it was, not partly taken out.
+
+With `allowNegative: true` the count goes under instead, and the negative is how
+many you owe; `increment()` counts it back up again as deliveries arrive.
+`isAvailable()` is unaffected either way — a stock at `-2` has nothing available.
+
+The count is never clamped to zero, under either policy. A stock that quietly
+disagrees with what was taken out of it is the one outcome that helps nobody, so
+the choice is between hearing about the oversell and recording it.
+
+> Nothing in this package calls `decrement()`, so this fires wherever you do —
+> usually a listener on `Events\Order\Paid`, which is *after* the money is taken.
+> `Cart::canAdd()` is the earlier and cheaper place to find out.
+
+The cart is the only part of the package that consults stock on its own, in
+`canAdd()`, and it only reports what it finds. Nothing decrements automatically
+at checkout either; when to take stock out — on order, on payment, on dispatch —
+is the shop's call, and `Events\Order\Paid` is the usual place to make it.
+
+`StockWorkerInterface` is deliberately not bound in the container: a worker
+cannot be built without being told which stock it counts, so there is nothing
+sensible to resolve. Buyables hand one over themselves.
 
 ### Tax
-Documentation coming soon
+
+Optional, and currently a **reporting** seam rather than a charging one.
+
+A buyable that carries tax implements `TaxableInterface` and returns a rate. The
+package ships no rate — the one it used to ship taxed nothing — because a rate
+is where the one decision that matters lives:
+
+```php
+<?php
+
+use Tnt\Ecommerce\Contracts\TaxableInterface;
+use Tnt\Ecommerce\Contracts\TaxRateInterface;
+use Tnt\Ecommerce\Money;
+
+final class Vat implements TaxRateInterface
+{
+    public function __construct(private readonly float $percentage) {}
+
+    public function getTax(int $amount): int
+    {
+        return Money::percentageOf($amount, $this->percentage);
+    }
+}
+
+class Product extends \dry\orm\Model implements TaxableInterface
+{
+    // ... the five BuyableInterface methods ...
+
+    public function getTaxRate(): TaxRateInterface
+    {
+        return new Vat($this->vat_percentage);
+    }
+}
+```
+
+`Cart::getTax()` then sums the tax on the lines whose buyable is taxable,
+applying each rate to that line's total and rounding it there — the per-line half
+of [the rounding rule](#the-rounding-rule). Lines whose buyable is not taxable
+contribute nothing.
+
+```php
+$cart->getTax(); // cents
+```
+
+Each line is taxed on its **full line total**: a coupon does not reduce the base.
+`getReduction()` comes off the cart rather than off any line in particular, and
+nothing in `CouponInterface` says which lines it came off, so there is no honest
+way to restate a line total after one. A €100 taxable line with €10 off reports
+`2100`, not `1890`. If your prices are quoted without tax, that is the figure to
+check before printing it — `getSubTotal()` and `getReduction()` are there to work
+out a discounted base with.
+
+> **It does not enter `getTotal()`, and no tax is written to the order.** That is
+> a stopping point on purpose. Whether a price is quoted with tax already in it —
+> as a Belgian consumer price is — or without it decides whether this figure is a
+> *breakdown* of the total or an *addition* to it, and the two answers differ by
+> the whole amount. This package has never recorded which a shop means and has no
+> column to record it in, so guessing would silently restate every existing total
+> by 21%. Print the figure; charging it needs that question answered first.

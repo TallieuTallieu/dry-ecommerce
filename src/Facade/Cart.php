@@ -18,6 +18,7 @@ use Tnt\Ecommerce\Model\DiscountCode;
  * Every amount below is integer cents; see {@see \Tnt\Ecommerce\Money}.
  *
  * @method static mixed add(BuyableInterface $buyable, int $quantity = 1)
+ * @method static bool canAdd(BuyableInterface $buyable, int $quantity = 1)
  * @method static mixed remove(BuyableInterface $buyable)
  * @method static array<int, CartItemInterface> items()
  * @method static mixed clear()
@@ -30,6 +31,7 @@ use Tnt\Ecommerce\Model\DiscountCode;
  * @method static int getSubTotal()
  * @method static int getTotal()
  * @method static int getReduction()
+ * @method static int getTax()
  *
  * @extends Facade<CartInterface>
  */

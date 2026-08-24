@@ -5,19 +5,25 @@ declare(strict_types=1);
 namespace Tests\Support;
 
 use Tnt\Ecommerce\Contracts\BuyableInterface;
-use Tnt\Ecommerce\Contracts\StockWorkerInterface;
-use Tnt\Ecommerce\Contracts\TaxRateInterface;
-use Tnt\Ecommerce\Stock\NullStockWorker;
-use Tnt\Ecommerce\TaxRate\NullTaxRate;
 
 /**
- * Something sellable that is not a database row.
+ * Something sellable that is not a database row, with no stock and no tax.
  *
- * `BuyableInterface`'s shape is deliberately not touched by this ticket, so
- * this implements it as it stands today, fat contract and all. Only the price
- * changed: it is integer cents now, so `1225` is €12.25.
+ * The plainest buyable the package now allows, and the one the acceptance
+ * criterion "a buyable can be implemented with no stock and no tax" is about:
+ * five methods, all of which any model that is for sale can answer. Before
+ * `BuyableInterface` was slimmed this class could not have been written without
+ * also handing back a `NullStockWorker` and a `NullTaxRate` — which it did, and
+ * which is what the two capability interfaces removed the need for.
+ *
+ * The three fakes that add a capability extend this one, so that the difference
+ * between the four combinations is exactly the method each of them adds:
+ * {@see FakeTaxableBuyable}, {@see FakeStockedBuyable} and
+ * {@see FakeStockedTaxableBuyable}.
+ *
+ * Prices are integer cents, so `1225` is €12.25.
  */
-final class FakeBuyable implements BuyableInterface
+class FakeBuyable implements BuyableInterface
 {
     /**
      * @param string $id
@@ -53,15 +59,5 @@ final class FakeBuyable implements BuyableInterface
     public function getThumbnailSource(): string
     {
         return '';
-    }
-
-    public function getStockWorker(): StockWorkerInterface
-    {
-        return new NullStockWorker();
-    }
-
-    public function getTaxRate(): TaxRateInterface
-    {
-        return new NullTaxRate();
     }
 }

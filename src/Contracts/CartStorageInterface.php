@@ -38,6 +38,25 @@ interface CartStorageInterface
     public function add(BuyableInterface $buyable, int $quantity = 1): void;
 
     /**
+     * How many of one buyable the cart holds, or 0 when it holds none.
+     *
+     * The counterpart to {@see add()} merging rather than adding a second line:
+     * whatever an implementation considers "the same buyable" there, it has to
+     * consider the same buyable here. That is the reason this is asked of
+     * storage rather than worked out by counting {@see items()} — the answer
+     * depends on how lines are keyed, and storage is what keys them.
+     *
+     * It is also the cheap way round. Both shipped implementations answer with
+     * a lookup they already have — an array index, or the same indexed query
+     * `add()` uses — where the caller would have to walk every line and load
+     * every buyable behind it to work the same answer out.
+     *
+     * @param BuyableInterface $buyable
+     * @return int
+     */
+    public function quantityOf(BuyableInterface $buyable): int;
+
+    /**
      * Take a buyable out of the cart entirely, whatever its quantity.
      *
      * @param BuyableInterface $buyable

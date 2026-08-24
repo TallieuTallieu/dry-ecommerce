@@ -24,15 +24,14 @@ it('autoloads the service provider without booting Dry', function (): void {
     )->toBeTrue();
 });
 
-it('autoloads the null implementations without booting Dry', function (
-    string $class
-): void {
-    expect(class_exists($class))->toBeTrue();
-})->with([
-    Tnt\Ecommerce\Payment\NullPayment::class,
-    Tnt\Ecommerce\Stock\NullStockWorker::class,
-    Tnt\Ecommerce\TaxRate\NullTaxRate::class,
-]);
+it('autoloads the null payment without booting Dry', function (): void {
+    // The last of the null implementations, and the only one that was ever a
+    // real default: a shop with no payment package installed has to be able to
+    // resolve *something* for PaymentInterface. NullStockWorker and NullTaxRate
+    // were not defaults in that sense — they stood in for answers a buyable
+    // should never have been asked for, and are gone.
+    expect(class_exists(Tnt\Ecommerce\Payment\NullPayment::class))->toBeTrue();
+});
 
 it('autoloads the cart seam without booting Dry', function (
     string $class
@@ -44,9 +43,12 @@ it('autoloads the cart seam without booting Dry', function (
     Tnt\Ecommerce\Cart\InMemoryCartStorage::class,
     Tnt\Ecommerce\Cart\SessionCartStorage::class,
     Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage::class,
+    Tnt\Ecommerce\Model\CartItem::class,
+    Tnt\Ecommerce\Model\OrderItem::class,
     Tnt\Ecommerce\Fulfillment\SessionAttributeStorage::class,
     Tnt\Ecommerce\Shop\Shop::class,
     Tnt\Ecommerce\Stock\StockWorker::class,
+    Tnt\Ecommerce\Stock\StockWouldGoNegative::class,
 ]);
 
 it('autoloads every repository without booting Dry', function (
