@@ -14,9 +14,9 @@ declare(strict_types=1);
  *
  * What made it testable is one protected method, Cart::newOrder(), overridden
  * by Tests\Support\InMemoryOrderCart to hand back an order that keeps to
- * memory. Everything after that line is the production code: the same six
- * assignments, the same order_id, the same loop over the lines, the same event
- * and the same payment call.
+ * memory. Everything after that line is the production code: the same nine
+ * assignments onto the row, the same order_id, the same loop over the lines,
+ * the same event and the same payment call.
  *
  * The first test is the one this was all for. checkout() copies four money
  * values onto the row by hand, and before this there was nothing anywhere in
@@ -29,8 +29,8 @@ use Tests\Support\FakeCoupon;
 use Tests\Support\FakeDiscountCode;
 use Tests\Support\FakeFulfillment;
 use Tests\Support\FakeUserResolver;
-use Tests\Support\UnsavedCustomer;
 use Tests\Support\InMemoryOrder;
+use Tests\Support\UnsavedCustomer;
 use Tnt\Ecommerce\Events\Order\Created;
 
 beforeEach(function (): void {
@@ -145,6 +145,13 @@ it('builds an order id on the id the first save gave it', function (): void {
     // the id only exists once the row has been written.
     expect($order->saveCount)->toBe(2);
     expect($order->order_id)->toStartWith($order->id . '-');
+
+    // The trailing `*` is deliberate and should not be tightened to `+`.
+    // `checkout()` splits eight random characters as rand(5, 8) and 8 minus
+    // that, so the tail is empty roughly one order in four and the id ends on a
+    // bare underscore. That is a known quirk with a ticket of its own; a `+`
+    // here would pass most runs and fail the rest, which is worse than
+    // describing what the code actually does.
     expect($order->order_id)->toMatch('/^\d+-[a-zA-Z0-9]+_[a-zA-Z0-9]*$/');
 });
 
@@ -184,8 +191,16 @@ it('runs the callback and then takes payment', function (): void {
     $cart->add(new FakeBuyable('1', 2000));
 
     $order = $cart->checkout(new UnsavedCustomer(), function ($given) use (
-        &$seen
+        &$seen,
+        $payment
     ): void {
+        // Asserted here rather than afterwards, because afterwards cannot tell
+        // the two orders apart: both calls have happened by then whichever way
+        // round they went. The callback is where a shop stamps something onto
+        // the order it is about to be charged for, so running after the payment
+        // would be too late for the thing it is there to do.
+        expect($payment->paid)->toBe([]);
+
         $seen[] = $given;
     });
 
