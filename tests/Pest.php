@@ -1,9 +1,11 @@
 <?php
 
 use Tests\Support\FakePayment;
+use Tnt\Ecommerce\Account\GuestUserResolver;
 use Tnt\Ecommerce\Cart\Cart;
 use Tnt\Ecommerce\Cart\InMemoryCartStorage;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
+use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
 use Tnt\Ecommerce\Shop\Shop;
 
@@ -35,11 +37,19 @@ uses(Tests\TestCase::class)->in('Feature', 'Unit');
  * available to the files Pest happens to load after it, which is a load-order
  * dependency worth not having.
  *
+ * The cart resolves accounts through a seam too, and it defaults here to the
+ * same guest resolver the service provider binds when a shop has not configured
+ * one — so every existing caller keeps building the cart of a shop with no
+ * accounts, and a test about the account path passes one in.
+ *
  * @param array<int, FulfillmentInterface> $fulfillments
+ * @param UserResolverInterface|null $users Who is signed in; guest by default.
  * @return array{0: Cart, 1: InMemoryCartStorage, 2: Shop}
  */
-function makeCart(array $fulfillments = []): array
-{
+function makeCart(
+    array $fulfillments = [],
+    ?UserResolverInterface $users = null
+): array {
     $shop = new Shop(new InMemoryAttributeStorage());
 
     foreach ($fulfillments as $fulfillment) {
@@ -47,7 +57,12 @@ function makeCart(array $fulfillments = []): array
     }
 
     $storage = new InMemoryCartStorage();
-    $cart = new Cart($shop, $storage, new FakePayment());
+    $cart = new Cart(
+        $shop,
+        $storage,
+        new FakePayment(),
+        $users ?? new GuestUserResolver()
+    );
 
     return [$cart, $storage, $shop];
 }

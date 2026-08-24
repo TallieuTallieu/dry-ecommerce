@@ -26,8 +26,13 @@ $app->bootstrap();
 Name | Default
 ---- | -------
 payment | \Tnt\Ecommerce\Payment\NullPayment::class
+user_resolver | \Tnt\Ecommerce\Account\GuestUserResolver::class
 
 **Careful!** Payment can be set from configuration. the default value of the "payment" config property provides a default NullPayment which basically gives everything away for free. For more info on payments check out the topic payments below.
+
+`user_resolver` decides whether a checkout can be linked to an account. The
+default answers "nobody is signed in", so every checkout is a guest checkout.
+See [Customer](#customer).
 
 #### Concepts
 * Money
@@ -282,7 +287,81 @@ Documentation coming soon
 Documentation coming soon
 
 ### Customer
-Documentation coming soon
+
+A customer row records who placed *one* order and where it was going. Every
+checkout writes a new one, and an order carries a non-null `customer` either
+way — guest checkout and account checkout are the same code path.
+
+Rows are never reused or deduplicated. Two things follow from that, both
+deliberate:
+
+- **An email address is not an identity claim.** Matching a checkout to an
+  existing row by email would let anyone check out as somebody else's address
+  and merge into their record. `CustomerRepository::byEmail()` exists so an
+  admin can *find* the orders placed from an address; checkout does not use it.
+- **The address on a placed order stays put.** The row carries the delivery
+  address, VAT number and comments of that order. Reusing one across checkouts
+  would rewrite the address on every order already placed against it the next
+  time somebody moved house.
+
+#### Linking a customer to an account
+
+`Customer.user` is a nullable id: the account that was signed in at checkout, or
+`NULL` for a guest. It is what lets a shop show a person their orders without
+this package and an accounts package keeping two unrelated records of the same
+person.
+
+The pairing with [dry-accounts](https://github.com/TallieuTallieu/dry-accounts)
+is one config line:
+
+```php
+// config/ecommerce.php
+'user_resolver' => \Tnt\Ecommerce\Account\AccountsUserResolver::class,
+```
+
+That is all. `Cart::checkout()` asks the resolver who is signed in and the
+customer row records the answer; nothing else in the checkout changes, and a
+guest checkout costs no extra query.
+
+dry-accounts is **not** a dependency of this package — a shop that sells without
+accounts installs and runs exactly as before. Anything else implementing
+`UserResolverInterface` works just as well:
+
+```php
+final class MyAuthResolver implements \Tnt\Ecommerce\Contracts\UserResolverInterface
+{
+    public function getCurrentUserId(): ?int
+    {
+        return MyAuth::user()?->id;
+    }
+}
+```
+
+A returning account gets a *new* customer row linked to the same user, for the
+address-history reason above. To read the account back:
+
+```php
+$userId = $order->getCustomer()->getUserId(); // int|null
+
+if ($userId !== null) {
+    $user = \Tnt\Account\Model\User::load($userId);
+}
+```
+
+The id is deliberately not hydrated into a user object by this package. Doing
+that would mean naming a user class it does not own, and a project that has
+accounts has that class imported already.
+
+##### The column has no foreign key
+
+`ecommerce_customer.user` is the one relation here without a database-level
+constraint. The table it would point at belongs to dry-accounts, and a shop
+without that package has no such table — MySQL refuses a constraint against a
+table that is not there, so declaring one would break the `ecommerce` migrator
+on exactly the shops the nullable column exists to support. The two packages
+also register separate migrators with no ordering between them, so there is no
+point at which the target is known to exist. Add the constraint in your own
+schema if your shop always has both.
 
 ### Order
 Documentation coming soon

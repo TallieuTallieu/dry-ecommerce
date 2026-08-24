@@ -38,6 +38,7 @@ it('autoloads the cart seam without booting Dry', function (
 ): void {
     expect(class_exists($class))->toBeTrue();
 })->with([
+    Tnt\Ecommerce\Account\GuestUserResolver::class,
     Tnt\Ecommerce\Cart\Cart::class,
     Tnt\Ecommerce\Cart\InMemoryCartItem::class,
     Tnt\Ecommerce\Cart\InMemoryCartStorage::class,

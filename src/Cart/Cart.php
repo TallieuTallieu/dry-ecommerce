@@ -5,6 +5,7 @@ namespace Tnt\Ecommerce\Cart;
 use Closure;
 use dry\util\Str;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Model\Customer;
 use Oak\Dispatcher\Facade\Dispatcher;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Events\Order\Created;
@@ -20,6 +21,7 @@ use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Contracts\HasStockInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
+use Tnt\Ecommerce\Contracts\UserResolverInterface;
 
 /**
  * The shop's cart: what is in it, what it costs, and turning it into an order.
@@ -46,6 +48,14 @@ use Tnt\Ecommerce\Contracts\FulfillmentInterface;
  * of retiring the `NullStockWorker` and `NullTaxRate` that used to stand in for
  * the answers.
  *
+ * # Accounts
+ *
+ * {@see checkout()} asks a third question, of the shop rather than of a
+ * buyable: whether anybody is signed in. {@see UserResolverInterface} answers
+ * it with an id or with null, and the customer row records what it said. A shop
+ * with no accounts leaves the default in place and every checkout is a guest
+ * one. There is no second code path for that case — see `checkout()`.
+ *
  * # Reporting, not deciding
  *
  * Both capabilities stop at reporting. {@see canAdd()} says whether the stock
@@ -70,19 +80,24 @@ class Cart implements CartInterface, TotalingInterface
 
     private PaymentInterface $payment;
 
+    private UserResolverInterface $users;
+
     /**
      * @param ShopInterface $shop
      * @param CartStorageInterface $storage
      * @param PaymentInterface $payment
+     * @param UserResolverInterface $users
      */
     public function __construct(
         ShopInterface $shop,
         CartStorageInterface $storage,
-        PaymentInterface $payment
+        PaymentInterface $payment,
+        UserResolverInterface $users
     ) {
         $this->shop = $shop;
         $this->storage = $storage;
         $this->payment = $payment;
+        $this->users = $users;
     }
 
     /**
@@ -357,6 +372,22 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
+     * Turn the cart into an order placed by this customer.
+     *
+     * Guest and account checkout are the same call. The customer is whatever
+     * the shop built and saved, the order carries it either way, and the only
+     * difference between the two is what
+     * {@see UserResolverInterface::getCurrentUserId()} answers — an id, or
+     * null. Nothing below branches on it.
+     *
+     * The account link is attached first, before the order is written, because
+     * the order points at the customer row and that row has to be finished by
+     * then. {@see Customer::linkTo()} holds the rest of the rule.
+     *
+     * The `instanceof` is the same shape as the capability checks above: a shop
+     * is free to pass any {@see CustomerInterface}, and one that is not this
+     * package's {@see Customer} has no column to link and is left as it is.
+     *
      * @param CustomerInterface $customer
      * @param (Closure(OrderInterface): void)|null $callback
      * @return OrderInterface
@@ -365,6 +396,10 @@ class Cart implements CartInterface, TotalingInterface
         CustomerInterface $customer,
         ?Closure $callback = null
     ): OrderInterface {
+        if ($customer instanceof Customer) {
+            $customer->linkTo($this->users->getCurrentUserId());
+        }
+
         $fulfillment = $this->getFulfillment();
 
         // Create the order

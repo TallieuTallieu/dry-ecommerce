@@ -8,6 +8,7 @@ use Oak\Contracts\Dispatcher\DispatcherInterface;
 use Oak\Migration\MigrationManager;
 use Oak\Migration\Migrator;
 use Oak\ServiceProvider;
+use Tnt\Ecommerce\Account\GuestUserResolver;
 use Tnt\Ecommerce\Cart\Cart;
 use Tnt\Ecommerce\Cart\SessionCartStorage;
 use Tnt\Ecommerce\Contracts\AttributeStorageInterface;
@@ -15,6 +16,7 @@ use Tnt\Ecommerce\Contracts\CartInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
+use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Fulfillment\SessionAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
@@ -71,11 +73,35 @@ class EcommerceServiceProvider extends ServiceProvider
 
         $app->singleton(ShopInterface::class, Shop::class);
         $app->singleton(CartInterface::class, Cart::class);
+
+        // ContainerInterface::get() is typed `class-string<T>|string`, so the
+        // union collapses T to plain `object` and every call on the result is
+        // an unknown method. Narrowing it once here is what lets both bindings
+        // below read as themselves.
+        /** @var RepositoryInterface $config */
+        $config = $app->get(RepositoryInterface::class);
+
         $app->singleton(
             PaymentInterface::class,
-            $app
-                ->get(RepositoryInterface::class)
-                ->get('ecommerce.payment', NullPayment::class)
+            self::configuredClass(
+                $config,
+                'ecommerce.payment',
+                NullPayment::class
+            )
+        );
+
+        // Who is signed in, resolved from config exactly as the payment above
+        // is. The default answers "nobody", which is the correct answer for a
+        // shop with no accounts rather than a placeholder for a missing one; a
+        // shop running dry-accounts points this at AccountsUserResolver and
+        // needs no glue of its own.
+        $app->singleton(
+            UserResolverInterface::class,
+            self::configuredClass(
+                $config,
+                'ecommerce.user_resolver',
+                GuestUserResolver::class
+            )
         );
 
         // StockWorkerInterface is deliberately not bound. A worker counts one
@@ -83,6 +109,37 @@ class EcommerceServiceProvider extends ServiceProvider
         // binding that used to sit here could never have been resolved. A
         // buyable that has stock now hands a worker over itself, through
         // HasStockInterface.
+    }
+
+    /**
+     * The class a config key names, or the default when it names nothing.
+     *
+     * `RepositoryInterface::get()` answers `mixed` and types its `$default`
+     * parameter as `null`, so the default cannot be passed through it and the
+     * value it does return has to be narrowed before the container will take
+     * it. Both bindings above need the same two steps, so they happen here
+     * once.
+     *
+     * Anything that is not a class name falls back rather than reaching the
+     * container. A config key holding an array or a stray `true` is a mistake
+     * in the shop's config, and the shop it breaks is better served by a
+     * working default than by a container error thrown while booting.
+     *
+     * @param RepositoryInterface $config
+     * @param string $key
+     * @param class-string $default
+     * @return string
+     */
+    private static function configuredClass(
+        RepositoryInterface $config,
+        string $key,
+        string $default
+    ): string {
+        $configured = $config->get($key);
+
+        return is_string($configured) && $configured !== ''
+            ? $configured
+            : $default;
     }
 
     private function bootEventListeners(ContainerInterface $app)

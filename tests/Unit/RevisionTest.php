@@ -24,6 +24,7 @@ declare(strict_types=1);
  * booted Dry application and a live connection, which the suite does not have.
  */
 
+use Tests\Support\CapturingCreateCustomerTable;
 use Tests\Support\CapturingCreateOrderItemTable;
 use Tests\Support\CapturingCreateOrderTable;
 use Tnt\Dbi\QueryBuilder;
@@ -49,6 +50,44 @@ function orderItemTableSql(): string
 
     return $revision->sql;
 }
+
+/**
+ * @return string
+ */
+function customerTableSql(): string
+{
+    $revision = new CapturingCreateCustomerTable(new QueryBuilder());
+    $revision->up();
+
+    return $revision->sql;
+}
+
+it('declares the customer account column as a nullable int', function (): void {
+    // Nullable because guest checkout is a first-class path: a customer with no
+    // account is the ordinary case, not a broken row.
+    expect(customerTableSql())->toContain('`user` INT(11) NULL');
+});
+
+it('puts no foreign key on the customer account column', function (): void {
+    // The one relation in this package with no database-level constraint behind
+    // it, and the reason is that the table it would point at belongs to
+    // dry-accounts — a supported pairing, not a dependency. A shop selling
+    // without accounts has no such table, and MySQL refuses a constraint
+    // against a table that is not there, so declaring one would break the
+    // migrator on exactly the shops the nullable column exists to keep working.
+    //
+    // Asserted on the whole statement rather than on the column, because any
+    // FOREIGN KEY appearing here at all would be the mistake.
+    expect(customerTableSql())->not->toContain('FOREIGN KEY');
+});
+
+it('still constrains the relations it does own', function (): void {
+    // The corollary, so the test above cannot be satisfied by dropping foreign
+    // keys everywhere. An order's customer is this package's own table and
+    // keeps a real key.
+    expect(orderTableSql())->toContain('FOREIGN KEY');
+    expect(orderTableSql())->toContain('REFERENCES `ecommerce_customer`');
+});
 
 it('declares every order money column as a bigint', function (
     string $column

@@ -19,6 +19,24 @@ class CreateCustomerTable extends DatabaseRevision implements RevisionInterface
                 $table->addColumn('last_name', 'varchar')->length(255);
                 $table->addColumn('email', 'varchar')->length(255);
 
+                // The account this checkout was made from, or NULL for a
+                // guest. Nullable because guest checkout is a first-class
+                // path, not a degraded one.
+                //
+                // No addForeignKey(), unlike every other relation in this
+                // package. The table it would point at belongs to
+                // dry-accounts, which is a supported pairing and not a
+                // dependency: a shop that sells without accounts has no such
+                // table, and MySQL refuses a constraint against a table that
+                // is not there. Declaring one would break the ecommerce
+                // migrator on exactly the shops this nullable column exists to
+                // keep working. Even where dry-accounts *is* installed the two
+                // packages register separate migrators with no ordering
+                // between them, so there is no point at which the target is
+                // known to exist. The column is an honest int the shop's own
+                // schema can constrain if it wants to.
+                $table->addColumn('user', 'int')->length(11)->null();
+
                 // Address fields
                 $table->addColumn('address_street', 'varchar')->length(255);
                 $table->addColumn('address_number', 'varchar')->length(255);
