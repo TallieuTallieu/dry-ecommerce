@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "70e728db302e97b8fe182a32c9f7a06f",
+    "content-hash": "644476d031524d284895da4d16445e12",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3295,6 +3295,72 @@
             "time": "2025-08-08T12:00:00+00:00"
         },
         {
+            "name": "firebase/php-jwt",
+            "version": "v7.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/googleapis/php-jwt.git",
+                "reference": "b374a5d1a4f1f67fadc2165cdb284645945e2fc0"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/googleapis/php-jwt/zipball/b374a5d1a4f1f67fadc2165cdb284645945e2fc0",
+                "reference": "b374a5d1a4f1f67fadc2165cdb284645945e2fc0",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.0"
+            },
+            "require-dev": {
+                "guzzlehttp/guzzle": "^7.4",
+                "phpfastcache/phpfastcache": "^9.2",
+                "phpseclib/phpseclib": "~3.0",
+                "phpspec/prophecy-phpunit": "^2.0",
+                "phpunit/phpunit": "^9.5",
+                "psr/cache": "^2.0||^3.0",
+                "psr/http-client": "^1.0",
+                "psr/http-factory": "^1.0"
+            },
+            "suggest": {
+                "ext-sodium": "Support EdDSA (Ed25519) signatures",
+                "paragonie/sodium_compat": "Support EdDSA (Ed25519) signatures when libsodium is not present",
+                "phpseclib/phpseclib": "Support PS256 (RSASSA-PSS) signatures"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Firebase\\JWT\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "BSD-3-Clause"
+            ],
+            "authors": [
+                {
+                    "name": "Neuman Vong",
+                    "email": "neuman+pear@twilio.com",
+                    "role": "Developer"
+                },
+                {
+                    "name": "Anant Narayanan",
+                    "email": "anant@php.net",
+                    "role": "Developer"
+                }
+            ],
+            "description": "A simple library to encode and decode JSON Web Tokens (JWT) in PHP. Should conform to the current spec.",
+            "homepage": "https://github.com/googleapis/php-jwt",
+            "keywords": [
+                "jwt",
+                "php"
+            ],
+            "support": {
+                "issues": "https://github.com/googleapis/php-jwt/issues",
+                "source": "https://github.com/googleapis/php-jwt/tree/v7.1.0"
+            },
+            "time": "2026-06-11T17:54:14+00:00"
+        },
+        {
             "name": "jean85/pretty-package-versions",
             "version": "2.1.1",
             "source": {
@@ -6456,6 +6522,80 @@
                 "source": "https://github.com/ta-tikoma/phpunit-architecture-test/tree/0.8.7"
             },
             "time": "2026-02-17T17:25:14+00:00"
+        },
+        {
+            "name": "tallieutallieu/dry-accounts",
+            "version": "3.0.7",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/TallieuTallieu/dry-accounts.git",
+                "reference": "a51012b9886e13289baa516ccee47cc798e8b8f3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/TallieuTallieu/dry-accounts/zipball/a51012b9886e13289baa516ccee47cc798e8b8f3",
+                "reference": "a51012b9886e13289baa516ccee47cc798e8b8f3",
+                "shasum": ""
+            },
+            "require": {
+                "firebase/php-jwt": "^7.0.3",
+                "phpstan/phpstan": "^2.1",
+                "tallieutallieu/dry": "^v3.8.1-beta.5|^4.0.0",
+                "tallieutallieu/dry-dbi": "^3.8.0",
+                "tallieutallieu/dry-external-api": "^3.0.1",
+                "tallieutallieu/oak": "^3.0.2"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Tnt\\Account\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "description": "Account system for DRY applications",
+            "support": {
+                "source": "https://github.com/TallieuTallieu/dry-accounts/tree/3.0.7"
+            },
+            "time": "2026-05-06T09:55:11+00:00"
+        },
+        {
+            "name": "tallieutallieu/dry-external-api",
+            "version": "3.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/TallieuTallieu/dry-external-api.git",
+                "reference": "6f4f043ec09ca0ec1d225e8ec7e89ac9939127b8"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/TallieuTallieu/dry-external-api/zipball/6f4f043ec09ca0ec1d225e8ec7e89ac9939127b8",
+                "reference": "6f4f043ec09ca0ec1d225e8ec7e89ac9939127b8",
+                "shasum": ""
+            },
+            "require": {
+                "ext-json": "*",
+                "tallieutallieu/dry": "^3.0.0|^4.0.0",
+                "tallieutallieu/oak": "^3.0.2"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Tnt\\ExternalApi\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "description": "An external API for your DRY applications",
+            "keywords": [
+                "api",
+                "dry",
+                "external-api",
+                "rest",
+                "restful"
+            ],
+            "support": {
+                "source": "https://github.com/TallieuTallieu/dry-external-api/tree/3.0.2"
+            },
+            "time": "2026-05-06T10:03:01+00:00"
         },
         {
             "name": "theseer/tokenizer",

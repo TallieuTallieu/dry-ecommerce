@@ -32,6 +32,7 @@ it('autoloads every public contract', function (string $contract): void {
     Tnt\Ecommerce\Contracts\TaxableInterface::class,
     Tnt\Ecommerce\Contracts\TaxRateInterface::class,
     Tnt\Ecommerce\Contracts\TotalingInterface::class,
+    Tnt\Ecommerce\Contracts\UserResolverInterface::class,
 ]);
 
 it('autoloads the money helper', function (): void {
