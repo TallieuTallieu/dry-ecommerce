@@ -1,6 +1,7 @@
 <?php
 
 use Tests\Support\FakePayment;
+use Tests\Support\InMemoryOrderCart;
 use Tnt\Ecommerce\Account\GuestUserResolver;
 use Tnt\Ecommerce\Cart\Cart;
 use Tnt\Ecommerce\Cart\InMemoryCartStorage;
@@ -65,4 +66,42 @@ function makeCart(
     );
 
     return [$cart, $storage, $shop];
+}
+
+/**
+ * The same cart, but one that checks out into memory.
+ *
+ * {@see makeCart()} builds the real {@see Cart}, whose `checkout()` writes rows
+ * and so cannot run here. This builds {@see InMemoryOrderCart}, which differs
+ * from it by one overridden method and lets the body of `checkout()` run for
+ * real against an order that keeps to memory.
+ *
+ * Hands back the payment as well as the storage, because what `checkout()` does
+ * last — hand the finished order to the payment — is part of what there was no
+ * way to check before.
+ *
+ * @param array<int, FulfillmentInterface> $fulfillments
+ * @param UserResolverInterface|null $users
+ * @return array{InMemoryOrderCart, InMemoryCartStorage, FakePayment, Shop}
+ */
+function makeCheckoutCart(
+    array $fulfillments = [],
+    ?UserResolverInterface $users = null
+): array {
+    $shop = new Shop(new InMemoryAttributeStorage());
+
+    foreach ($fulfillments as $fulfillment) {
+        $shop->addFulfillment($fulfillment);
+    }
+
+    $storage = new InMemoryCartStorage();
+    $payment = new FakePayment();
+    $cart = new InMemoryOrderCart(
+        $shop,
+        $storage,
+        $payment,
+        $users ?? new GuestUserResolver()
+    );
+
+    return [$cart, $storage, $payment, $shop];
 }
