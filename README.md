@@ -368,6 +368,34 @@ schema if your shop always has both.
 ### Order
 Documentation coming soon
 
+#### The order reference
+
+`Order.order_id` is the reference a customer quotes when they mean an order —
+the row id, a dash, then ten characters:
+
+```
+12-K4M7QX9RTB
+```
+
+Find an order by it with `OrderRepository::byOrderId()`. The row id keeps it
+unique without a lookup, and the random part is drawn with `random_int()` so
+that a shop's orders cannot be walked through one after another.
+
+> [!important] It is a reference, not a credential
+> Knowing an order reference must **not** be enough to see the order. It is
+> unguessable to stop enumeration, not to stand in for signing in. A page that
+> shows an order still has to establish who is asking, exactly as it would if
+> the reference were `1`, `2`, `3` — otherwise every email that quotes it
+> becomes a key to the order it names.
+>
+> If you want a "track your order" link with nothing behind it, that is a
+> separate secret token, and it is yours to add.
+
+The alphabet leaves out `I`, `L`, `O` and `U`: a reference gets read down a
+telephone and copied off a printed invoice, so a `0` that might be an `O` costs
+somebody a support call, and dropping `U` keeps a random string from
+occasionally spelling something a customer would rather not read out.
+
 ### Payment
 Documentation coming soon.
 
