@@ -53,6 +53,22 @@ final class FrozenAddress implements AddressInterface
     }
 
     /**
+     * Always false. A frozen copy is never the default.
+     *
+     * The mark says which address to reach for at the *next* checkout, and
+     * this one is not being reached for — it is the copy an order already
+     * took. Answering true would let a copy on an invoice be mistaken for a
+     * live entry in the book, which is the confusion the two classes exist to
+     * keep apart.
+     *
+     * @return bool
+     */
+    public function isDefault(): bool
+    {
+        return false;
+    }
+
+    /**
      * @return string
      */
     public function getFirstName(): string

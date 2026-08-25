@@ -329,7 +329,7 @@ class Cart implements CartInterface, TotalingInterface
         // Only when the prices it is built from are net. Under inclusive
         // pricing the tax is already inside every one of those figures, and
         // adding it here would charge the customer for it twice.
-        if ($this->tax->convention()->addsTaxToTheTotal()) {
+        if ($this->tax->addsTaxToTheTotal()) {
             $total += $this->getTax();
         }
 
@@ -378,11 +378,9 @@ class Cart implements CartInterface, TotalingInterface
     {
         $items = $this->items();
 
-        // The coupon comes off the cart, and tax is worked out per line, so
-        // the reduction has to reach the lines before any of them is taxed.
-        // Spread across *every* line and not only the taxable ones: a discount
-        // applies to the whole cart, and charging the taxable lines with all of
-        // it would tax them on less than the customer paid for them.
+        // Weighted by *every* line, including the untaxed ones the loop below
+        // then skips. That reads like a bug from here and is the point; the
+        // docblock above says why.
         $shares = Money::apportion(
             $this->getReduction(),
             array_map(static fn($item): int => $item->getPrice(), $items)

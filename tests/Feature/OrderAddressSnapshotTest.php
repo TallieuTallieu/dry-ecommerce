@@ -283,3 +283,124 @@ it('freezes the address the shop said to use', function (): void {
     expect($cart->placed()->shipping_street)->toBe('Bellevue');
     expect($cart->placed()->shipping_city)->toBe('Ledeberg');
 });
+
+/*
+ * The business identity: the VAT number and the company name.
+ *
+ * They live in different places on purpose. A VAT number belongs to whoever is
+ * buying, so it sits on the customer; a company name is part of a postal block
+ * and can differ between where the invoice goes and where the parcel goes, so
+ * it sits on the address. Both end up frozen on the order, because both are
+ * printed on the invoice and neither may move afterwards.
+ */
+
+it('freezes the vat number the order was placed under', function (): void {
+    [$cart] = makeCheckoutCart();
+    [$customer] = aCustomerWithABook();
+    $customer->vat = 'BE0123456789';
+
+    $cart->add(new FakeBuyable('1', 2000));
+    $cart->checkout($customer);
+
+    expect($cart->placed()->getVatNumber())->toBe('BE0123456789');
+});
+
+it(
+    'leaves a placed order alone when the vat number changes',
+    function (): void {
+        [$cart] = makeCheckoutCart();
+        [$customer] = aCustomerWithABook();
+        $customer->vat = 'BE0123456789';
+
+        $cart->add(new FakeBuyable('1', 2000));
+        $cart->checkout($customer);
+
+        // The customer had it wrong and corrects it. A filed invoice carrying the
+        // wrong VAT number is a tax problem; a filed invoice that silently starts
+        // carrying a different one is a worse tax problem.
+        $customer->vat = 'BE9876543210';
+
+        expect($customer->getVatNumber())->toBe('BE9876543210');
+        expect($cart->placed()->getVatNumber())->toBe('BE0123456789');
+    }
+);
+
+it('records no vat number for a customer without one', function (): void {
+    [$cart] = makeCheckoutCart();
+    [$customer] = aCustomerWithABook();
+
+    $cart->add(new FakeBuyable('1', 2000));
+    $cart->checkout($customer);
+
+    // A shop selling to people. Empty, not null, so an invoice template asks
+    // one question rather than two.
+    expect($cart->placed()->getVatNumber())->toBe('');
+});
+
+it('freezes the company the account is in the name of', function (): void {
+    [$cart] = makeCheckoutCart();
+    [$customer] = aCustomerWithABook();
+    $customer->company = 'Acme NV';
+    $customer->vat = 'BE0123456789';
+
+    $cart->add(new FakeBuyable('1', 2000));
+    $cart->checkout($customer);
+
+    // One identity, frozen together. An account opened by a business has both
+    // of these; an account opened by a person has neither.
+    expect($cart->placed()->getCompanyName())->toBe('Acme NV');
+    expect($cart->placed()->getVatNumber())->toBe('BE0123456789');
+});
+
+it(
+    'leaves a placed order alone when the account is renamed',
+    function (): void {
+        [$cart] = makeCheckoutCart();
+        [$customer] = aCustomerWithABook();
+        $customer->company = 'Acme NV';
+
+        $cart->add(new FakeBuyable('1', 2000));
+        $cart->checkout($customer);
+
+        // A business is sold, or restructured, and the account is renamed. The
+        // invoices the old name was on are not reopened by that.
+        $customer->company = 'Acme Holdings NV';
+
+        expect($customer->getCompanyName())->toBe('Acme Holdings NV');
+        expect($cart->placed()->getCompanyName())->toBe('Acme NV');
+    }
+);
+
+it('records no company for an account opened by a person', function (): void {
+    [$cart] = makeCheckoutCart();
+    [$customer] = aCustomerWithABook();
+
+    $cart->add(new FakeBuyable('1', 2000));
+    $cart->checkout($customer);
+
+    expect($cart->placed()->getCompanyName())->toBe('');
+    expect($cart->placed()->getVatNumber())->toBe('');
+});
+
+it('keeps the company off the address it froze', function (): void {
+    [$cart] = makeCheckoutCart();
+    [$customer] = aCustomerWithABook();
+    $customer->company = 'Acme NV';
+
+    $cart->add(new FakeBuyable('1', 2000));
+    $cart->checkout($customer);
+
+    // The company belongs to the account, not to either address, so the frozen
+    // address blocks carry no company line. A shop that needs a different name
+    // on the delivery label -- a head office invoiced and a branch delivered to
+    // -- has nowhere to put it yet, and that is a known gap rather than an
+    // oversight. See CustomerInterface::getCompanyName().
+    $columns = array_merge(
+        AddressType::Billing->columns(),
+        AddressType::Shipping->columns()
+    );
+
+    foreach ($columns as $column) {
+        expect($column)->not->toContain('company');
+    }
+});

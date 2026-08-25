@@ -50,6 +50,8 @@ class CreateOrderTable extends DatabaseRevision implements RevisionInterface
                 $table->addColumn('first_name', 'varchar')->length(255);
                 $table->addColumn('last_name', 'varchar')->length(255);
                 $table->addColumn('email', 'varchar')->length(255);
+                $table->addColumn('company', 'varchar')->length(255);
+                $table->addColumn('vat', 'varchar')->length(255);
 
                 // And where it went. Deliberately columns and deliberately not
                 // a foreign key into ecommerce_address: that table is an

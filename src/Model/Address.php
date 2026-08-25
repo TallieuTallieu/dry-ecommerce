@@ -34,6 +34,7 @@ use Tnt\Ecommerce\NotAnAddressType;
  * @property int $updated
  * @property Customer $customer
  * @property string $type
+ * @property int $is_default
  * @property string $first_name
  * @property string $last_name
  * @property string $street
@@ -80,6 +81,20 @@ class Address extends Model implements AddressInterface
         $type = (string) $this->type;
 
         return AddressType::tryFrom($type) ?? throw new NotAnAddressType($type);
+    }
+
+    /**
+     * Whether this is the one of its kind a checkout takes by default.
+     *
+     * Stored as an int rather than a bool because the column is one, and read
+     * through a comparison rather than a cast so that a row written before the
+     * column existed reads as "not the default" instead of as a truthy string.
+     *
+     * @return bool
+     */
+    public function isDefault(): bool
+    {
+        return (int) $this->is_default === 1;
     }
 
     /**

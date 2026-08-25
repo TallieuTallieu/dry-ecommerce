@@ -28,7 +28,7 @@ Name | Default
 payment | \Tnt\Ecommerce\Payment\NullPayment::class
 user_resolver | \Tnt\Ecommerce\Account\GuestUserResolver::class
 prices | `inclusive`
-delivery_tax_rate | *(none — delivery is untaxed)*
+delivery_tax_rate | `0` — delivery costs no tax
 
 **Careful!** Payment can be set from configuration. the default value of the "payment" config property provides a default NullPayment which basically gives everything away for free. For more info on payments check out the topic payments below.
 
@@ -291,6 +291,29 @@ Documentation coming soon
 
 ### Customer
 
+#### One row per account, a fresh row per guest
+
+A shop with a signed-in user should check out with the customer row already on
+that account, so the same person keeps the same row:
+
+```php
+$customer =
+    $customerRepository->byUser($userId)->getOne() ?? new Customer();
+```
+
+That is what makes the address book a book — with a fresh row each checkout
+there is nothing for it to accumulate into, and `ecommerce_address` would hold
+one order's addresses rather than a person's.
+
+A **guest** gets a new row every time, and that is the only correct answer:
+there is nothing to recognise a returning guest by that they could not have made
+up. Do not reuse a row on a matching email — an account has been proved, an
+email address has only been typed, and matching on one would let anybody check
+out into somebody else's address book.
+
+Either way the row is not what an invoice reads. The order takes its own copy of
+the name, the email, the VAT number and both addresses at checkout.
+
 A customer row records who placed *one* order and where it was going. Every
 checkout writes a new one, and an order carries a non-null `customer` either
 way — guest checkout and account checkout are the same code path.
@@ -470,139 +493,63 @@ inline columns could not.
 selling downloads, or one with its own customer class, freezes both sides blank
 and checks out exactly as before.
 
-#### Upgrading an existing shop
+#### Company and VAT number
 
-> **This one needs SQL by hand.** Oak's migrator is a positional version
-> counter: it remembers *how many* revisions a shop has run, not which, and it
-> never re-runs one it has already applied. `CreateAddressTable` is appended to
-> the end of the list, so running your project's migrate command creates
-> `ecommerce_address` for you. The edits to `CreateCustomerTable` and
-> `CreateOrderTable` are for fresh installs only and will not reach a shop that
-> already has those tables.
+An account can be opened in the name of a business. When it is, the company name
+and the VAT number are what the account *is* — one identity, not two facts that
+happen to travel together — so both sit on the customer:
 
-Run the migrator first, so `ecommerce_address` exists. Then these four steps, in
-order, having backed up — step 4 destroys the data steps 2 and 3 move.
-
-**1. Add the frozen columns to `ecommerce_order`.**
-
-```sql
-ALTER TABLE `ecommerce_order`
-    ADD COLUMN `first_name`           VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `last_name`            VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `email`                VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `billing_first_name`   VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `billing_last_name`    VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `billing_street`       VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `billing_number`       VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `billing_postal_code`  VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `billing_city`         VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `billing_country`      VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `shipping_first_name`  VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `shipping_last_name`   VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `shipping_street`      VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `shipping_number`      VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `shipping_postal_code` VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `shipping_city`        VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `shipping_country`     VARCHAR(255) NOT NULL DEFAULT '';
+```php
+$customer->company = 'Acme NV';
+$customer->vat = 'BE0123456789';
 ```
 
-**2. Backfill every existing order from the customer row it points at.** This is
-the step that matters: it is the last moment at which the old columns still say
-where each order actually went.
+`CustomerInterface` requires `getCompanyName()` and `getVatNumber()`, both
+returning `''` for an account opened by a person. Every customer can answer both
+honestly, which is why neither is behind a capability interface.
 
-```sql
-UPDATE `ecommerce_order` o
-JOIN `ecommerce_customer` c ON c.id = o.customer
-SET o.first_name           = c.first_name,
-    o.last_name            = c.last_name,
-    o.email                = c.email,
-    o.billing_first_name   = c.first_name,
-    o.billing_last_name    = c.last_name,
-    o.billing_street       = c.address_street,
-    o.billing_number       = c.address_number,
-    o.billing_postal_code  = c.address_postal_code,
-    o.billing_city         = c.address_city,
-    o.billing_country      = c.address_country,
-    o.shipping_first_name  = c.shipping_first_name,
-    o.shipping_last_name   = c.shipping_last_name,
-    o.shipping_street      = c.shipping_street,
-    o.shipping_number      = c.shipping_number,
-    o.shipping_postal_code = c.shipping_postal_code,
-    o.shipping_city        = c.shipping_city,
-    o.shipping_country     = c.shipping_country;
+Both are **frozen onto the order** at checkout, beside the name and the email.
+A business that is sold or restructured, or a VAT number corrected afterwards,
+does not reopen the invoices the old details were on.
+
+> [!note] A postal company line is a different thing, and is not here yet
+> An address block can carry a company of its own: the invoice goes to a head
+> office and the parcel goes to a branch, and a delivery label without that name
+> on it does not get past a post room. The field above cannot stand in for it —
+> one account has one company name, and a customer may post to several places.
+>
+> Deferred rather than solved. A shop needing a different name on the label has
+> nowhere to put it today. When one does, it belongs on `AddressInterface`, and
+> the account's company name stays where it is.
+
+#### Choosing an address
+
+A book may hold several addresses of a kind — home and work, one warehouse and
+another. Mark one of each kind as the **default**, and that is the one a
+checkout takes:
+
+```php
+$address->is_default = 1;
+$address->save();
 ```
 
-The old billing columns carried no name of their own, so the customer's name is
-used for `billing_*`. If your shop leaves `shipping_*` blank to mean "same as
-billing", say so here — that convention was yours, and this is where to record
-it, because after step 4 there is nothing left to say it with:
+A book holding one address of a kind needs no mark: with nothing to choose
+between, that one is the answer.
 
-```sql
-UPDATE `ecommerce_order`
-SET shipping_first_name  = billing_first_name,
-    shipping_last_name   = billing_last_name,
-    shipping_street      = billing_street,
-    shipping_number      = billing_number,
-    shipping_postal_code = billing_postal_code,
-    shipping_city        = billing_city,
-    shipping_country     = billing_country
-WHERE shipping_street = '' AND shipping_city = '';
+If a book holds several of a kind and marks none — or marks two —
+`Customer::getAddress()` raises `Tnt\Ecommerce\AmbiguousAddress` rather than
+picking. That is deliberate. A checkout that stops costs somebody a moment; a
+checkout that guesses sends the parcel to the wrong address and produces an
+order that reads perfectly, with nothing anywhere to say it went wrong.
+
+To settle it for one checkout without touching the book — a customer choosing a
+delivery address at the till — name the address:
+
+```php
+$customer->useAddress($address);   // this request only, nothing written
+$order = $cart->checkout($customer);
 ```
 
-**3. Seed the address book from the customer rows.** Optional — orders no longer
-need it — but it is what gives returning customers something to pick from.
-
-```sql
-INSERT INTO `ecommerce_address`
-    (created, updated, customer, type,
-     first_name, last_name, street, number, postal_code, city, country)
-SELECT UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), c.id, 'billing',
-       c.first_name, c.last_name, c.address_street, c.address_number,
-       c.address_postal_code, c.address_city, c.address_country
-FROM `ecommerce_customer` c
-WHERE c.address_street <> '';
-
-INSERT INTO `ecommerce_address`
-    (created, updated, customer, type,
-     first_name, last_name, street, number, postal_code, city, country)
-SELECT UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), c.id, 'shipping',
-       c.shipping_first_name, c.shipping_last_name, c.shipping_street,
-       c.shipping_number, c.shipping_postal_code, c.shipping_city,
-       c.shipping_country
-FROM `ecommerce_customer` c
-WHERE c.shipping_street <> '';
-```
-
-Note that a customer row here is still one-per-checkout, so this produces one
-address per past order. Deduplicate afterwards if you care to.
-
-**4. Drop the twelve inline columns.**
-
-```sql
-ALTER TABLE `ecommerce_customer`
-    DROP COLUMN `address_street`,
-    DROP COLUMN `address_number`,
-    DROP COLUMN `address_postal_code`,
-    DROP COLUMN `address_city`,
-    DROP COLUMN `address_country`,
-    DROP COLUMN `shipping_first_name`,
-    DROP COLUMN `shipping_last_name`,
-    DROP COLUMN `shipping_street`,
-    DROP COLUMN `shipping_number`,
-    DROP COLUMN `shipping_postal_code`,
-    DROP COLUMN `shipping_city`,
-    DROP COLUMN `shipping_country`;
-```
-
-`Customer` no longer declares any of them, so anything in your project reading
-`$customer->address_street` now reads `null`. Grep for the prefixes
-`address_` and `shipping_` before you deploy; on a placed order the replacement
-is `$order->getBillingAddress()` or `$order->getShippingAddress()`, and on a live
-customer it is `$customer->getAddress(AddressType::Billing)`.
-
-**One more breaking change, without SQL.** `CustomerInterface` now declares
-`getEmail(): string`. If you implement that interface yourself rather than
-extending `Tnt\Ecommerce\Model\Customer`, add the method.
 
 ### Order
 Documentation coming soon
@@ -767,7 +714,8 @@ inferred and everything else follows from it. Set `ecommerce.prices` to
 `inclusive` or `exclusive`.
 
 A price of `1250` at 21% is either €12.50 *of which* €2.17 is VAT, or €12.50
-*plus* €2.63 of VAT. The two differ by the whole tax amount:
+*plus* €2.63 of VAT. The two differ by the whole tax amount — here for a cart of
+**two lines of `1250`**, delivered for `475`:
 
 | | `inclusive` | `exclusive` |
 |---|---|---|
@@ -775,6 +723,10 @@ A price of `1250` at 21% is either €12.50 *of which* €2.17 is VAT, or €12.
 | VAT | *434, contained* | **526, added** |
 | delivery | 475 | 475 |
 | **total** | **2975** | **3501** |
+
+Two lines rather than one because the VAT differs: 21% of `2500` in a single sum
+is `525`, but each line rounds on its own, and `263` twice is `526`. That is [the
+rounding rule](#the-rounding-rule), not a slip.
 
 Under `inclusive` — the Belgian consumer norm, and the default — the tax is a
 figure to **report**: `getTotal()` is exactly what it always was, and
@@ -815,8 +767,9 @@ rule](#the-rounding-rule).
 #### Delivery
 
 Set `ecommerce.delivery_tax_rate` to a percentage and the fulfillment cost is
-taxed at it. Leave it unset and delivery is untaxed — which is different from
-setting it to `0`, a zero-rated supply that prints as one.
+taxed at it. Leave it unset and it is `0`, so delivery costs no tax. Anything
+that is not a number — a string, a stray `true` — reads as `0` too, rather than
+being coerced into a rate nobody chose.
 
 > [!warning] One rate for the whole shop
 > Belgian VAT treats delivery as ancillary to what is being delivered, so a

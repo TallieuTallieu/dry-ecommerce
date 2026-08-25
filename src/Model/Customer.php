@@ -5,6 +5,7 @@ namespace Tnt\Ecommerce\Model;
 use dry\orm\Model;
 use dry\orm\relationship\HasMany;
 use Tnt\Ecommerce\Address\AddressType;
+use Tnt\Ecommerce\AmbiguousAddress;
 use Tnt\Ecommerce\Contracts\AddressInterface;
 use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\HasAddressesInterface;
@@ -12,12 +13,23 @@ use Tnt\Ecommerce\Contracts\HasAddressesInterface;
 /**
  * The person an order was placed by, as stored in `ecommerce_customer`.
  *
- * # A row per checkout, not a row per person
+ * # One row per account, and a fresh row per guest
  *
- * A customer row is a record of who placed one order. It is not a profile, and
- * nothing in this package looks one up to reuse it —
- * {@see \Tnt\Ecommerce\Repository\CustomerRepository::byEmail()} says why
- * matching on an email address would be wrong.
+ * A shop with a signed-in user checks out with the row already on that account
+ * — {@see \Tnt\Ecommerce\Repository\CustomerRepository::byUser()} finds it —
+ * so the same person keeps the same row, and the address book below accumulates
+ * across their orders. A guest gets a new row every time.
+ *
+ * The asymmetry is the point, and it is not about convenience. An account has
+ * been proved and an email address has only been typed, so recognising a
+ * returning customer by account is recognising *them*, while recognising one by
+ * email would let anybody check out into somebody else's address book. See
+ * {@see \Tnt\Ecommerce\Repository\CustomerRepository::byEmail()}.
+ *
+ * Either way the row is not what an invoice reads. {@see Order} takes its own
+ * copy of the name, the email, the VAT number and both addresses at checkout,
+ * so a row that goes on being edited cannot rewrite an order that is already
+ * placed.
  *
  * # The address book
  *
@@ -70,6 +82,7 @@ use Tnt\Ecommerce\Contracts\HasAddressesInterface;
  * @property string $first_name
  * @property string $last_name
  * @property string $email
+ * @property string $company
  * @property string $vat
  * @property string $comments
  * @property string $first_contact
@@ -134,6 +147,26 @@ class Customer extends Model implements CustomerInterface, HasAddressesInterface
     }
 
     /**
+     * The company the account is in the name of, or ''.
+     *
+     * @return string
+     */
+    public function getCompanyName(): string
+    {
+        return (string) $this->company;
+    }
+
+    /**
+     * The customer's VAT number, or '' when they have none.
+     *
+     * @return string
+     */
+    public function getVatNumber(): string
+    {
+        return (string) $this->vat;
+    }
+
+    /**
      * This customer's address book.
      *
      * @return HasMany
@@ -184,21 +217,31 @@ class Customer extends Model implements CustomerInterface, HasAddressesInterface
     }
 
     /**
-     * The address an order of this kind would be frozen with, or null.
+     * The address of a kind this customer's next checkout should use.
      *
-     * Whatever {@see useAddress()} was told, when the shop has told it
-     * anything. Otherwise the most recently added address of that kind, which
-     * is a *default* and not a rule: a package cannot know whether this shop
-     * lets people choose at checkout, so it picks the one answer that is right
-     * for the shop that never asks — the address the customer most recently
-     * said was theirs — and gets out of the way of the shop that does ask.
+     * Three answers, in order. An address named for this request with
+     * {@see useAddress()} wins outright. Otherwise the one marked the default
+     * is it. Otherwise, if the book holds exactly one of that kind, that is the
+     * one — with nothing to choose between, the mark would say nothing the book
+     * does not already say.
      *
-     * Null when the book holds none of that kind. That is an ordinary answer,
-     * not a failure, and nothing is substituted from the other kind; see
-     * {@see Order::freezeCustomer()}.
+     * Null when the book holds none of that kind, which is not an error: a
+     * customer who gave no shipping address has none, and the order freezes
+     * empty columns for it.
+     *
+     * # When it cannot answer
+     *
+     * Several of a kind and none marked, or more than one marked, raises
+     * {@see AmbiguousAddress}. The package used to take the most recently
+     * added, and that was the package deciding something the shop owns —
+     * quietly, and wrongly whenever the customer's newest address was not the
+     * one they meant. Guessing here does not fail visibly. It sends the parcel
+     * somewhere else and produces an order that reads perfectly.
      *
      * @param AddressType $type
      * @return AddressInterface|null
+     *
+     * @throws AmbiguousAddress If the book cannot say which one.
      */
     public function getAddress(AddressType $type): ?AddressInterface
     {
@@ -206,19 +249,34 @@ class Customer extends Model implements CustomerInterface, HasAddressesInterface
             return $this->chosen[$type->value];
         }
 
-        $latest = null;
+        $ofType = [];
+        $defaults = [];
 
         foreach ($this->getAddresses() as $address) {
             if ($address->getType() !== $type) {
                 continue;
             }
 
-            if ($latest === null || $address->created >= $latest->created) {
-                $latest = $address;
+            $ofType[] = $address;
+
+            if ($address->isDefault()) {
+                $defaults[] = $address;
             }
         }
 
-        return $latest;
+        if (count($defaults) > 1) {
+            throw new AmbiguousAddress($type, count($ofType), true);
+        }
+
+        if (count($defaults) === 1) {
+            return $defaults[0];
+        }
+
+        if (count($ofType) > 1) {
+            throw new AmbiguousAddress($type, count($ofType));
+        }
+
+        return $ofType[0] ?? null;
     }
 
     /**

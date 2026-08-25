@@ -37,6 +37,21 @@ interface AddressInterface
     public function getType(): AddressType;
 
     /**
+     * Whether this is the one of its kind a checkout takes by default.
+     *
+     * A book may hold several addresses of a kind, and exactly one of them
+     * answers true. A book holding one of a kind does not need the mark: with
+     * nothing to choose between, that one is the answer either way.
+     *
+     * A frozen copy on an order always answers false. The mark says which
+     * address to reach for next time, and an order is not reaching for
+     * anything — it already has its copy.
+     *
+     * @return bool
+     */
+    public function isDefault(): bool;
+
+    /**
      * The recipient's first name, which need not be the customer's.
      *
      * A parcel can go to somebody else — a gift, a colleague, a neighbour who

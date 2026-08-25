@@ -26,6 +26,8 @@ use Tnt\Ecommerce\Money;
  *
  * # What each one does to a cart
  *
+ * The same cart both ways: two lines of 1250 at 21%, delivered for 475.
+ *
  * ```
  * INCLUSIVE                        EXCLUSIVE
  *   subtotal      2500               subtotal      2500  (net)
@@ -38,6 +40,11 @@ use Tnt\Ecommerce\Money;
  * Under `Inclusive` the tax is a figure to *report*: the total is what it
  * always was, and the VAT is shown beneath it. Under `Exclusive` it is an
  * amount to *charge*, and it lands in the total.
+ *
+ * Two lines and not one, because the figures differ and it is the per-line
+ * ones that are right. 21% of 2500 in a single sum is 525, but each line is
+ * printed and checked on its own, so each rounds on its own: 263 twice is 526.
+ * See the rounding rule in {@see Money}.
  */
 enum PriceConvention: string
 {

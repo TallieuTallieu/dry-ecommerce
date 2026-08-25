@@ -50,6 +50,13 @@ class CreateAddressTable extends DatabaseRevision implements RevisionInterface
                 // what was wrong with it.
                 $table->addColumn('type', 'varchar')->length(255);
 
+                // The one of its type a checkout takes when the shop does not
+                // name one. Not a foreign key on the customer pointing back
+                // here: that is two columns to keep in step with this table
+                // rather than one, and it lets a customer point at an address
+                // belonging to somebody else.
+                $table->addColumn('is_default', 'int')->length(1);
+
                 // The recipient, who need not be the customer: a parcel can go
                 // to a colleague or to whoever the gift is for.
                 $table->addColumn('first_name', 'varchar')->length(255);

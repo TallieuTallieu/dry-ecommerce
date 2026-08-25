@@ -108,6 +108,22 @@ it('declares every order money column as a bigint', function (
     expect(orderTableSql())->toContain('`' . $column . '` BIGINT(20)');
 })->with(['total', 'subtotal', 'reduction', 'fulfillment_cost', 'tax']);
 
+it('keeps the business identity on the account', function (
+    string $column
+): void {
+    // Company name and VAT number together, on the customer rather than on an
+    // address: an account can be opened in the name of a business, and that is
+    // one identity rather than two facts that travel together.
+    expect(customerTableSql())->toContain('`' . $column . '` VARCHAR(255)');
+})->with(['company', 'vat']);
+
+it('marks which address a checkout takes by default', function (): void {
+    // The mark lives on the address rather than as two columns on the
+    // customer pointing back at it: one place to keep in step instead of two,
+    // and no way for a customer to point at somebody else's address.
+    expect(addressTableSql())->toContain('`is_default` INT(1)');
+});
+
 it('records the convention an order was priced under', function (): void {
     // Not a money column, and not derivable from the money columns either:
     // whether a total is gross or net cannot be recovered from the figures.
@@ -188,7 +204,7 @@ it('records the identity the order was placed with', function (
     string $column
 ): void {
     expect(orderTableSql())->toContain('`' . $column . '` VARCHAR(255)');
-})->with(['first_name', 'last_name', 'email']);
+})->with(['first_name', 'last_name', 'email', 'company', 'vat']);
 
 it('never points an order at the address book', function (): void {
     // The whole of sc-11172 in one assertion. A foreign key here would make

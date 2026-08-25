@@ -54,6 +54,8 @@ use Tnt\Ecommerce\Tax\PriceConvention;
  * @property string $first_name
  * @property string $last_name
  * @property string $email
+ * @property string $company
+ * @property string $vat
  * @property string $billing_first_name
  * @property string $billing_last_name
  * @property string $billing_street
@@ -173,6 +175,8 @@ class Order extends Model implements OrderInterface, TotalingInterface
         $this->first_name = $customer->getFirstName();
         $this->last_name = $customer->getLastName();
         $this->email = $customer->getEmail();
+        $this->company = $customer->getCompanyName();
+        $this->vat = $customer->getVatNumber();
 
         $book = $customer instanceof HasAddressesInterface ? $customer : null;
 
@@ -183,6 +187,35 @@ class Order extends Model implements OrderInterface, TotalingInterface
                 $this->{$column} = $value;
             }
         }
+    }
+
+    /**
+     * The company this order was placed under, or ''.
+     *
+     * Frozen with the VAT number it belongs to. An account renamed after the
+     * fact -- a business sold, a company restructured -- must not restate the
+     * invoices the old name was on.
+     *
+     * @return string
+     */
+    public function getCompanyName(): string
+    {
+        return (string) $this->company;
+    }
+
+    /**
+     * The VAT number this order was placed under, or ''.
+     *
+     * Frozen with the rest of the identity, and for the same reason: it is what
+     * the invoice has to carry, and a customer who corrects their VAT number
+     * afterwards must not restate an invoice that has already been issued. A
+     * wrong VAT number on a filed invoice is a tax problem, not a typo.
+     *
+     * @return string
+     */
+    public function getVatNumber(): string
+    {
+        return (string) $this->vat;
     }
 
     /**

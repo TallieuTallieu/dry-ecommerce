@@ -44,6 +44,10 @@ class CreateCustomerTable extends DatabaseRevision implements RevisionInterface
                 // They live in ecommerce_address now, one row per address, as
                 // many as the customer has. See CreateAddressTable.
 
+                // The two halves of a business identity, together because
+                // that is what they are: an account opened by a company has
+                // both, an account opened by a person has neither.
+                $table->addColumn('company', 'varchar')->length(255);
                 $table->addColumn('vat', 'varchar')->length(255);
 
                 $table->addColumn('comments', 'varchar')->length(255);

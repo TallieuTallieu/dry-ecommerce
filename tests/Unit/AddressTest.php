@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 use Tests\Support\CustomerWithAddresses;
 use Tnt\Ecommerce\Address\AddressType;
+use Tnt\Ecommerce\AmbiguousAddress;
 use Tnt\Ecommerce\Address\FrozenAddress;
 use Tnt\Ecommerce\Model\Address;
 use Tnt\Ecommerce\NotAnAddressType;
@@ -26,12 +27,14 @@ use Tnt\Ecommerce\NotAnAddressType;
 function bookEntry(
     AddressType $type,
     int $created,
-    string $street = 'Nieuwstraat'
+    string $street = 'Nieuwstraat',
+    bool $default = false
 ): Address {
     $address = new Address();
     $address->setType($type);
     $address->created = $created;
     $address->street = $street;
+    $address->is_default = $default ? 1 : 0;
 
     return $address;
 }
@@ -129,19 +132,76 @@ it('has no address book before it has been saved', function (): void {
     expect($customer->getAddress(AddressType::Billing))->toBeNull();
 });
 
-it('picks the most recent address of the kind asked for', function (): void {
+it('takes the address marked the default', function (): void {
     $customer = new CustomerWithAddresses();
-    $customer->keep(bookEntry(AddressType::Shipping, 100, 'Oude straat'));
-    $customer->keep(bookEntry(AddressType::Billing, 300, 'Gasmeterlaan'));
+    $customer->keep(bookEntry(AddressType::Shipping, 100, 'Oude straat', true));
     $customer->keep(bookEntry(AddressType::Shipping, 200, 'Nieuwe straat'));
+    $customer->keep(bookEntry(AddressType::Billing, 300, 'Gasmeterlaan'));
 
-    // Newest of that kind, not newest overall, and not first in the book.
+    // The marked one, and not the newest. Those are different addresses here
+    // on purpose: the rule used to be "newest", and a customer whose newest
+    // address is not the one they post to would have had their parcel sent
+    // there with nothing to show anything had gone wrong.
     expect($customer->getAddress(AddressType::Shipping)?->getStreet())->toBe(
-        'Nieuwe straat'
+        'Oude straat'
     );
+
+    // One of its kind needs no mark. With nothing to choose between, the mark
+    // would say nothing the book does not already say.
     expect($customer->getAddress(AddressType::Billing)?->getStreet())->toBe(
         'Gasmeterlaan'
     );
+});
+
+it('refuses to choose between unmarked addresses', function (): void {
+    $customer = new CustomerWithAddresses();
+    $customer->keep(bookEntry(AddressType::Shipping, 100, 'Oude straat'));
+    $customer->keep(bookEntry(AddressType::Shipping, 200, 'Nieuwe straat'));
+
+    // Two of a kind, neither marked: there is no answer, and inventing one
+    // sends the parcel somewhere the customer did not ask for. A checkout that
+    // stops costs somebody a moment; a checkout that guesses costs a delivery.
+    expect(fn() => $customer->getAddress(AddressType::Shipping))->toThrow(
+        AmbiguousAddress::class
+    );
+
+    // The other kind is unaffected -- the book is only ambiguous where it is
+    // ambiguous.
+    expect($customer->getAddress(AddressType::Billing))->toBeNull();
+});
+
+it('refuses a book that marks two of a kind', function (): void {
+    $customer = new CustomerWithAddresses();
+    $customer->keep(bookEntry(AddressType::Billing, 100, 'Eerste', true));
+    $customer->keep(bookEntry(AddressType::Billing, 200, 'Tweede', true));
+
+    try {
+        $customer->getAddress(AddressType::Billing);
+    } catch (AmbiguousAddress $refused) {
+        // Two marks is a different fault from none, and says so: one is a book
+        // nobody has finished setting up, the other is one that has been set up
+        // twice.
+        expect($refused->hasTooManyDefaults())->toBeTrue();
+        expect($refused->getType())->toBe(AddressType::Billing);
+        expect($refused->getMessage())->toContain('more than one');
+
+        return;
+    }
+
+    throw new Exception('The book was not refused.');
+});
+
+it('lets the shop name an address past an ambiguous book', function (): void {
+    $customer = new CustomerWithAddresses();
+    $wanted = bookEntry(AddressType::Shipping, 100, 'Oude straat');
+    $customer->keep($wanted);
+    $customer->keep(bookEntry(AddressType::Shipping, 200, 'Nieuwe straat'));
+
+    // Ambiguous a moment ago. Naming one settles it for this request without
+    // touching the book, which is the shop deciding rather than the package.
+    $customer->useAddress($wanted);
+
+    expect($customer->getAddress(AddressType::Shipping))->toBe($wanted);
 });
 
 it('answers null for a kind the book has none of', function (): void {
