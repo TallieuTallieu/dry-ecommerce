@@ -37,27 +37,12 @@ class CreateCustomerTable extends DatabaseRevision implements RevisionInterface
                 // schema can constrain if it wants to.
                 $table->addColumn('user', 'int')->length(11)->null();
 
-                // Address fields
-                $table->addColumn('address_street', 'varchar')->length(255);
-                $table->addColumn('address_number', 'varchar')->length(255);
-                $table
-                    ->addColumn('address_postal_code', 'varchar')
-                    ->length(255);
-                $table->addColumn('address_city', 'varchar')->length(255);
-                $table->addColumn('address_country', 'varchar')->length(255);
-
-                // Shipping fields
-                $table
-                    ->addColumn('shipping_first_name', 'varchar')
-                    ->length(255);
-                $table->addColumn('shipping_last_name', 'varchar')->length(255);
-                $table->addColumn('shipping_street', 'varchar')->length(255);
-                $table->addColumn('shipping_number', 'varchar')->length(255);
-                $table
-                    ->addColumn('shipping_postal_code', 'varchar')
-                    ->length(255);
-                $table->addColumn('shipping_city', 'varchar')->length(255);
-                $table->addColumn('shipping_country', 'varchar')->length(255);
+                // No address columns. There used to be twelve of them — five
+                // address_* and seven shipping_* — and between them they fixed
+                // a customer at exactly one billing and one shipping address
+                // for ever, which is not a shape an address list fits into.
+                // They live in ecommerce_address now, one row per address, as
+                // many as the customer has. See CreateAddressTable.
 
                 $table->addColumn('vat', 'varchar')->length(255);
 

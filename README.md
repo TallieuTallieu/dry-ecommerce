@@ -43,6 +43,7 @@ See [Customer](#customer).
 * Discount & Coupon
 * Fulfillment
 * Customer
+* Address
 * Order
 * Payment
 * Stock
@@ -294,17 +295,16 @@ A customer row records who placed *one* order and where it was going. Every
 checkout writes a new one, and an order carries a non-null `customer` either
 way — guest checkout and account checkout are the same code path.
 
-Rows are never reused or deduplicated. Two things follow from that, both
-deliberate:
+Rows are never reused or deduplicated. **An email address is not an identity
+claim** — matching a checkout to an existing row by email would let anyone check
+out as somebody else's address and merge into their record.
+`CustomerRepository::byEmail()` exists so an admin can *find* the orders placed
+from an address; checkout does not use it.
 
-- **An email address is not an identity claim.** Matching a checkout to an
-  existing row by email would let anyone check out as somebody else's address
-  and merge into their record. `CustomerRepository::byEmail()` exists so an
-  admin can *find* the orders placed from an address; checkout does not use it.
-- **The address on a placed order stays put.** The row carries the delivery
-  address, VAT number and comments of that order. Reusing one across checkouts
-  would rewrite the address on every order already placed against it the next
-  time somebody moved house.
+`CustomerInterface` is three getters — `getFirstName()`, `getLastName()`,
+`getEmail()` — and that is everything a checkout has to be able to answer about
+who placed an order. Addresses are asked for separately; see
+[Address](#address).
 
 #### Linking a customer to an account
 
@@ -339,8 +339,8 @@ final class MyAuthResolver implements \Tnt\Ecommerce\Contracts\UserResolverInter
 }
 ```
 
-A returning account gets a *new* customer row linked to the same user, for the
-address-history reason above. To read the account back:
+A returning account gets a *new* customer row linked to the same user. To read
+the account back:
 
 ```php
 $userId = $order->getCustomer()->getUserId(); // int|null
@@ -364,6 +364,245 @@ on exactly the shops the nullable column exists to support. The two packages
 also register separate migrators with no ordering between them, so there is no
 point at which the target is known to exist. Add the constraint in your own
 schema if your shop always has both.
+
+### Address
+
+A customer keeps an **address book**: `ecommerce_address`, one row per address,
+as many as they have, each with an `AddressType` saying what it is for.
+
+```php
+use Tnt\Ecommerce\Address\AddressType;
+use Tnt\Ecommerce\Model\Address;
+
+$address = new Address();
+$address->customer = $customer;
+$address->setType(AddressType::Shipping);
+$address->first_name = 'Ada';
+$address->last_name = 'Lovelace';
+$address->street = 'Kortrijksesteenweg';
+$address->number = '1144';
+$address->postal_code = '9051';
+$address->city = 'Gent';
+$address->country = 'BE';
+$address->save();
+```
+
+`AddressType` has two cases, `Billing` and `Shipping`, because those are the two
+questions a shop asks of an address: where the invoice goes and where the parcel
+goes. A "home" or "work" label is a shop's own vocabulary for its customers'
+addresses and means nothing to a checkout, so it is not modelled here.
+
+The recipient's name lives on the address, not on the customer. A parcel can go
+to somebody else — a gift, a colleague, a neighbour who is in during the day.
+
+#### Reading the book
+
+```php
+$customer->getAddresses();                        // iterable<Address>
+$customer->getAddress(AddressType::Shipping);     // ?AddressInterface
+```
+
+`getAddress()` answers with the **most recently added** address of that kind.
+That is a default for the shop that never asks, not a rule. A shop that lets a
+customer pick at checkout says which one it picked:
+
+```php
+$customer->useAddress($chosen);   // for this request; nothing is written
+$cart->checkout($customer);
+```
+
+A customer with no address of that kind answers `null`, and nothing is
+substituted from the other kind — see below.
+
+#### The order takes a copy
+
+**An order never points at the address book.** At checkout,
+`Order::freezeCustomer()` copies the identity and both addresses onto the
+order's own columns:
+
+```
+first_name  last_name  email
+billing_first_name  billing_last_name  billing_street  billing_number
+billing_postal_code  billing_city  billing_country
+shipping_… (the same seven)
+```
+
+The reason is that an address book is *edited*. A customer moves house and
+corrects the address on file; a customer deletes an address they used once. Both
+are things a book must let them do, and an order that read through to those rows
+would answer, next year, that last year's parcel went somewhere it never went —
+or that it went nowhere, the row having been deleted. **An invoice is a
+statement about the past, and a mutable row cannot back one.**
+
+`Order.customer` is still a foreign key, and it still answers "whose account is
+this order on". Only the frozen copy answers "who placed it and where did it
+go", and only the frozen copy is safe to print.
+
+```php
+$order->getFirstName();        // as it was at checkout
+$order->getEmail();
+$order->getShippingAddress();  // Tnt\Ecommerce\Address\FrozenAddress
+$order->getBillingAddress();
+```
+
+`FrozenAddress` implements the same `AddressInterface` as `Address`, so one
+template renders either, but it is readonly and has nothing behind it to
+re-read. `isEmpty()` asks whether the order recorded an address of that kind at
+all.
+
+#### Nothing is substituted for a missing address
+
+A customer with a shipping address and no billing address freezes seven blank
+billing columns, and vice versa. An order carrying an address the customer never
+gave for that purpose is a worse record than one that admits the purpose had no
+address — and it is a record nobody can correct afterwards, because it looks
+exactly like an address that *was* given.
+
+A shop that means "bill me where you ship" says so by keeping an address of each
+kind, which is precisely the thing the book can now express and the twelve
+inline columns could not.
+
+#### Customers that keep no addresses
+
+`HasAddressesInterface` is a capability, in the same shape as
+`HasStockInterface` and `TaxableInterface`: `Cart::checkout()` asks with
+`instanceof`, and a customer that does not implement it is not asked. A shop
+selling downloads, or one with its own customer class, freezes both sides blank
+and checks out exactly as before.
+
+#### Upgrading an existing shop
+
+> **This one needs SQL by hand.** Oak's migrator is a positional version
+> counter: it remembers *how many* revisions a shop has run, not which, and it
+> never re-runs one it has already applied. `CreateAddressTable` is appended to
+> the end of the list, so running your project's migrate command creates
+> `ecommerce_address` for you. The edits to `CreateCustomerTable` and
+> `CreateOrderTable` are for fresh installs only and will not reach a shop that
+> already has those tables.
+
+Run the migrator first, so `ecommerce_address` exists. Then these four steps, in
+order, having backed up — step 4 destroys the data steps 2 and 3 move.
+
+**1. Add the frozen columns to `ecommerce_order`.**
+
+```sql
+ALTER TABLE `ecommerce_order`
+    ADD COLUMN `first_name`           VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `last_name`            VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `email`                VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `billing_first_name`   VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `billing_last_name`    VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `billing_street`       VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `billing_number`       VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `billing_postal_code`  VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `billing_city`         VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `billing_country`      VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `shipping_first_name`  VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `shipping_last_name`   VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `shipping_street`      VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `shipping_number`      VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `shipping_postal_code` VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `shipping_city`        VARCHAR(255) NOT NULL DEFAULT '',
+    ADD COLUMN `shipping_country`     VARCHAR(255) NOT NULL DEFAULT '';
+```
+
+**2. Backfill every existing order from the customer row it points at.** This is
+the step that matters: it is the last moment at which the old columns still say
+where each order actually went.
+
+```sql
+UPDATE `ecommerce_order` o
+JOIN `ecommerce_customer` c ON c.id = o.customer
+SET o.first_name           = c.first_name,
+    o.last_name            = c.last_name,
+    o.email                = c.email,
+    o.billing_first_name   = c.first_name,
+    o.billing_last_name    = c.last_name,
+    o.billing_street       = c.address_street,
+    o.billing_number       = c.address_number,
+    o.billing_postal_code  = c.address_postal_code,
+    o.billing_city         = c.address_city,
+    o.billing_country      = c.address_country,
+    o.shipping_first_name  = c.shipping_first_name,
+    o.shipping_last_name   = c.shipping_last_name,
+    o.shipping_street      = c.shipping_street,
+    o.shipping_number      = c.shipping_number,
+    o.shipping_postal_code = c.shipping_postal_code,
+    o.shipping_city        = c.shipping_city,
+    o.shipping_country     = c.shipping_country;
+```
+
+The old billing columns carried no name of their own, so the customer's name is
+used for `billing_*`. If your shop leaves `shipping_*` blank to mean "same as
+billing", say so here — that convention was yours, and this is where to record
+it, because after step 4 there is nothing left to say it with:
+
+```sql
+UPDATE `ecommerce_order`
+SET shipping_first_name  = billing_first_name,
+    shipping_last_name   = billing_last_name,
+    shipping_street      = billing_street,
+    shipping_number      = billing_number,
+    shipping_postal_code = billing_postal_code,
+    shipping_city        = billing_city,
+    shipping_country     = billing_country
+WHERE shipping_street = '' AND shipping_city = '';
+```
+
+**3. Seed the address book from the customer rows.** Optional — orders no longer
+need it — but it is what gives returning customers something to pick from.
+
+```sql
+INSERT INTO `ecommerce_address`
+    (created, updated, customer, type,
+     first_name, last_name, street, number, postal_code, city, country)
+SELECT UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), c.id, 'billing',
+       c.first_name, c.last_name, c.address_street, c.address_number,
+       c.address_postal_code, c.address_city, c.address_country
+FROM `ecommerce_customer` c
+WHERE c.address_street <> '';
+
+INSERT INTO `ecommerce_address`
+    (created, updated, customer, type,
+     first_name, last_name, street, number, postal_code, city, country)
+SELECT UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), c.id, 'shipping',
+       c.shipping_first_name, c.shipping_last_name, c.shipping_street,
+       c.shipping_number, c.shipping_postal_code, c.shipping_city,
+       c.shipping_country
+FROM `ecommerce_customer` c
+WHERE c.shipping_street <> '';
+```
+
+Note that a customer row here is still one-per-checkout, so this produces one
+address per past order. Deduplicate afterwards if you care to.
+
+**4. Drop the twelve inline columns.**
+
+```sql
+ALTER TABLE `ecommerce_customer`
+    DROP COLUMN `address_street`,
+    DROP COLUMN `address_number`,
+    DROP COLUMN `address_postal_code`,
+    DROP COLUMN `address_city`,
+    DROP COLUMN `address_country`,
+    DROP COLUMN `shipping_first_name`,
+    DROP COLUMN `shipping_last_name`,
+    DROP COLUMN `shipping_street`,
+    DROP COLUMN `shipping_number`,
+    DROP COLUMN `shipping_postal_code`,
+    DROP COLUMN `shipping_city`,
+    DROP COLUMN `shipping_country`;
+```
+
+`Customer` no longer declares any of them, so anything in your project reading
+`$customer->address_street` now reads `null`. Grep for the prefixes
+`address_` and `shipping_` before you deploy; on a placed order the replacement
+is `$order->getBillingAddress()` or `$order->getShippingAddress()`, and on a live
+customer it is `$customer->getAddress(AddressType::Billing)`.
+
+**One more breaking change, without SQL.** `CustomerInterface` now declares
+`getEmail(): string`. If you implement that interface yourself rather than
+extending `Tnt\Ecommerce\Model\Customer`, add the method.
 
 ### Order
 Documentation coming soon

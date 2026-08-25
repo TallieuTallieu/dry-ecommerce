@@ -14,6 +14,7 @@ declare(strict_types=1);
 it('autoloads every public contract', function (string $contract): void {
     expect(interface_exists($contract))->toBeTrue();
 })->with([
+    Tnt\Ecommerce\Contracts\AddressInterface::class,
     Tnt\Ecommerce\Contracts\AttributeStorageAwareInterface::class,
     Tnt\Ecommerce\Contracts\AttributeStorageInterface::class,
     Tnt\Ecommerce\Contracts\BuyableInterface::class,
@@ -23,6 +24,7 @@ it('autoloads every public contract', function (string $contract): void {
     Tnt\Ecommerce\Contracts\CouponInterface::class,
     Tnt\Ecommerce\Contracts\CustomerInterface::class,
     Tnt\Ecommerce\Contracts\FulfillmentInterface::class,
+    Tnt\Ecommerce\Contracts\HasAddressesInterface::class,
     Tnt\Ecommerce\Contracts\HasStockInterface::class,
     Tnt\Ecommerce\Contracts\OrderInterface::class,
     Tnt\Ecommerce\Contracts\OrderItemInterface::class,
@@ -39,13 +41,31 @@ it('autoloads the money helper', function (): void {
     expect(class_exists(Tnt\Ecommerce\Money::class))->toBeTrue();
 });
 
-it('autoloads what the money helper throws', function (string $class): void {
+it('autoloads every published exception', function (string $class): void {
     // Published surface as much as the contracts are: a caller catches these
     // by name, so renaming one silently is the same kind of break.
     expect(class_exists($class))->toBeTrue();
     expect(is_a($class, InvalidArgumentException::class, true))->toBeTrue();
 })->with([
     Tnt\Ecommerce\AmountTooLarge::class,
+    Tnt\Ecommerce\NotAnAddressType::class,
     Tnt\Ecommerce\NotAnAmount::class,
     Tnt\Ecommerce\UnsupportedRate::class,
 ]);
+
+it('autoloads the two kinds of address', function (string $class): void {
+    // Both implement AddressInterface and the difference between them is the
+    // subject of sc-11172: Address is a row in an editable book, FrozenAddress
+    // is the copy an order took and is the only one safe on an invoice.
+    expect(class_exists($class))->toBeTrue();
+    expect(
+        is_a($class, Tnt\Ecommerce\Contracts\AddressInterface::class, true)
+    )->toBeTrue();
+})->with([
+    Tnt\Ecommerce\Address\FrozenAddress::class,
+    Tnt\Ecommerce\Model\Address::class,
+]);
+
+it('publishes the address type as an enum', function (): void {
+    expect(enum_exists(Tnt\Ecommerce\Address\AddressType::class))->toBeTrue();
+});

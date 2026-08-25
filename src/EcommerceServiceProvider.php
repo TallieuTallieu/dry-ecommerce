@@ -21,6 +21,7 @@ use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Fulfillment\SessionAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Payment\NullPayment;
+use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
 use Tnt\Ecommerce\Shop\Shop;
@@ -55,6 +56,13 @@ class EcommerceServiceProvider extends ServiceProvider
                 CreateCartItemTable::class,
                 CreateStockTable::class,
                 CreateStockItemTable::class,
+
+                // Appended, never inserted. Oak's migrator counts how many
+                // revisions a shop has run rather than remembering which, so
+                // putting a new one next to the table it relates to would
+                // shift everything after it and make an existing shop run the
+                // wrong statement. New revisions go on the end.
+                CreateAddressTable::class,
             ]);
 
             $app->get(MigrationManager::class)->addMigrator($migrator);

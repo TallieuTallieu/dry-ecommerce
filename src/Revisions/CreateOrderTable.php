@@ -4,6 +4,7 @@ namespace Tnt\Ecommerce\Revisions;
 
 use Oak\Contracts\Migration\RevisionInterface;
 use Tnt\Dbi\TableBuilder;
+use Tnt\Ecommerce\Address\AddressType;
 
 class CreateOrderTable extends DatabaseRevision implements RevisionInterface
 {
@@ -40,6 +41,29 @@ class CreateOrderTable extends DatabaseRevision implements RevisionInterface
                     ->null();
                 $table->addColumn('discount', 'int')->length(11)->null();
                 $table->addColumn('customer', 'int')->length(11);
+
+                // Who placed the order, frozen at checkout. The foreign key
+                // above answers "whose account is this on" and follows a row
+                // that a shop may let its owner edit; these three answer "who
+                // placed it", and nothing but a write to this order can move
+                // them.
+                $table->addColumn('first_name', 'varchar')->length(255);
+                $table->addColumn('last_name', 'varchar')->length(255);
+                $table->addColumn('email', 'varchar')->length(255);
+
+                // And where it went. Deliberately columns and deliberately not
+                // a foreign key into ecommerce_address: that table is an
+                // address book, a book is edited and deleted from, and an
+                // invoice is a statement about the past that a mutable row
+                // cannot back. See Tnt\Ecommerce\Model\Order::freezeCustomer().
+                //
+                // The names come from the enum that writes them, so the table
+                // and the write cannot drift apart.
+                foreach (AddressType::cases() as $type) {
+                    foreach ($type->columns() as $column) {
+                        $table->addColumn($column, 'varchar')->length(255);
+                    }
+                }
 
                 $table->addForeignKey('discount', 'ecommerce_discount_code');
                 $table->addForeignKey('customer', 'ecommerce_customer');

@@ -437,6 +437,13 @@ class Cart implements CartInterface, TotalingInterface
      * is free to pass any {@see CustomerInterface}, and one that is not this
      * package's {@see Customer} has no column to link and is left as it is.
      *
+     * What the order freezes has grown by one more thing than the money: the
+     * identity and the two addresses the checkout was made with, copied onto
+     * the order's own columns rather than followed through the customer. That
+     * is {@see Order::freezeCustomer()}, and the reason is the whole of
+     * sc-11172 — an address book is edited, and an invoice is a statement about
+     * the past.
+     *
      * @param CustomerInterface $customer
      * @param (Closure(OrderInterface): void)|null $callback
      * @return OrderInterface
@@ -470,6 +477,16 @@ class Cart implements CartInterface, TotalingInterface
         $order->fulfillment_method = $fulfillment?->getId();
         $order->discount = $this->getDiscount();
         $order->customer = $customer;
+
+        // Two records of the same person, and they are not redundant. The line
+        // above is a foreign key and answers "whose account is this order on",
+        // reading the customer row as it stands today. This one takes the
+        // order's own copy of who placed it and where it went, so that editing
+        // or deleting an address book entry afterwards cannot reach an order
+        // that has already been placed. Only the copy is safe on an invoice.
+        // See Order::freezeCustomer().
+        $order->freezeCustomer($customer);
+
         $order->save();
 
         // Generate an order id
