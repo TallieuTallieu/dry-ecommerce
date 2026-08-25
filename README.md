@@ -28,7 +28,7 @@ Name | Default
 payment | \Tnt\Ecommerce\Payment\NullPayment::class
 user_resolver | \Tnt\Ecommerce\Account\GuestUserResolver::class
 prices | `inclusive`
-delivery_tax_rate | *(none — delivery is untaxed)*
+delivery_tax_rate | `0` — delivery costs no tax
 
 **Careful!** Payment can be set from configuration. the default value of the "payment" config property provides a default NullPayment which basically gives everything away for free. For more info on payments check out the topic payments below.
 
@@ -43,6 +43,7 @@ See [Customer](#customer).
 * Discount & Coupon
 * Fulfillment
 * Customer
+* Address
 * Order
 * Payment
 * Stock
@@ -290,21 +291,43 @@ Documentation coming soon
 
 ### Customer
 
+#### One row per account, a fresh row per guest
+
+A shop with a signed-in user should check out with the customer row already on
+that account, so the same person keeps the same row:
+
+```php
+$customer =
+    $customerRepository->byUser($userId)->getOne() ?? new Customer();
+```
+
+That is what makes the address book a book — with a fresh row each checkout
+there is nothing for it to accumulate into, and `ecommerce_address` would hold
+one order's addresses rather than a person's.
+
+A **guest** gets a new row every time, and that is the only correct answer:
+there is nothing to recognise a returning guest by that they could not have made
+up. Do not reuse a row on a matching email — an account has been proved, an
+email address has only been typed, and matching on one would let anybody check
+out into somebody else's address book.
+
+Either way the row is not what an invoice reads. The order takes its own copy of
+the name, the email, the VAT number and both addresses at checkout.
+
 A customer row records who placed *one* order and where it was going. Every
 checkout writes a new one, and an order carries a non-null `customer` either
 way — guest checkout and account checkout are the same code path.
 
-Rows are never reused or deduplicated. Two things follow from that, both
-deliberate:
+Rows are never reused or deduplicated. **An email address is not an identity
+claim** — matching a checkout to an existing row by email would let anyone check
+out as somebody else's address and merge into their record.
+`CustomerRepository::byEmail()` exists so an admin can *find* the orders placed
+from an address; checkout does not use it.
 
-- **An email address is not an identity claim.** Matching a checkout to an
-  existing row by email would let anyone check out as somebody else's address
-  and merge into their record. `CustomerRepository::byEmail()` exists so an
-  admin can *find* the orders placed from an address; checkout does not use it.
-- **The address on a placed order stays put.** The row carries the delivery
-  address, VAT number and comments of that order. Reusing one across checkouts
-  would rewrite the address on every order already placed against it the next
-  time somebody moved house.
+`CustomerInterface` is three getters — `getFirstName()`, `getLastName()`,
+`getEmail()` — and that is everything a checkout has to be able to answer about
+who placed an order. Addresses are asked for separately; see
+[Address](#address).
 
 #### Linking a customer to an account
 
@@ -339,8 +362,8 @@ final class MyAuthResolver implements \Tnt\Ecommerce\Contracts\UserResolverInter
 }
 ```
 
-A returning account gets a *new* customer row linked to the same user, for the
-address-history reason above. To read the account back:
+A returning account gets a *new* customer row linked to the same user. To read
+the account back:
 
 ```php
 $userId = $order->getCustomer()->getUserId(); // int|null
@@ -364,6 +387,169 @@ on exactly the shops the nullable column exists to support. The two packages
 also register separate migrators with no ordering between them, so there is no
 point at which the target is known to exist. Add the constraint in your own
 schema if your shop always has both.
+
+### Address
+
+A customer keeps an **address book**: `ecommerce_address`, one row per address,
+as many as they have, each with an `AddressType` saying what it is for.
+
+```php
+use Tnt\Ecommerce\Address\AddressType;
+use Tnt\Ecommerce\Model\Address;
+
+$address = new Address();
+$address->customer = $customer;
+$address->setType(AddressType::Shipping);
+$address->first_name = 'Ada';
+$address->last_name = 'Lovelace';
+$address->street = 'Kortrijksesteenweg';
+$address->number = '1144';
+$address->postal_code = '9051';
+$address->city = 'Gent';
+$address->country = 'BE';
+$address->save();
+```
+
+`AddressType` has two cases, `Billing` and `Shipping`, because those are the two
+questions a shop asks of an address: where the invoice goes and where the parcel
+goes. A "home" or "work" label is a shop's own vocabulary for its customers'
+addresses and means nothing to a checkout, so it is not modelled here.
+
+The recipient's name lives on the address, not on the customer. A parcel can go
+to somebody else — a gift, a colleague, a neighbour who is in during the day.
+
+#### Reading the book
+
+```php
+$customer->getAddresses();                        // iterable<Address>
+$customer->getAddress(AddressType::Shipping);     // ?AddressInterface
+```
+
+`getAddress()` answers with the **most recently added** address of that kind.
+That is a default for the shop that never asks, not a rule. A shop that lets a
+customer pick at checkout says which one it picked:
+
+```php
+$customer->useAddress($chosen);   // for this request; nothing is written
+$cart->checkout($customer);
+```
+
+A customer with no address of that kind answers `null`, and nothing is
+substituted from the other kind — see below.
+
+#### The order takes a copy
+
+**An order never points at the address book.** At checkout,
+`Order::freezeCustomer()` copies the identity and both addresses onto the
+order's own columns:
+
+```
+first_name  last_name  email
+billing_first_name  billing_last_name  billing_street  billing_number
+billing_postal_code  billing_city  billing_country
+shipping_… (the same seven)
+```
+
+The reason is that an address book is *edited*. A customer moves house and
+corrects the address on file; a customer deletes an address they used once. Both
+are things a book must let them do, and an order that read through to those rows
+would answer, next year, that last year's parcel went somewhere it never went —
+or that it went nowhere, the row having been deleted. **An invoice is a
+statement about the past, and a mutable row cannot back one.**
+
+`Order.customer` is still a foreign key, and it still answers "whose account is
+this order on". Only the frozen copy answers "who placed it and where did it
+go", and only the frozen copy is safe to print.
+
+```php
+$order->getFirstName();        // as it was at checkout
+$order->getEmail();
+$order->getShippingAddress();  // Tnt\Ecommerce\Address\FrozenAddress
+$order->getBillingAddress();
+```
+
+`FrozenAddress` implements the same `AddressInterface` as `Address`, so one
+template renders either, but it is readonly and has nothing behind it to
+re-read. `isEmpty()` asks whether the order recorded an address of that kind at
+all.
+
+#### Nothing is substituted for a missing address
+
+A customer with a shipping address and no billing address freezes seven blank
+billing columns, and vice versa. An order carrying an address the customer never
+gave for that purpose is a worse record than one that admits the purpose had no
+address — and it is a record nobody can correct afterwards, because it looks
+exactly like an address that *was* given.
+
+A shop that means "bill me where you ship" says so by keeping an address of each
+kind, which is precisely the thing the book can now express and the twelve
+inline columns could not.
+
+#### Customers that keep no addresses
+
+`HasAddressesInterface` is a capability, in the same shape as
+`HasStockInterface` and `TaxableInterface`: `Cart::checkout()` asks with
+`instanceof`, and a customer that does not implement it is not asked. A shop
+selling downloads, or one with its own customer class, freezes both sides blank
+and checks out exactly as before.
+
+#### Company and VAT number
+
+An account can be opened in the name of a business. When it is, the company name
+and the VAT number are what the account *is* — one identity, not two facts that
+happen to travel together — so both sit on the customer:
+
+```php
+$customer->company = 'Acme NV';
+$customer->vat = 'BE0123456789';
+```
+
+`CustomerInterface` requires `getCompanyName()` and `getVatNumber()`, both
+returning `''` for an account opened by a person. Every customer can answer both
+honestly, which is why neither is behind a capability interface.
+
+Both are **frozen onto the order** at checkout, beside the name and the email.
+A business that is sold or restructured, or a VAT number corrected afterwards,
+does not reopen the invoices the old details were on.
+
+> [!note] A postal company line is a different thing, and is not here yet
+> An address block can carry a company of its own: the invoice goes to a head
+> office and the parcel goes to a branch, and a delivery label without that name
+> on it does not get past a post room. The field above cannot stand in for it —
+> one account has one company name, and a customer may post to several places.
+>
+> Deferred rather than solved. A shop needing a different name on the label has
+> nowhere to put it today. When one does, it belongs on `AddressInterface`, and
+> the account's company name stays where it is.
+
+#### Choosing an address
+
+A book may hold several addresses of a kind — home and work, one warehouse and
+another. Mark one of each kind as the **default**, and that is the one a
+checkout takes:
+
+```php
+$address->is_default = 1;
+$address->save();
+```
+
+A book holding one address of a kind needs no mark: with nothing to choose
+between, that one is the answer.
+
+If a book holds several of a kind and marks none — or marks two —
+`Customer::getAddress()` raises `Tnt\Ecommerce\AmbiguousAddress` rather than
+picking. That is deliberate. A checkout that stops costs somebody a moment; a
+checkout that guesses sends the parcel to the wrong address and produces an
+order that reads perfectly, with nothing anywhere to say it went wrong.
+
+To settle it for one checkout without touching the book — a customer choosing a
+delivery address at the till — name the address:
+
+```php
+$customer->useAddress($address);   // this request only, nothing written
+$order = $cart->checkout($customer);
+```
+
 
 ### Order
 Documentation coming soon
@@ -528,7 +714,8 @@ inferred and everything else follows from it. Set `ecommerce.prices` to
 `inclusive` or `exclusive`.
 
 A price of `1250` at 21% is either €12.50 *of which* €2.17 is VAT, or €12.50
-*plus* €2.63 of VAT. The two differ by the whole tax amount:
+*plus* €2.63 of VAT. The two differ by the whole tax amount — here for a cart of
+**two lines of `1250`**, delivered for `475`:
 
 | | `inclusive` | `exclusive` |
 |---|---|---|
@@ -536,6 +723,10 @@ A price of `1250` at 21% is either €12.50 *of which* €2.17 is VAT, or €12.
 | VAT | *434, contained* | **526, added** |
 | delivery | 475 | 475 |
 | **total** | **2975** | **3501** |
+
+Two lines rather than one because the VAT differs: 21% of `2500` in a single sum
+is `525`, but each line rounds on its own, and `263` twice is `526`. That is [the
+rounding rule](#the-rounding-rule), not a slip.
 
 Under `inclusive` — the Belgian consumer norm, and the default — the tax is a
 figure to **report**: `getTotal()` is exactly what it always was, and
@@ -576,8 +767,9 @@ rule](#the-rounding-rule).
 #### Delivery
 
 Set `ecommerce.delivery_tax_rate` to a percentage and the fulfillment cost is
-taxed at it. Leave it unset and delivery is untaxed — which is different from
-setting it to `0`, a zero-rated supply that prints as one.
+taxed at it. Leave it unset and it is `0`, so delivery costs no tax. Anything
+that is not a number — a string, a stray `true` — reads as `0` too, rather than
+being coerced into a rate nobody chose.
 
 > [!warning] One rate for the whole shop
 > Belgian VAT treats delivery as ancillary to what is being delivered, so a

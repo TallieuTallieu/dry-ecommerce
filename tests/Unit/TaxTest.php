@@ -36,13 +36,13 @@ use Tnt\Ecommerce\Tax\TaxPolicy;
  * A cart taxed under a named convention.
  *
  * @param PriceConvention $convention
- * @param int|float|null $deliveryRate
+ * @param int|float $deliveryRate
  * @param array<int, FakeFulfillment> $fulfillments
  * @return array{0: Cart, 1: InMemoryCartStorage, 2: Shop}
  */
 function taxedCart(
     PriceConvention $convention,
-    int|float|null $deliveryRate = null,
+    int|float $deliveryRate = 0,
     array $fulfillments = []
 ): array {
     return makeCart(
@@ -205,17 +205,24 @@ it('taxes delivery at the configured rate', function (): void {
     expect($cart->getTotal())->toBe(1000 + 475 + 310);
 });
 
-it('leaves delivery untaxed when no rate is set', function (): void {
+it('leaves delivery untaxed at a rate of 0', function (
+    int|float $deliveryRate
+): void {
     $post = new FakeFulfillment('post', 475);
-    [$cart] = taxedCart(PriceConvention::Exclusive, null, [$post]);
+    [$cart] = taxedCart(PriceConvention::Exclusive, $deliveryRate, [$post]);
 
     $cart->add(new FakeTaxableBuyable('1', 1000, new PercentageTaxRate(21)));
     $cart->setFulfillment($post);
 
-    // No rate configured means no figure invented for it. Different from a
-    // configured rate of 0, which is a zero-rated supply and prints as one.
+    // A shop that sets no rate delivers at 0%, and both datasets are that same
+    // shop: 0% of 475 is 0 cents, so the 210 on the goods is the whole figure.
+    // There is no separate "untaxed" state behind this, because there is
+    // nothing a shop could do with one that it cannot do with a rate of 0.
     expect($cart->getTax())->toBe(210);
-});
+})->with([
+    'the default' => [0],
+    'set explicitly' => [0.0],
+]);
 
 it(
     'taxes delivery even when nothing in the cart is taxable',

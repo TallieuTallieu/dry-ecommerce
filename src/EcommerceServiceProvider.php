@@ -21,6 +21,7 @@ use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Fulfillment\SessionAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Payment\NullPayment;
+use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
 use Tnt\Ecommerce\Shop\Shop;
@@ -55,6 +56,13 @@ class EcommerceServiceProvider extends ServiceProvider
                 CreateCartItemTable::class,
                 CreateStockTable::class,
                 CreateStockItemTable::class,
+
+                // Appended, never inserted. Oak's migrator counts how many
+                // revisions a shop has run rather than remembering which, so
+                // putting a new one next to the table it relates to would
+                // shift everything after it and make an existing shop run the
+                // wrong statement. New revisions go on the end.
+                CreateAddressTable::class,
             ]);
 
             $app->get(MigrationManager::class)->addMigrator($migrator);
@@ -109,7 +117,7 @@ class EcommerceServiceProvider extends ServiceProvider
         // How the shop taxes, as one value rather than two loose settings.
         // Both halves default to leaving an existing shop exactly where it
         // was: prices that already contain their tax, so getTotal() does not
-        // move, and delivery untaxed, so no figure appears that the shop never
+        // move, and delivery at 0%, so no figure appears that the shop never
         // asked for.
         $app->singleton(TaxPolicy::class, function () use ($config): TaxPolicy {
             return new TaxPolicy(
@@ -125,25 +133,6 @@ class EcommerceServiceProvider extends ServiceProvider
         // HasStockInterface.
     }
 
-    /**
-     * The class a config key names, or the default when it names nothing.
-     *
-     * `RepositoryInterface::get()` answers `mixed` and types its `$default`
-     * parameter as `null`, so the default cannot be passed through it and the
-     * value it does return has to be narrowed before the container will take
-     * it. Both bindings above need the same two steps, so they happen here
-     * once.
-     *
-     * Anything that is not a class name falls back rather than reaching the
-     * container. A config key holding an array or a stray `true` is a mistake
-     * in the shop's config, and the shop it breaks is better served by a
-     * working default than by a container error thrown while booting.
-     *
-     * @param RepositoryInterface $config
-     * @param string $key
-     * @param class-string $default
-     * @return string
-     */
     /**
      * The convention a shop quotes its prices under.
      *
@@ -169,28 +158,49 @@ class EcommerceServiceProvider extends ServiceProvider
     }
 
     /**
-     * A rate from configuration, or null when the shop has not set one.
+     * A rate from configuration, or 0 when the shop has not set one.
      *
-     * Distinguishes "no rate" from "a rate of zero" deliberately. An unset
-     * delivery rate means delivery is not taxed and no figure is reported for
-     * it; a rate of 0 means it is taxed, at nothing, which is what a
-     * zero-rated supply is. The two print differently on an invoice.
+     * A rate has to arrive as a number to count. Anything else — unset, a
+     * string, a stray `true` — reads as 0 rather than being coerced, so a
+     * mistake in a config file cannot start taxing at a figure nobody chose.
+     *
+     * "Not set" and "set to 0" are the same answer here, on purpose. They
+     * produce the same cents at every rate and under both conventions, and a
+     * package that carried them separately without ever letting a shop tell
+     * them apart would be keeping a distinction it does not honour.
      *
      * @param RepositoryInterface $config
      * @param string $key
-     * @return int|float|null
+     * @return int|float
      */
     private static function configuredRate(
         RepositoryInterface $config,
         string $key
-    ): int|float|null {
+    ): int|float {
         $configured = $config->get($key);
 
-        return is_int($configured) || is_float($configured)
-            ? $configured
-            : null;
+        return is_int($configured) || is_float($configured) ? $configured : 0;
     }
 
+    /**
+     * The class a config key names, or the default when it names nothing.
+     *
+     * `RepositoryInterface::get()` answers `mixed` and types its `$default`
+     * parameter as `null`, so the default cannot be passed through it and the
+     * value it does return has to be narrowed before the container will take
+     * it. Both bindings above need the same two steps, so they happen here
+     * once.
+     *
+     * Anything that is not a class name falls back rather than reaching the
+     * container. A config key holding an array or a stray `true` is a mistake
+     * in the shop's config, and the shop it breaks is better served by a
+     * working default than by a container error thrown while booting.
+     *
+     * @param RepositoryInterface $config
+     * @param string $key
+     * @param class-string $default
+     * @return string
+     */
     private static function configuredClass(
         RepositoryInterface $config,
         string $key,
