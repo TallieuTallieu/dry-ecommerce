@@ -26,6 +26,7 @@ declare(strict_types=1);
 use Tnt\Ecommerce\AmountTooLarge;
 use Tnt\Ecommerce\Money;
 use Tnt\Ecommerce\NotAnAmount;
+use Tnt\Ecommerce\NotApportionable;
 use Tnt\Ecommerce\UnsupportedRate;
 
 it('rounds a half cent away from zero', function (): void {
@@ -448,4 +449,55 @@ it('apportions nothing across nothing', function (): void {
     // reduction over. Zero shares rather than a division by zero.
     expect(Money::apportion(500, [0, 0]))->toBe([0, 0]);
     expect(Money::apportion(500, []))->toBe([]);
+});
+
+it('refuses to split a negative amount', function (): void {
+    expect(fn() => Money::apportion(-5, [1, 1]))->toThrow(
+        NotApportionable::class
+    );
+});
+
+it('refuses to split across a negative weight', function (): void {
+    expect(fn() => Money::apportion(500, [2000, -500]))->toThrow(
+        NotApportionable::class
+    );
+});
+
+it('refuses the splits that used to not add up', function (
+    int $amount,
+    array $weights,
+    int $wrongSum
+): void {
+    // The regression, held at the exact figures that showed it. Each of these
+    // came back summing to something other than what it was split from, which
+    // is the one thing apportion() promises never to do. intdiv() truncates
+    // towards zero, so it rounds a negative product *up*: the floored shares
+    // overshoot instead of falling short, the correction step finds nothing
+    // left over to hand out, and a cent is invented in silence.
+    expect($amount)->not->toBe($wrongSum);
+    expect(fn() => Money::apportion($amount, $weights))->toThrow(
+        NotApportionable::class
+    );
+})->with([
+    // Two negative weights against one positive: [-2, -2, 10], summing to 6.
+    'a cent invented' => [5, [-1, -1, 4], 6],
+    // A negative amount, floored towards zero on both shares: [-2, -2] is -4.
+    'a cent lost' => [-5, [1, 1], -4],
+]);
+
+it('says which figure it would not split', function (): void {
+    // Two different mistakes reach the same class, and a discount spread over
+    // cart lines has an index worth naming: the message points at the line, and
+    // the accessor carries the figure that was wrong.
+    try {
+        Money::apportion(500, [2000, -500]);
+    } catch (NotApportionable $refused) {
+        expect($refused->getRefused())->toBe(-500);
+        expect($refused->getMessage())->toContain('index 1');
+        expect($refused->getMessage())->toContain('not negative');
+
+        return;
+    }
+
+    throw new Exception('The weight was not refused.');
 });

@@ -70,12 +70,13 @@ namespace Tnt\Ecommerce;
  *
  * # What it refuses
  *
- * The exactness above is a promise, so the two ways of losing it are refused
- * rather than approximated: an amount past the ceiling for its rate raises
- * {@see AmountTooLarge}, and a rate finer or larger than the scale can hold —
- * or `INF`, or `NAN` — raises {@see UnsupportedRate}. Neither is reachable
- * with a real order and a real VAT rate. Both are reachable by handing this
- * class something that is not cents, or not a percentage, which is exactly
+ * The exactness above is a promise, so the ways of losing it are refused rather
+ * than approximated: an amount past the ceiling for its rate raises
+ * {@see AmountTooLarge}, a rate finer or larger than the scale can hold — or
+ * `INF`, or `NAN` — raises {@see UnsupportedRate}, and a split that could not
+ * add back up raises {@see NotApportionable}. None of the three is reachable
+ * with a real order and a real VAT rate. All three are reachable by handing
+ * this class something that is not cents, or not a percentage, which is exactly
  * when an exception beats an answer.
  */
 final class Money
@@ -215,6 +216,14 @@ final class Money
      * whose fraction was largest — the largest remainder method. Whatever the
      * weights, `array_sum($result) === $amount`.
      *
+     * That promise is why a negative amount or a negative weight raises
+     * {@see NotApportionable} rather than being split anyway. Flooring only
+     * holds the sum together while it can leave money on the table; below zero
+     * `intdiv()` truncates the other way, the shares overshoot, and there is
+     * nothing left over for the correction step to hand out. Refused here, as
+     * everything else this class cannot do exactly is refused, rather than
+     * returning parts that quietly do not add up.
+     *
      * A cart-level coupon is the reason this exists. The discount comes off the
      * cart, but tax is worked out per line, so the reduction has to reach the
      * lines somehow, and it has to arrive complete: a cart discounted by 250
@@ -225,17 +234,33 @@ final class Money
      * split. Two lines with equal weights and one cent to spare — the first
      * line gets it, every time, rather than it depending on sort order.
      *
-     * @param int $amount The amount to split, in cents. Not negative.
-     * @param array<int, int> $weights What to split it in proportion to. Not
-     *                                 negative.
+     * @param int $amount The amount to split, in cents.
+     * @param array<int, int> $weights What to split it in proportion to.
      * @return array<int, int> One share per weight, in the same order, summing
      *                         to `$amount`. All zero when the weights are.
+     *
+     * @throws NotApportionable If the amount, or any weight, is negative.
      */
     public static function apportion(int $amount, array $weights): array
     {
-        $total = array_sum($weights);
+        if ($amount < 0) {
+            throw NotApportionable::negativeAmount($amount);
+        }
 
-        if ($total <= 0) {
+        $total = 0;
+
+        // Adding the weights up is where each one is looked at anyway, so it is
+        // also where each one is checked. Nothing below runs on a weight that
+        // has not been through here.
+        foreach ($weights as $index => $weight) {
+            if ($weight < 0) {
+                throw NotApportionable::negativeWeight($weight, $index);
+            }
+
+            $total += $weight;
+        }
+
+        if ($total === 0) {
             return array_fill_keys(array_keys($weights), 0);
         }
 
@@ -250,8 +275,10 @@ final class Money
         }
 
         // What flooring every share left behind, handed out a cent at a time.
-        // The count cannot exceed the number of weights: each share was short
-        // of the exact figure by less than one cent.
+        // Both the amount and every weight are known non-negative by now, so
+        // every share fell short of the exact figure by less than one cent and
+        // none overshot it: the count is neither negative nor larger than the
+        // number of weights.
         $left = $amount - array_sum($shares);
 
         if ($left > 0) {
