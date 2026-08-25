@@ -170,6 +170,11 @@ it('takes no interest in an order it did not write', function (): void {
         {
             return 0;
         }
+
+        public function getTax(): int
+        {
+            return 0;
+        }
     };
 
     bootEcommerce()->dispatch(Paid::class, new Paid($foreign));

@@ -93,7 +93,13 @@ it('declares every order money column as a bigint', function (
     string $column
 ): void {
     expect(orderTableSql())->toContain('`' . $column . '` BIGINT(20)');
-})->with(['total', 'subtotal', 'reduction', 'fulfillment_cost']);
+})->with(['total', 'subtotal', 'reduction', 'fulfillment_cost', 'tax']);
+
+it('records the convention an order was priced under', function (): void {
+    // Not a money column, and not derivable from the money columns either:
+    // whether a total is gross or net cannot be recovered from the figures.
+    expect(orderTableSql())->toContain('`prices` VARCHAR(255)');
+});
 
 it('declares the order line price as a bigint', function (): void {
     expect(orderItemTableSql())->toContain('`price` BIGINT(20)');

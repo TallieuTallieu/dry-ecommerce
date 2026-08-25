@@ -120,12 +120,13 @@ interface CartInterface
      * The tax on the lines whose buyable implements {@see TaxableInterface}, in
      * cents, rounded per line. 0 when none of them does.
      *
-     * Each line is taxed on its full line total. {@see getReduction()} does not
-     * enter this, because a coupon comes off the cart rather than off any line
-     * in particular.
+     * Each line is taxed on what is left of it after {@see getReduction()},
+     * which is spread across the lines in proportion to their totals so that
+     * nothing is taxed on money the customer did not pay. The fulfillment cost
+     * is taxed too when the shop has set a rate for it.
      *
-     * Reported, not charged: this does not enter {@see getTotal()} and is not
-     * written to the order. See {@see TaxableInterface} for why not.
+     * Whether this figure is *contained in* {@see getTotal()} or was *added to*
+     * it depends on the shop's {@see \Tnt\Ecommerce\Tax\PriceConvention}.
      *
      * @see \Tnt\Ecommerce\Money
      * @return int

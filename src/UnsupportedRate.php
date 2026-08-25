@@ -81,6 +81,29 @@ final class UnsupportedRate extends InvalidArgumentException
     }
 
     /**
+     * A rate an amount cannot have inside it.
+     *
+     * {@see Money::percentageIn()} divides by 100 plus the rate, so a rate of
+     * -100% or below leaves nothing to divide by. There is no amount that
+     * contains -100% of itself.
+     *
+     * @param int|float $percentage The rate that was refused.
+     * @return self
+     */
+    public static function cannotBeContained(int|float $percentage): self
+    {
+        return new self(
+            $percentage,
+            sprintf(
+                'Money cannot find a rate of %s%% inside an amount: an amount ' .
+                    'that contains a rate is 100%% plus that rate, and this ' .
+                    'one leaves nothing for the amount to be.',
+                self::describe($percentage)
+            )
+        );
+    }
+
+    /**
      * The rate that was refused, as a percentage.
      */
     public function getPercentage(): int|float

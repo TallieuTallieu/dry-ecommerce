@@ -18,10 +18,10 @@ declare(strict_types=1);
  * not, taxed or not, and neither choice leaks into the other or into the
  * arithmetic in CartTest.
  *
- * Amounts are integer cents throughout, and stock quantities are whole. Tax is
- * reported by Cart::getTax() and deliberately does not enter Cart::getTotal();
- * the last test in the tax group holds that line, and TaxableInterface says why
- * it is drawn there.
+ * Amounts are integer cents throughout, and stock quantities are whole. What the
+ * tax actually comes to, under each pricing convention, is TaxTest's business;
+ * the tax group here only asks which lines are taxed at all, which is the
+ * capability question this file is about.
  */
 
 use Tests\Support\FakeBuyable;
@@ -35,6 +35,8 @@ use Tests\Support\PercentageTaxRate;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\HasStockInterface;
 use Tnt\Ecommerce\Contracts\TaxableInterface;
+use Tnt\Ecommerce\Tax\PriceConvention;
+use Tnt\Ecommerce\Tax\TaxPolicy;
 
 it(
     'applies stock and tax only where the buyable asks for them',
@@ -60,8 +62,8 @@ it(
         expect($cart->items())->toHaveCount(1);
         expect($cart->getSubTotal())->toBe(1000);
 
-        // 21% of €10.00.
-        expect($cart->getTax())->toBe($taxed ? 210 : 0);
+        // The 21% inside €10.00, under the default inclusive convention.
+        expect($cart->getTax())->toBe($taxed ? 174 : 0);
 
         // Whether or not there is tax, the total is the subtotal.
         expect($cart->getTotal())->toBe(1000);
@@ -247,36 +249,12 @@ it('taxes only the lines whose buyable carries a rate', function (): void {
     $cart->add(new FakeTaxableBuyable('2', 10_000, new PercentageTaxRate(6)));
     $cart->add(new FakeBuyable('3', 10_000));
 
-    // €100 at 21% plus €100 at 6%, and nothing at all for the untaxed line.
-    expect($cart->getTax())->toBe(2100 + 600);
+    // The capability question, which is all this file is about: two lines
+    // carry a rate and one does not, so two are taxed and one contributes
+    // nothing. What the figures come to is TaxTest's business — these are the
+    // tax contained in €100 at each rate, under the default convention.
+    expect($cart->getTax())->toBe(1736 + 566);
     expect($cart->getSubTotal())->toBe(30_000);
-});
-
-it('rounds tax per line rather than on the subtotal', function (): void {
-    [$cart] = makeCart();
-
-    $cart->add(new FakeTaxableBuyable('1', 1250, new PercentageTaxRate(21)));
-    $cart->add(new FakeTaxableBuyable('2', 1250, new PercentageTaxRate(21)));
-
-    // The worked example in Tnt\Ecommerce\Money: 21% of 1250 is 262.5, which
-    // rounds to 263, and two of those come to 526 — not the 525 that taxing the
-    // subtotal in one go would give. A line is a figure that gets printed, so
-    // the total has to be the sum of the printed figures.
-    expect($cart->getSubTotal())->toBe(2500);
-    expect($cart->getTax())->toBe(526);
-});
-
-it('taxes a line once, on its line total', function (): void {
-    [$cart] = makeCart();
-
-    $cart->add(new FakeTaxableBuyable('1', 1250, new PercentageTaxRate(21)), 2);
-
-    // The same 2500 as the test above, and 525 rather than 526, because this
-    // time it is one line. Quantity multiplies before the rate applies; the
-    // rounding happens once, where the printed figure is.
-    expect($cart->items())->toHaveCount(1);
-    expect($cart->getSubTotal())->toBe(2500);
-    expect($cart->getTax())->toBe(525);
 });
 
 it('reports no tax for a cart of untaxed things', function (): void {
@@ -294,31 +272,19 @@ it('reports no tax for an empty cart', function (): void {
     expect($cart->getTax())->toBe(0);
 });
 
-it('taxes a line total a coupon has not touched', function (): void {
-    [$cart] = makeCart();
+it('leaves a cart of untaxed things at its subtotal', function (): void {
+    // A shop that sells nothing taxable is unaffected by any of this,
+    // whichever convention it is configured for: there is no tax to contain
+    // and none to add.
+    foreach (
+        [PriceConvention::Inclusive, PriceConvention::Exclusive]
+        as $convention
+    ) {
+        [$cart] = makeCart([], null, new TaxPolicy($convention));
 
-    $cart->add(new FakeTaxableBuyable('1', 10_000, new PercentageTaxRate(21)));
-    $cart->addDiscount(FakeDiscountCode::withCoupon(new PercentageCoupon(10)));
+        $cart->add(new FakeBuyable('1', 4000), 2);
 
-    // €10.00 off a €100.00 cart, and the tax is still 21% of the whole line.
-    // A coupon comes off the cart rather than off any line in particular, so
-    // there is no line total for it to have changed and nothing that says which
-    // line it would have changed. A shop quoting prices without tax in them and
-    // wanting the discounted base has both figures below to work it out from.
-    expect($cart->getReduction())->toBe(1000);
-    expect($cart->getTax())->toBe(2100);
-    expect($cart->getTotal())->toBe(9000);
-});
-
-it('keeps tax out of the total', function (): void {
-    [$cart] = makeCart();
-
-    $cart->add(new FakeTaxableBuyable('1', 10_000, new PercentageTaxRate(21)));
-
-    // The seam reports; it does not charge. Whether a price already contains
-    // its VAT decides whether this figure is part of the total or on top of it,
-    // and that is not a question this package has ever recorded an answer to.
-    expect($cart->getTax())->toBe(2100);
-    expect($cart->getSubTotal())->toBe(10_000);
-    expect($cart->getTotal())->toBe(10_000);
+        expect($cart->getTax())->toBe(0);
+        expect($cart->getTotal())->toBe(8000);
+    }
 });

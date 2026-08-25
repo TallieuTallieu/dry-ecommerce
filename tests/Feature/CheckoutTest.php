@@ -31,7 +31,11 @@ use Tests\Support\FakeFulfillment;
 use Tests\Support\FakeUserResolver;
 use Tests\Support\InMemoryOrder;
 use Tests\Support\UnsavedCustomer;
+use Tests\Support\FakeTaxableBuyable;
+use Tests\Support\PercentageTaxRate;
 use Tnt\Ecommerce\Events\Order\Created;
+use Tnt\Ecommerce\Tax\PriceConvention;
+use Tnt\Ecommerce\Tax\TaxPolicy;
 
 beforeEach(function (): void {
     // The only thing checkout() needs that is not a database: the Dispatcher
@@ -76,6 +80,60 @@ it('freezes each cart amount onto its own column', function (): void {
     expect($order->subtotal)->toBe($cart->getSubTotal());
     expect($order->reduction)->toBe($cart->getReduction());
     expect($order->fulfillment_cost)->toBe($cart->getFulfillmentCost());
+});
+
+it(
+    'freezes the tax and the convention it was worked out under',
+    function (): void {
+        [$cart] = makeCheckoutCart(
+            [],
+            null,
+            new TaxPolicy(PriceConvention::Exclusive)
+        );
+
+        $cart->add(
+            new FakeTaxableBuyable('1', 1250, new PercentageTaxRate(21))
+        );
+        $cart->checkout(new UnsavedCustomer());
+
+        $order = $cart->placed();
+
+        expect($order->tax)->toBe(263);
+        expect($order->total)->toBe(1513);
+
+        // The convention travels with the order, not only the figures. Without it
+        // a shop that switches to inclusive prices next year would reprint this
+        // invoice as 1250 with 217 of VAT inside -- a different total from the one
+        // the customer was charged.
+        expect($order->getPriceConvention())->toBe(PriceConvention::Exclusive);
+        expect($order->getTax())->toBe(263);
+    }
+);
+
+it('freezes an inclusive order without moving its total', function (): void {
+    [$cart] = makeCheckoutCart(
+        [],
+        null,
+        new TaxPolicy(PriceConvention::Inclusive)
+    );
+
+    $cart->add(new FakeTaxableBuyable('1', 1250, new PercentageTaxRate(21)));
+    $cart->checkout(new UnsavedCustomer());
+
+    expect($cart->placed()->tax)->toBe(217);
+    expect($cart->placed()->total)->toBe(1250);
+    expect($cart->placed()->getPriceConvention())->toBe(
+        PriceConvention::Inclusive
+    );
+});
+
+it('reads an order written before the column existed', function (): void {
+    // A row from before sc-11195 has no convention recorded. It reports
+    // inclusive, which is the reading whose totals match what those rows
+    // already hold -- their tax was never added to anything.
+    $order = new InMemoryOrder();
+
+    expect($order->getPriceConvention())->toBe(PriceConvention::Inclusive);
 });
 
 it('records what the order was placed against', function (): void {
