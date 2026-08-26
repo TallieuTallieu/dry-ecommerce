@@ -32,6 +32,7 @@ use Tnt\Ecommerce\Revisions\AddOptionsToLineTables;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
+use Tnt\Ecommerce\Revisions\DropAddressNameColumns;
 use Tnt\Ecommerce\Shop\Shop;
 use Tnt\Ecommerce\Tax\PriceConvention;
 use Tnt\Ecommerce\Tax\TaxPolicy;
@@ -73,6 +74,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 CreateAddressTable::class,
                 AddFulfillmentAttributesToOrderTable::class,
                 AddOptionsToLineTables::class,
+                DropAddressNameColumns::class,
             ]);
 
             /** @var MigrationManager $manager */

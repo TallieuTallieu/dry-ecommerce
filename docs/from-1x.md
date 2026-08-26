@@ -95,7 +95,9 @@ and delivery at 0%. See [Tax](tax.md).
 for ever.
 
 **Now:** a one-to-many into `ecommerce_address`, with an `AddressType` of
-`Billing` or `Shipping` and a default flag per kind.
+`Billing` or `Shipping` and a default flag per kind. An address carries no
+recipient name — it is purely a *where*, and the identity an order is placed
+under is frozen on the order itself. See [Addresses](addresses.md).
 
 Two things follow that used to be the same thing:
 
@@ -151,9 +153,10 @@ selection, which is still the shop's job. See [Options](options.md).
 
 ### Contract changes at a glance
 
-A project that ships its **own implementation** of any of these four contracts
-has to grow the new members on upgrade; a project that only *consumes* them is
-untouched (`add()`'s new parameter defaults to no options).
+A project that ships its **own implementation** of any of these five contracts
+has to follow the changed members on upgrade; a project that only *consumes*
+them is untouched (`add()`'s new parameter defaults to no options, and callers
+of the removed address getters read the identity off the order instead).
 
 | Contract | Changed | New |
 | --- | --- | --- |
@@ -161,6 +164,7 @@ untouched (`add()`'s new parameter defaults to no options).
 | `CartStorageInterface` | `add()` gains `$options`; `quantityOf()` sums across variants | `updateQuantity()`, `removeItem()` |
 | `CartItemInterface` | — | `getOptions(): array` |
 | `OrderItemInterface` | — | `getPrice(): int`, `getOptions(): array` |
+| `AddressInterface` | `getFirstName()` and `getLastName()` **removed** — an address is purely a *where*; the who stays frozen on the order | — |
 
 ## The cart stopped writing a row just for existing
 

@@ -4,7 +4,6 @@ namespace Tnt\Ecommerce\Revisions;
 
 use Oak\Contracts\Migration\RevisionInterface;
 use Tnt\Dbi\TableBuilder;
-use Tnt\Ecommerce\Address\AddressType;
 
 class CreateOrderTable extends DatabaseRevision implements RevisionInterface
 {
@@ -48,13 +47,35 @@ class CreateOrderTable extends DatabaseRevision implements RevisionInterface
                 $table->addColumn('vat', 'varchar')->length(255);
 
                 // And where it went — frozen columns, deliberately not a
-                // foreign key into the editable address book. The names come
-                // from the enum that writes them, so table and write agree.
-                foreach (AddressType::cases() as $type) {
-                    foreach ($type->columns() as $column) {
-                        $table->addColumn($column, 'varchar')->length(255);
-                    }
-                }
+                // foreign key into the editable address book.
+                //
+                // Every name below is pinned history, spelled out rather than
+                // derived from AddressType: a revision that reads live code
+                // produces different DDL whenever that code moves, and Oak's
+                // migrator replays revisions by position — later revisions
+                // (the name-column drop) must find exactly what this one
+                // built. This file never changes again; the schema evolves
+                // through appended revisions.
+                $table->addColumn('billing_first_name', 'varchar')->length(255);
+                $table->addColumn('billing_last_name', 'varchar')->length(255);
+                $table->addColumn('billing_street', 'varchar')->length(255);
+                $table->addColumn('billing_number', 'varchar')->length(255);
+                $table
+                    ->addColumn('billing_postal_code', 'varchar')
+                    ->length(255);
+                $table->addColumn('billing_city', 'varchar')->length(255);
+                $table->addColumn('billing_country', 'varchar')->length(255);
+                $table
+                    ->addColumn('shipping_first_name', 'varchar')
+                    ->length(255);
+                $table->addColumn('shipping_last_name', 'varchar')->length(255);
+                $table->addColumn('shipping_street', 'varchar')->length(255);
+                $table->addColumn('shipping_number', 'varchar')->length(255);
+                $table
+                    ->addColumn('shipping_postal_code', 'varchar')
+                    ->length(255);
+                $table->addColumn('shipping_city', 'varchar')->length(255);
+                $table->addColumn('shipping_country', 'varchar')->length(255);
 
                 $table->addForeignKey('discount', 'ecommerce_discount_code');
                 $table->addForeignKey('customer', 'ecommerce_customer');

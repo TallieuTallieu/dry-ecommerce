@@ -47,15 +47,11 @@ use Tnt\Ecommerce\Tax\PriceConvention;
  * @property string $email
  * @property string $company
  * @property string $vat
- * @property string $billing_first_name
- * @property string $billing_last_name
  * @property string $billing_street
  * @property string $billing_number
  * @property string $billing_postal_code
  * @property string $billing_city
  * @property string $billing_country
- * @property string $shipping_first_name
- * @property string $shipping_last_name
  * @property string $shipping_street
  * @property string $shipping_number
  * @property string $shipping_postal_code
@@ -194,8 +190,6 @@ class Order extends Model implements OrderInterface, TotalingInterface
     {
         return new FrozenAddress(
             AddressType::Billing,
-            (string) $this->billing_first_name,
-            (string) $this->billing_last_name,
             (string) $this->billing_street,
             (string) $this->billing_number,
             (string) $this->billing_postal_code,
@@ -206,7 +200,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
 
     /**
      * The shipping address as this order froze it. Written out column by
-     * column on purpose — a generated list feeding seven positional strings is
+     * column on purpose — a generated list feeding five positional strings is
      * one silent transposition away from a wrong label.
      *
      * @return AddressInterface
@@ -215,8 +209,6 @@ class Order extends Model implements OrderInterface, TotalingInterface
     {
         return new FrozenAddress(
             AddressType::Shipping,
-            (string) $this->shipping_first_name,
-            (string) $this->shipping_last_name,
             (string) $this->shipping_street,
             (string) $this->shipping_number,
             (string) $this->shipping_postal_code,

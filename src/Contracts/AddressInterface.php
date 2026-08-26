@@ -28,21 +28,6 @@ interface AddressInterface
     public function isDefault(): bool;
 
     /**
-     * The recipient's first name, which need not be the customer's — a parcel
-     * can go to somebody else.
-     *
-     * @return string
-     */
-    public function getFirstName(): string;
-
-    /**
-     * The recipient's last name.
-     *
-     * @return string
-     */
-    public function getLastName(): string;
-
-    /**
      * @return string
      */
     public function getStreet(): string;

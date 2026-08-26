@@ -39,8 +39,6 @@ enum AddressType: string
         $prefix = $this->value . '_';
 
         return [
-            $prefix . 'first_name' => $address?->getFirstName() ?? '',
-            $prefix . 'last_name' => $address?->getLastName() ?? '',
             $prefix . 'street' => $address?->getStreet() ?? '',
             $prefix . 'number' => $address?->getNumber() ?? '',
             $prefix . 'postal_code' => $address?->getPostalCode() ?? '',
