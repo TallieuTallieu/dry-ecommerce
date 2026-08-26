@@ -149,6 +149,19 @@ Old projects that made the configuration a buyable of its own to keep
 selections apart no longer need to — unless the configuration *prices* the
 selection, which is still the shop's job. See [Options](options.md).
 
+### Contract changes at a glance
+
+A project that ships its **own implementation** of any of these four contracts
+has to grow the new members on upgrade; a project that only *consumes* them is
+untouched (`add()`'s new parameter defaults to no options).
+
+| Contract | Changed | New |
+| --- | --- | --- |
+| `CartInterface` | `add()` gains `array $options = []`; `remove()` now removes every option-variant | `updateQuantity(string $itemId, int $quantity)`, `removeItem(string $itemId)` |
+| `CartStorageInterface` | `add()` gains `$options`; `quantityOf()` sums across variants | `updateQuantity()`, `removeItem()` |
+| `CartItemInterface` | — | `getOptions(): array` |
+| `OrderItemInterface` | — | `getPrice(): int`, `getOptions(): array` |
+
 ## The cart stopped writing a row just for existing
 
 **Then:** the cart created its `ecommerce_cart` row from its constructor, so

@@ -22,6 +22,11 @@ class InMemoryCartItem implements CartItemInterface
     private int $quantity;
 
     /**
+     * @var array<array-key, mixed>
+     */
+    private readonly array $options;
+
+    /**
      * @param string $id The line's id, issued by the storage that made it.
      * @param BuyableInterface $buyable
      * @param int $quantity
@@ -32,10 +37,15 @@ class InMemoryCartItem implements CartItemInterface
         private readonly string $id,
         BuyableInterface $buyable,
         int $quantity = 1,
-        private readonly array $options = []
+        array $options = []
     ) {
         $this->buyable = $buyable;
         $this->quantity = $quantity;
+
+        // Through the same canonicalisation the database storage applies, so
+        // the two storages are indistinguishable through the contract — keys
+        // read back sorted here too, exactly as docs/options.md promises.
+        $this->options = LineOptions::decode(LineOptions::canonical($options));
     }
 
     /**
@@ -110,7 +120,7 @@ class InMemoryCartItem implements CartItemInterface
     }
 
     /**
-     * The choices this line was added with, as they were handed over.
+     * The choices this line was added with, in canonical form.
      *
      * @return array<array-key, mixed>
      */

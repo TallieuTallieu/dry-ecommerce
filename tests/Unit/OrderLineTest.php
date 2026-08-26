@@ -116,3 +116,31 @@ it('reads a line from before options existed as none', function (): void {
     // and [] is the honest reading: nothing was chosen.
     expect($line->getOptions())->toBe([]);
 });
+
+it('stamps created and updated on the order line', function (): void {
+    // ecommerce_order_item.created/updated are NOT NULL with no default, so
+    // under MySQL strict mode a line without them is an insert error — and
+    // every other insert in this package stamps them by hand.
+    $order = new InMemoryLineOrder();
+    $before = time();
+
+    $order->add(new InMemoryCartItem('1', new FakeBuyable('1', 1000), 2));
+
+    $line = $order->writtenLines[0];
+    expect($line->created)->toBeGreaterThanOrEqual($before);
+    expect($line->updated)->toBeGreaterThanOrEqual($before);
+});
+
+it(
+    'canonicalises in-memory options like the database storage does',
+    function (): void {
+        // The two storages must be indistinguishable through the contract: keys
+        // read back sorted from both, exactly as docs/options.md promises.
+        $item = new InMemoryCartItem('1', new FakeBuyable('1', 1000), 1, [
+            'size' => 'L',
+            'gift' => true,
+        ]);
+
+        expect(array_keys($item->getOptions()))->toBe(['gift', 'size']);
+    }
+);

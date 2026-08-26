@@ -255,7 +255,28 @@ it('adds the options column to both line tables', function (): void {
     );
 
     foreach ($revision->statements as $statement) {
-        expect($statement)->toContain('`options` TEXT NULL');
+        expect($statement)->toContain(
+            '`options` TEXT COLLATE utf8mb4_bin NULL'
+        );
+    }
+});
+
+it('compares the options column exactly, not by collation', function (): void {
+    // The column is half the merge key: CartItemRepository::forBuyable() finds
+    // a line by comparing it to the canonical string. dry-dbi builds tables
+    // COLLATE utf8mb4_0900_ai_ci, under which MySQL reads `No Goat` = `no goat`
+    // and `crème` = `creme` — so a second selection would merge into the first
+    // line and be silently discarded, keeping the first line's stored JSON.
+    // Verified against MySQL 8.0.34: ai_ci answers 1 to both comparisons,
+    // utf8mb4_bin answers 0.
+    //
+    // Asserted on the collation alone rather than the whole column, so this
+    // fails on it going missing however the rest of the declaration is spelled.
+    $revision = new CapturingAddOptionsToLineTables(new QueryBuilder());
+    $revision->up();
+
+    foreach ($revision->statements as $statement) {
+        expect($statement)->toContain('COLLATE utf8mb4_bin');
     }
 });
 

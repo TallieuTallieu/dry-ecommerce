@@ -462,7 +462,9 @@ class Cart implements CartInterface, TotalingInterface
             $attributes[$name] = $fulfillment->getAttribute($name);
         }
 
-        return json_encode($attributes, JSON_THROW_ON_ERROR);
+        // The same canonical encoding the line options use — one JSON
+        // convention per package, not two that disagree about escaping.
+        return LineOptions::canonical($attributes);
     }
 
     /**
