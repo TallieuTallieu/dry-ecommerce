@@ -22,42 +22,17 @@ declare(strict_types=1);
  * through would look wrong.
  */
 
-use Oak\Contracts\Dispatcher\DispatcherInterface;
-use Oak\Dispatcher\Dispatcher;
 use Tests\Support\FakeCoupon;
 use Tests\Support\FakeDiscountCode;
 use Tests\Support\InMemoryOrder;
-use Tests\Support\WebContainer;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
-use Tnt\Ecommerce\EcommerceServiceProvider;
 use Tnt\Ecommerce\Events\Order\Paid;
 
-/**
- * A booted package, and the dispatcher its listeners are on.
- *
- * @return DispatcherInterface
- */
-function bootEcommerce(): DispatcherInterface
-{
-    $app = new WebContainer();
-
-    // singleton(), so that the dispatcher the provider adds listeners to is the
-    // dispatcher the event is later sent through. With set() the container
-    // builds a fresh one per resolution and the listener is never reached --
-    // which is a mistake a test can make, not one the framework makes:
-    // Oak\Dispatcher\DispatcherServiceProvider binds this as a singleton.
-    $app->singleton(DispatcherInterface::class, Dispatcher::class);
-
-    (new EcommerceServiceProvider())->boot($app);
-
-    /** @var DispatcherInterface $dispatcher */
-    $dispatcher = $app->get(DispatcherInterface::class);
-
-    return $dispatcher;
-}
+// bootEcommerce() — the booted package and the dispatcher its listeners are
+// on — lives in Pest.php now: the payment status tests boot the provider too.
 
 /**
  * An order carrying a discount code, as checkout would have left it.

@@ -42,6 +42,7 @@ it('autoloads the cart seam without booting Dry', function (
     Tnt\Ecommerce\Cart\Cart::class,
     Tnt\Ecommerce\Cart\InMemoryCartItem::class,
     Tnt\Ecommerce\Cart\InMemoryCartStorage::class,
+    Tnt\Ecommerce\Cart\LineOptions::class,
     Tnt\Ecommerce\Cart\SessionCartStorage::class,
     Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage::class,
     Tnt\Ecommerce\Model\CartItem::class,

@@ -22,24 +22,31 @@ class InMemoryCartItem implements CartItemInterface
     private int $quantity;
 
     /**
+     * @param string $id The line's id, issued by the storage that made it.
      * @param BuyableInterface $buyable
      * @param int $quantity
+     * @param array<array-key, mixed> $options The choices the line was added
+     *                                         with; [] when there were none.
      */
-    public function __construct(BuyableInterface $buyable, int $quantity = 1)
-    {
+    public function __construct(
+        private readonly string $id,
+        BuyableInterface $buyable,
+        int $quantity = 1,
+        private readonly array $options = []
+    ) {
         $this->buyable = $buyable;
         $this->quantity = $quantity;
     }
 
     /**
-     * There is no row to take an id from, so the line is identified the same
-     * way the database identifies it: by which buyable it points at.
+     * The id the storage issued when the line was made — issued, not derived
+     * from the buyable, because one buyable can sit on several lines.
      *
      * @return string
      */
     public function getId(): string
     {
-        return get_class($this->buyable) . ':' . $this->buyable->getId();
+        return $this->id;
     }
 
     /**
@@ -76,10 +83,7 @@ class InMemoryCartItem implements CartItemInterface
     }
 
     /**
-     * The line total, not the unit price — the same thing
-     * {@see \Tnt\Ecommerce\Model\CartItem::getPrice()} returns.
-     *
-     * In cents.
+     * The line total in cents, not the unit price.
      *
      * @return int
      */
@@ -103,5 +107,15 @@ class InMemoryCartItem implements CartItemInterface
     public function setQuantity(int $quantity)
     {
         $this->quantity = $quantity;
+    }
+
+    /**
+     * The choices this line was added with, as they were handed over.
+     *
+     * @return array<array-key, mixed>
+     */
+    public function getOptions(): array
+    {
+        return $this->options;
     }
 }

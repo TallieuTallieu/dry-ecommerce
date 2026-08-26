@@ -24,6 +24,8 @@ declare(strict_types=1);
  * booted Dry application and a live connection, which the suite does not have.
  */
 
+use Tests\Support\CapturingAddFulfillmentAttributesToOrderTable;
+use Tests\Support\CapturingAddOptionsToLineTables;
 use Tests\Support\CapturingCreateAddressTable;
 use Tests\Support\CapturingCreateCustomerTable;
 use Tests\Support\CapturingCreateOrderItemTable;
@@ -211,6 +213,50 @@ it('never points an order at the address book', function (): void {
     // the order read through to a row the customer can edit and delete, and an
     // invoice cannot be backed by a mutable row.
     expect(orderTableSql())->not->toContain('`ecommerce_address`');
+});
+
+it(
+    'adds the fulfillment attributes as a nullable text column',
+    function (): void {
+        // An appended revision, so it alters the existing table rather than being
+        // folded into CreateOrderTable: Oak's migrator counts revisions, and a
+        // shop that has already run the create must reach this schema through an
+        // ALTER at the end of the list. Nullable text, because which attributes a
+        // method requires is the method's own business — the schema cannot hold
+        // columns it has never heard of, and an order whose method asked nothing
+        // has nothing to hold.
+        $revision = new CapturingAddFulfillmentAttributesToOrderTable(
+            new QueryBuilder()
+        );
+        $revision->up();
+
+        expect($revision->sql)->toContain('ALTER TABLE `ecommerce_order`');
+        expect($revision->sql)->toContain('`fulfillment_attributes` TEXT NULL');
+    }
+);
+
+it('adds the options column to both line tables', function (): void {
+    // One revision, two ALTERs, because the column means the same thing on
+    // both tables and neither is any use without the other: the cart line
+    // carries the selection, checkout copies it onto the order line. Nullable
+    // text like fulfillment_attributes, and for the same reason — which
+    // options a shop offers is its own business, and NULL is what every
+    // pre-options line already holds, so old lines and new no-options lines
+    // read the same.
+    $revision = new CapturingAddOptionsToLineTables(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(2);
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_cart_item`'
+    );
+    expect($revision->statements[1])->toContain(
+        'ALTER TABLE `ecommerce_order_item`'
+    );
+
+    foreach ($revision->statements as $statement) {
+        expect($statement)->toContain('`options` TEXT NULL');
+    }
 });
 
 it('keeps the non-money columns as they were', function (): void {

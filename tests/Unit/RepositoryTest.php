@@ -85,3 +85,24 @@ it('composes filters fluently', function (): void {
             ->amount(10)
     )->toBe($repository);
 });
+
+it('composes the cart line lookups fluently', function (): void {
+    // Both spellings of "find the line": the full merge key with options —
+    // which takes the IS NULL branch when there are none and the equality
+    // branch when there are — and the variant-blind lookup quantityOf() and
+    // remove() count and delete through. Running them needs a database;
+    // that they compose off an unbooted container does not.
+    $cart = new Cart();
+    $buyable = new Tests\Support\FakeBuyable('1', 1000);
+
+    $repository = CartItemRepository::create();
+    expect($repository->forBuyable($cart, $buyable))->toBe($repository);
+
+    $repository = CartItemRepository::create();
+    expect(
+        $repository->forBuyable($cart, $buyable, ['cheese' => 'no goat'])
+    )->toBe($repository);
+
+    $repository = CartItemRepository::create();
+    expect($repository->forAnyVariantOf($cart, $buyable))->toBe($repository);
+});

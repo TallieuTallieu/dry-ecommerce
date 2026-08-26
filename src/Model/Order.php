@@ -4,6 +4,7 @@ namespace Tnt\Ecommerce\Model;
 
 use dry\orm\Model;
 use Tnt\Ecommerce\Address\AddressType;
+use Tnt\Ecommerce\Cart\LineOptions;
 use Tnt\Ecommerce\Address\FrozenAddress;
 use Tnt\Ecommerce\Contracts\AddressInterface;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
@@ -14,25 +15,14 @@ use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\OrderItemInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Facade\Shop;
+use Tnt\Ecommerce\Payment\PaymentStatus;
 use Tnt\Ecommerce\Tax\PriceConvention;
 
 /**
- * A placed order, as stored in `ecommerce_order`.
- *
- * Totals are frozen onto the row at checkout rather than recomputed, so an
- * order still reads back the way it was placed after prices, coupons or
- * fulfillment costs change. All four money columns are integer cents.
- *
- * # Two records of the customer, answering two questions
- *
- * {@see $customer} is a foreign key, and it answers "whose account is this
- * order on" — follow it and you get the row as it stands today, which is what a
- * shop wants when it lists a person's orders.
- *
- * The `first_name`, `last_name`, `email`, `billing_*` and `shipping_*` columns
- * are a copy taken at checkout, and they answer "who placed it and where did it
- * go". Only these are safe to print on an invoice. See
- * {@see freezeCustomer()}.
+ * A placed order, as stored in `ecommerce_order`. Totals, identity and
+ * addresses are frozen onto the row at checkout rather than recomputed;
+ * {@see $customer} is the account link, the frozen columns are what an invoice
+ * prints. Money columns are integer cents. See docs/orders.md.
  *
  * @see \Tnt\Ecommerce\Money
  *
@@ -49,6 +39,7 @@ use Tnt\Ecommerce\Tax\PriceConvention;
  * @property string $prices
  * @property string $payment_status
  * @property string|int|null $fulfillment_method
+ * @property string|null $fulfillment_attributes
  * @property DiscountCode|null $discount
  * @property CustomerInterface $customer
  * @property string $first_name
@@ -85,18 +76,34 @@ class Order extends Model implements OrderInterface, TotalingInterface
     ];
 
     /**
+     * Write one cart line onto this order, as the order's own copy: the frozen
+     * line total plus the canonical options ({@see LineOptions}; NULL when the
+     * line had none).
+     *
      * @param CartItemInterface $cartItem
      * @return mixed|void
      */
     public function add(CartItemInterface $cartItem)
     {
-        $item = new OrderItem();
+        $item = $this->newOrderItem();
         $item->order = $this;
         $item->quantity = $cartItem->getQuantity();
         $item->price = $cartItem->getPrice();
         $item->item_id = (int) $cartItem->getBuyable()->getId();
         $item->item_class = get_class($cartItem->getBuyable());
+        $item->options = LineOptions::canonical($cartItem->getOptions());
         $item->save();
+    }
+
+    /**
+     * The empty line {@see add()} is about to fill in — a test seam, same
+     * shape as {@see \Tnt\Ecommerce\Cart\Cart::newOrder()}.
+     *
+     * @return OrderItem
+     */
+    protected function newOrderItem(): OrderItem
+    {
+        return new OrderItem();
     }
 
     /**
@@ -127,45 +134,10 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
-     * Take this order's own copy of who placed it and where it goes.
-     *
-     * # Why a copy and not a foreign key
-     *
-     * The obvious design is two more foreign keys, into
-     * {@see \Tnt\Ecommerce\Model\Address}, and it is wrong for one reason that
-     * is not recoverable from afterwards: those rows are an address *book*, and
-     * a book is edited. A customer moves house and corrects the address they
-     * keep on file; a customer deletes the address they used once for a gift.
-     * Both are things an address book must let them do, and an order that
-     * pointed at those rows would answer, next year, that last year's parcel
-     * went to an address it never went to — or that it went nowhere, the row
-     * having been deleted.
-     *
-     * An invoice is a statement about the past. A mutable row cannot back one.
-     * So the seven fields of each address are copied here, as text, and the
-     * only thing that can ever change them is a deliberate write to this order.
-     *
-     * The same argument applies to the name and the email, one step further
-     * removed: {@see $customer} does point at a live row, and following it is
-     * the right thing to do to answer *whose account this is*. It is the wrong
-     * thing to do to answer *who placed this* — a shop that ever lets somebody
-     * change the name or email on their account would be rewriting the header
-     * of every invoice they had ever been sent.
-     *
-     * # What a missing address does
-     *
-     * Nothing is substituted. A customer with a shipping address and no billing
-     * address freezes seven blank billing columns, and vice versa: an order
-     * that carries an address the customer never gave for that purpose is a
-     * worse record than one that admits the purpose had no address. A shop that
-     * means "bill me where you ship" says so by putting an address of each kind
-     * in the book, which is the thing the book is now able to express.
-     *
-     * A customer that is not a {@see HasAddressesInterface} at all — a shop's
-     * own customer class, or anything selling what is never delivered — freezes
-     * both sides blank and is asked nothing. Same `instanceof` shape as the
-     * capability checks in {@see \Tnt\Ecommerce\Cart\Cart}, and the same reason:
-     * absence of a thing is expressed by absence.
+     * Take this order's own copy of who placed it and where it goes — an
+     * address book is edited, and an invoice is a statement about the past.
+     * A missing address freezes blank; nothing is substituted. See
+     * docs/addresses.md.
      *
      * @param CustomerInterface $customer
      * @return void
@@ -190,11 +162,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
-     * The company this order was placed under, or ''.
-     *
-     * Frozen with the VAT number it belongs to. An account renamed after the
-     * fact -- a business sold, a company restructured -- must not restate the
-     * invoices the old name was on.
+     * The company this order was placed under, or '' — frozen at checkout.
      *
      * @return string
      */
@@ -204,12 +172,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
-     * The VAT number this order was placed under, or ''.
-     *
-     * Frozen with the rest of the identity, and for the same reason: it is what
-     * the invoice has to carry, and a customer who corrects their VAT number
-     * afterwards must not restate an invoice that has already been issued. A
-     * wrong VAT number on a filed invoice is a tax problem, not a typo.
+     * The VAT number this order was placed under, or '' — frozen at checkout.
      *
      * @return string
      */
@@ -219,11 +182,8 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
-     * The billing address as this order froze it.
-     *
-     * A {@see FrozenAddress}, never the row it was copied from — reading it
-     * cannot reach the address book, which is the point. An order placed before
-     * sc-11172 has none of these columns and comes back with every field blank;
+     * The billing address as this order froze it — a {@see FrozenAddress},
+     * never the live row. All fields blank for a pre-address-book order;
      * {@see FrozenAddress::isEmpty()} is how to ask.
      *
      * @return AddressInterface
@@ -243,14 +203,9 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
-     * The shipping address as this order froze it.
-     *
-     * Written out column by column rather than built from
-     * {@see AddressType::columns()}, unlike {@see freezeCustomer()}. The write
-     * side has to agree with the schema and gains from being generated; the
-     * read side has to agree with a constructor of seven positional strings,
-     * and a generated list feeding that is one silent transposition away from
-     * printing the postcode as the house number.
+     * The shipping address as this order froze it. Written out column by
+     * column on purpose — a generated list feeding seven positional strings is
+     * one silent transposition away from a wrong label.
      *
      * @return AddressInterface
      */
@@ -317,6 +272,49 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
+     * The fulfillment attributes this order was placed with — the order's own
+     * frozen copy, never read back through the method. Empty when nothing was
+     * frozen. See docs/fulfillment.md.
+     *
+     * @return array<string, mixed>
+     */
+    public function getFulfillmentAttributes(): array
+    {
+        $raw = $this->fulfillment_attributes;
+
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+
+        // A column that is not a JSON object reads as empty, not as an error.
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $attributes = [];
+
+        foreach ($decoded as $name => $value) {
+            $attributes[(string) $name] = $value;
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * One frozen fulfillment attribute, or null when the order has none by
+     * that name — null, never the MissingAttribute the live method throws.
+     *
+     * @param string $name
+     * @return mixed
+     */
+    public function getFulfillmentAttribute(string $name): mixed
+    {
+        return $this->getFulfillmentAttributes()[$name] ?? null;
+    }
+
+    /**
      * @return \dry\orm\relationship\HasMany
      */
     public function get_items()
@@ -362,13 +360,8 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
-     * Whether the amounts on this order contain their tax.
-     *
-     * Frozen at checkout rather than read from configuration, so that an order
-     * still reads back the way it was placed after the shop changes how it
-     * quotes prices. A row written before this column existed has no answer
-     * and reports the inclusive convention, which is the one whose totals
-     * match what those rows already hold.
+     * Whether the amounts on this order contain their tax — frozen at
+     * checkout, not read from configuration. Pre-column rows read as inclusive.
      *
      * @return PriceConvention
      */
@@ -376,5 +369,31 @@ class Order extends Model implements OrderInterface, TotalingInterface
     {
         return PriceConvention::tryFrom((string) $this->prices) ??
             PriceConvention::Inclusive;
+    }
+
+    /**
+     * Where the money for this order stands. A column this package cannot read
+     * — legacy `''`, or an unknown word — reads as
+     * {@see PaymentStatus::Pending}, the one status that claims nothing.
+     *
+     * @return PaymentStatus
+     */
+    public function getPaymentStatus(): PaymentStatus
+    {
+        return PaymentStatus::tryFrom((string) $this->payment_status) ??
+            PaymentStatus::Pending;
+    }
+
+    /**
+     * Record where the money stands, and save. Takes the enum so only words
+     * {@see getPaymentStatus()} can read back reach the column.
+     *
+     * @param PaymentStatus $status
+     * @return void
+     */
+    public function setPaymentStatus(PaymentStatus $status): void
+    {
+        $this->payment_status = $status->value;
+        $this->save();
     }
 }

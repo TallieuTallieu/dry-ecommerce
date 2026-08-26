@@ -52,4 +52,12 @@ interface CartItemInterface
      * @return mixed
      */
     public function setQuantity(int $quantity);
+
+    /**
+     * The choices this line was added with, decoded, or [] when there were
+     * none.
+     *
+     * @return array<array-key, mixed>
+     */
+    public function getOptions(): array;
 }

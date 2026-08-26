@@ -11,27 +11,27 @@ use Tnt\Ecommerce\Model\DiscountCode;
 interface CartInterface
 {
     /**
-     * Put a buyable in the cart, merging into the line it already has.
-     *
-     * Adds what it is asked to add. Stock does not veto it — see
-     * {@see canAdd()}, which reports and leaves the decision to the shop.
+     * Put a buyable in the cart. A line is `(buyable, options)`, so the same
+     * selection merges and a different one is a second line; stock does not
+     * veto — see {@see canAdd()}.
      *
      * @param BuyableInterface $buyable
      * @param int $quantity
+     * @param array<array-key, mixed> $options Part of the line's identity;
+     *                                         copied onto the order line at
+     *                                         checkout.
      * @return mixed
      */
-    public function add(BuyableInterface $buyable, int $quantity = 1);
+    public function add(
+        BuyableInterface $buyable,
+        int $quantity = 1,
+        array $options = []
+    );
 
     /**
-     * Whether the stock would cover this buyable in this quantity.
-     *
-     * True for anything that does not implement {@see HasStockInterface}: a
-     * buyable with no stock behind it has no limit to run into. For one that
-     * does, the quantity checked is the total the cart would hold afterwards,
-     * not the addition alone.
-     *
-     * Reported, not enforced: {@see add()} adds either way, and what to do with
-     * a false is the shop's call. {@see \Tnt\Ecommerce\Cart\Cart} says why.
+     * Whether the stock would cover the total the cart would then hold of this
+     * buyable. Always true without {@see HasStockInterface}. Reported, not
+     * enforced — {@see add()} adds either way.
      *
      * @param BuyableInterface $buyable
      * @param int $quantity
@@ -40,10 +40,33 @@ interface CartInterface
     public function canAdd(BuyableInterface $buyable, int $quantity = 1): bool;
 
     /**
+     * Take a buyable out of the cart — every line of it. A caller that means
+     * one variant says so by id, with {@see removeItem()}.
+     *
      * @param BuyableInterface $buyable
      * @return mixed
      */
     public function remove(BuyableInterface $buyable);
+
+    /**
+     * Set one line to a quantity, by the line's own id
+     * ({@see CartItemInterface::getId()}). Zero or less removes the line; an
+     * unknown id is a no-op, not an error.
+     *
+     * @param string $itemId
+     * @param int $quantity
+     * @return void
+     */
+    public function updateQuantity(string $itemId, int $quantity): void;
+
+    /**
+     * Take one line out of the cart, by the line's own id. An unknown id is a
+     * no-op.
+     *
+     * @param string $itemId
+     * @return void
+     */
+    public function removeItem(string $itemId): void;
 
     /**
      * @return array<int, CartItemInterface>
@@ -117,16 +140,10 @@ interface CartInterface
     public function getReduction(): int;
 
     /**
-     * The tax on the lines whose buyable implements {@see TaxableInterface}, in
-     * cents, rounded per line. 0 when none of them does.
-     *
-     * Each line is taxed on what is left of it after {@see getReduction()},
-     * which is spread across the lines in proportion to their totals so that
-     * nothing is taxed on money the customer did not pay. The fulfillment cost
-     * is taxed too when the shop has set a rate for it.
-     *
-     * Whether this figure is *contained in* {@see getTotal()} or was *added to*
-     * it depends on the shop's {@see \Tnt\Ecommerce\Tax\PriceConvention}.
+     * The tax on the lines whose buyable implements {@see TaxableInterface},
+     * in cents, rounded per line on what is left after the reduction. Whether
+     * it is contained in {@see getTotal()} or added to it is the shop's
+     * {@see \Tnt\Ecommerce\Tax\PriceConvention}. See docs/tax.md.
      *
      * @see \Tnt\Ecommerce\Money
      * @return int

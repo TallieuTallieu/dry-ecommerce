@@ -1,12 +1,16 @@
 <?php
 
+use Oak\Contracts\Dispatcher\DispatcherInterface;
+use Oak\Dispatcher\Dispatcher;
 use Tests\Support\FakePayment;
 use Tests\Support\InMemoryOrderCart;
+use Tests\Support\WebContainer;
 use Tnt\Ecommerce\Account\GuestUserResolver;
 use Tnt\Ecommerce\Cart\Cart;
 use Tnt\Ecommerce\Cart\InMemoryCartStorage;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
+use Tnt\Ecommerce\EcommerceServiceProvider;
 use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
 use Tnt\Ecommerce\Shop\Shop;
 use Tnt\Ecommerce\Tax\TaxPolicy;
@@ -29,6 +33,43 @@ uses(Tests\TestCase::class)->in('Feature', 'Unit');
 | Functions
 |--------------------------------------------------------------------------
 */
+
+/**
+ * A booted package, and the dispatcher its listeners are on.
+ *
+ * Moved here from CouponRedemptionTest for the same reason makeCart() lives
+ * here: the payment status tests need the provider's listeners too, and a
+ * global helper declared inside a test file is only available to the files
+ * Pest happens to load after it.
+ *
+ * Also points the facades at the booted container. The coupon tests do not
+ * need that, but a test that runs Cart::checkout() against these listeners
+ * does — checkout() dispatches Created through the Dispatcher facade, and the
+ * facade has to reach the same dispatcher the provider registered on or the
+ * listeners are never heard.
+ *
+ * @return DispatcherInterface
+ */
+function bootEcommerce(): DispatcherInterface
+{
+    $app = new WebContainer();
+
+    // singleton(), so that the dispatcher the provider adds listeners to is the
+    // dispatcher the event is later sent through. With set() the container
+    // builds a fresh one per resolution and the listener is never reached --
+    // which is a mistake a test can make, not one the framework makes:
+    // Oak\Dispatcher\DispatcherServiceProvider binds this as a singleton.
+    $app->singleton(DispatcherInterface::class, Dispatcher::class);
+
+    Oak\Facade::setContainer($app);
+
+    (new EcommerceServiceProvider())->boot($app);
+
+    /** @var DispatcherInterface $dispatcher */
+    $dispatcher = $app->get(DispatcherInterface::class);
+
+    return $dispatcher;
+}
 
 /**
  * A cart, the storage behind it and the shop it belongs to.
