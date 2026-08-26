@@ -9,23 +9,8 @@ use Tnt\Ecommerce\NotAnAddressType;
 
 /**
  * One address in a customer's address book, as stored in `ecommerce_address`.
- *
- * # A list, not two sets of columns
- *
- * `ecommerce_customer` used to carry twelve inline columns — five `address_*`
- * and seven `shipping_*` — which gave a customer exactly one billing and one
- * shipping address and no way to have a second of either. A person with a home
- * and a work address, or a company delivering to three sites, could not be
- * expressed at all. That is what this table replaces.
- *
- * # It is editable, and that is why an order does not point at it
- *
- * A row here says where a customer lives *today*. They move house, they correct
- * a typo, they delete an address they no longer use, and all three are ordinary
- * things for an address book to allow. None of them may reach an order that has
- * already been placed, so an order does not hold a foreign key into this table
- * — it copies the seven fields onto itself at checkout. See
- * {@see Order::freezeCustomer()} for the whole of that argument.
+ * Editable — which is why an order copies it at checkout rather than pointing
+ * at it ({@see Order::freezeCustomer()}). See docs/addresses.md.
  *
  * @see \Tnt\Ecommerce\Address\FrozenAddress The other side of that copy.
  *
@@ -67,11 +52,8 @@ class Address extends Model implements AddressInterface
     }
 
     /**
-     * What this address is for.
-     *
-     * Refuses a value it does not recognise rather than defaulting to one of
-     * the two. Which kind an address is decides whether it ends up on an
-     * invoice or on a parcel, and both are wrong half the time if guessed.
+     * What this address is for — refuses an unrecognised value rather than
+     * guessing between invoice and parcel.
      *
      * @return AddressType
      * @throws NotAnAddressType If the column holds something else.
@@ -85,10 +67,6 @@ class Address extends Model implements AddressInterface
 
     /**
      * Whether this is the one of its kind a checkout takes by default.
-     *
-     * Stored as an int rather than a bool because the column is one, and read
-     * through a comparison rather than a cast so that a row written before the
-     * column existed reads as "not the default" instead of as a truthy string.
      *
      * @return bool
      */

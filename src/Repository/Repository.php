@@ -11,14 +11,8 @@ use Tnt\Dbi\Criteria\Equals;
 use Tnt\Dbi\Criteria\In;
 
 /**
- * Base class for this package's repositories.
- *
- * dry-dbi's {@see BaseRepository} demands a criteria collection up front, which
- * is fine when a project's own service provider registers dry-dbi's
- * `RepositoryProvider` and inconvenient everywhere else. Defaulting the
- * argument means `new CartRepository()` works, oak can still autowire the
- * collection when it is bound, and nothing in this package has to care which of
- * the two is true.
+ * Base class for this package's repositories. Defaults the criteria
+ * collection so `new CartRepository()` works without the container.
  *
  * @template TModel of Model
  */
@@ -46,11 +40,8 @@ abstract class Repository extends BaseRepository
     }
 
     /**
-     * Filter to a set of primary keys.
-     *
-     * An empty set matches nothing rather than everything — dry-dbi's `In`
-     * criterion degrades to `1 = 0` — which is what a caller filtering by a
-     * list it happens to have emptied means.
+     * Filter to a set of primary keys. An empty set matches nothing, not
+     * everything.
      *
      * @param array<int, int> $ids
      * @return static
@@ -63,12 +54,8 @@ abstract class Repository extends BaseRepository
     }
 
     /**
-     * The first match, or null when there is none.
-     *
-     * `first()` treats an empty result as a failure and throws, which is right
-     * when the row has to be there and wrong for the many places in a shop
-     * where its absence is an ordinary state — a visitor with no cart yet, a
-     * product that was never stocked.
+     * The first match, or null when there is none — unlike `first()`, which
+     * throws on an empty result.
      *
      * @return TModel|null
      */

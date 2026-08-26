@@ -5,21 +5,8 @@ namespace Tnt\Ecommerce;
 use InvalidArgumentException;
 
 /**
- * Text {@see Money::fromDecimal()} cannot read as an amount of cents.
- *
- * Money enters this package as text — an admin field, a config value, a price
- * import — and text is where a wrong amount is easiest to introduce and hardest
- * to see. A plain `(int)` cast reads `'abc'`, `''` and `'12,25'` as `0`, and `0`
- * is a believable price, so none of them can be allowed through quietly.
- *
- * Two kinds of text are refused. One is not an amount at all. The other is an
- * amount finer than a cent — `'12.255'` — which could be rounded, but rounding
- * it would change a price nobody asked to change. Both say which text was
- * passed, because that text came from somewhere a developer will have to go
- * and look.
- *
- * Extends `InvalidArgumentException`, as do {@see AmountTooLarge} and
- * {@see UnsupportedRate}.
+ * Text {@see Money::fromDecimal()} cannot read as an amount of cents — not an
+ * amount, finer than a cent, or past what an int holds. See docs/money.md.
  */
 final class NotAnAmount extends InvalidArgumentException
 {

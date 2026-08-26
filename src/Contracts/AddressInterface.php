@@ -5,27 +5,10 @@ namespace Tnt\Ecommerce\Contracts;
 use Tnt\Ecommerce\Address\AddressType;
 
 /**
- * A postal address, whether it is still editable or already frozen.
- *
- * Two things implement it, and the difference between them is the whole point
- * of this ticket:
- *
- * - {@see \Tnt\Ecommerce\Model\Address} — a row in a customer's address book. It
- *   is mutable, it can be deleted, and it says where a customer *currently*
- *   lives.
- * - {@see \Tnt\Ecommerce\Address\FrozenAddress} — the copy an order took at
- *   checkout, read back off the order's own columns. It says where one order
- *   actually went, and nothing can change it afterwards.
- *
- * Only the second is safe to print on an invoice. They share this interface so
- * that a template rendering an address does not have to be written twice, not
- * because they are interchangeable.
- *
- * Every field is a string, and a field a shop never collected is `''` rather
- * than null. An address with nothing in it is a real state — see
- * {@see AddressType::snapshotOf()} — and making callers distinguish `null` from
- * `''` on seven fields buys nothing an `if ($address->getStreet() === '')`
- * does not.
+ * A postal address — the live {@see \Tnt\Ecommerce\Model\Address} or the
+ * frozen {@see \Tnt\Ecommerce\Address\FrozenAddress}; only the frozen copy is
+ * safe on an invoice. Fields a shop never collected are `''`, not null.
+ * See docs/addresses.md.
  */
 interface AddressInterface
 {
@@ -37,26 +20,16 @@ interface AddressInterface
     public function getType(): AddressType;
 
     /**
-     * Whether this is the one of its kind a checkout takes by default.
-     *
-     * A book may hold several addresses of a kind, and exactly one of them
-     * answers true. A book holding one of a kind does not need the mark: with
-     * nothing to choose between, that one is the answer either way.
-     *
-     * A frozen copy on an order always answers false. The mark says which
-     * address to reach for next time, and an order is not reaching for
-     * anything — it already has its copy.
+     * Whether this is the one of its kind a checkout takes by default. A
+     * frozen copy on an order always answers false.
      *
      * @return bool
      */
     public function isDefault(): bool;
 
     /**
-     * The recipient's first name, which need not be the customer's.
-     *
-     * A parcel can go to somebody else — a gift, a colleague, a neighbour who
-     * is in during the day — so the name travels with the address rather than
-     * being taken from the account that placed the order.
+     * The recipient's first name, which need not be the customer's — a parcel
+     * can go to somebody else.
      *
      * @return string
      */
@@ -75,10 +48,8 @@ interface AddressInterface
     public function getStreet(): string;
 
     /**
-     * The house number, kept apart from the street.
-     *
-     * Separate columns because a carrier's API asks for them separately, and
-     * splitting `'Nieuwstraat 12 bus 3'` back apart afterwards is guesswork.
+     * The house number, kept apart from the street — carriers ask for them
+     * separately.
      *
      * @return string
      */

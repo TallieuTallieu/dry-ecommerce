@@ -7,17 +7,10 @@ namespace Tnt\Ecommerce\Tax;
 use Tnt\Ecommerce\Contracts\TaxRateInterface;
 
 /**
- * How a shop taxes: whether its prices contain tax, and what delivery costs.
- *
- * Two facts that belong to the shop rather than to any buyable, travelling
- * together because every tax question needs both. The cart takes one of these
- * instead of two loose settings, and asks it rather than branching on a
- * convention itself.
- *
- * Built from configuration in {@see \Tnt\Ecommerce\EcommerceServiceProvider}:
- * `ecommerce.prices` and `ecommerce.delivery_tax_rate`. The default is
- * inclusive prices and delivery at 0%, which is what a shop that has said
- * nothing gets — and, importantly, leaves its totals exactly where they were.
+ * How a shop taxes: whether its prices contain tax, and the rate on delivery.
+ * Built from `ecommerce.prices` and `ecommerce.delivery_tax_rate`; the
+ * defaults (inclusive, 0%) leave an existing shop's totals unmoved. See
+ * docs/tax.md.
  */
 final class TaxPolicy
 {
@@ -45,12 +38,6 @@ final class TaxPolicy
     /**
      * Whether tax under this policy belongs in the total.
      *
-     * The same question {@see PriceConvention::addsTaxToTheTotal()} answers,
-     * asked here so that a caller holding a policy does not have to reach
-     * through it for the convention to ask. What a shop does with tax is the
-     * policy's to say; which of the two conventions produced that answer is
-     * nobody else's business.
-     *
      * @return bool
      */
     public function addsTaxToTheTotal(): bool
@@ -71,22 +58,9 @@ final class TaxPolicy
     }
 
     /**
-     * The tax on a fulfillment cost, in cents.
-     *
-     * One rate for the whole shop, rather than one per fulfillment method or
-     * one derived from the cart. A shop that sets no rate delivers at 0%, and
-     * 0% of any cost is 0 cents, so untaxed delivery needs no case of its own
-     * here — it is the ordinary path with the ordinary rate.
-     *
-     * That is a deliberate simplification and it is worth knowing where it
-     * stops being right. Belgian VAT treats delivery as ancillary to what is
-     * being delivered, so a cart of 6% goods should carry 6% on its delivery
-     * and a mixed cart should apportion it across the rates in it. A single
-     * shop-wide rate reports the same figure whatever is in the cart, which is
-     * exact for a shop selling at one rate and approximate for a shop selling
-     * at several. Delivery is a small amount beside the goods, so the error is
-     * small; a shop that cannot accept it needs delivery apportioned across
-     * the cart, which this package does not do.
+     * The tax on a fulfillment cost, in cents. One shop-wide rate — exact for
+     * a shop selling at one rate, approximate for a mixed cart; see
+     * docs/tax.md for where that stops being right.
      *
      * @param int $cost The fulfillment cost, in cents.
      * @return int

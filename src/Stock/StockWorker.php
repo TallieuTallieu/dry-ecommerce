@@ -13,36 +13,9 @@ use Tnt\Ecommerce\Repository\StockItemRepository;
 use Tnt\Ecommerce\Repository\StockRepository;
 
 /**
- * Counts one named stock.
- *
- * The shipped {@see StockWorkerInterface}, and the reason stock became an opt-in
- * capability rather than being dropped: a shop that counts what it sells still
- * gets this, unchanged in behaviour, by returning one from
- * {@see \Tnt\Ecommerce\Contracts\HasStockInterface::getStockWorker()}.
- *
- * The stock row is looked up on first use rather than in the constructor, so
- * constructing a worker no longer requires a database. Which stock a buyable is
- * counted in is the buyable's decision — it names one by `hid` here — and no
- * longer something the container guesses at: the old
- * `StockWorkerInterface => StockWorker` binding could not have been resolved,
- * because there is no stock to count without knowing which one.
- *
- * # Whether the count may go below zero
- *
- * The same decision, made the same way. A stock built plainly refuses a
- * decrement that would take it negative and raises
- * {@see StockWouldGoNegative}; one built with `allowNegative: true` lets the
- * count go under, where a negative reads as how many the shop owes.
- *
- * ```php
- * new StockWorker('warehouse');                       // refuses
- * new StockWorker('warehouse', allowNegative: true);  // backorders
- * ```
- *
- * Refusing is the default because a shop that has not thought about it is
- * better served by hearing that it oversold than by a negative number nobody
- * looks at. Neither answer is clamped to zero: a count that silently disagrees
- * with what was taken out is the one outcome that helps nobody.
+ * Counts one named stock, looked up by `hid` on first use. By default a
+ * decrement below zero raises {@see StockWouldGoNegative}; built with
+ * `allowNegative: true` the count goes under instead. See docs/stock.md.
  */
 class StockWorker implements StockWorkerInterface
 {
@@ -143,17 +116,9 @@ class StockWorker implements StockWorkerInterface
     }
 
     /**
-     * Take stock out.
-     *
-     * Taking out more than there is does one of two things, depending on how
-     * this worker was built. A stock that allows negatives goes under and the
-     * count is how many the shop owes; one that does not raises
-     * {@see StockWouldGoNegative} and nothing is written. See the note on the
-     * class for why those are the two answers and not three.
-     *
-     * A buyable this stock has never held is not stocked here at all, so there
-     * is no line to take anything out of and nothing happens — which is the
-     * same silence {@see getQuantity()} answers with, not a refusal.
+     * Take stock out. Going below zero refuses (nothing written) or goes
+     * under, per the worker's `allowNegative`; a never-stocked buyable is a
+     * silent no-op.
      *
      * @param BuyableInterface $buyable
      * @param int $quantity
