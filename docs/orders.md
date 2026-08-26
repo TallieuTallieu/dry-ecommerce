@@ -40,9 +40,11 @@ Not redundant, and the difference matters:
 | `$order->getBillingAddress()` etc. | the order's own frozen columns | anything printed |
 
 `freezeCustomer()` copies the first name, last name, email, company, VAT number
-and **both addresses** onto the order's own columns. `getBillingAddress()` and
-`getShippingAddress()` hand back a `FrozenAddress` built from those columns —
-never the live `Address` row.
+and **both addresses** onto the order's own columns. Each frozen address is five
+columns — street, number, postal code, city, country — and carries no name of
+its own: the *who* is the identity pair above, frozen once.
+`getBillingAddress()` and `getShippingAddress()` hand back a `FrozenAddress`
+built from those columns — never the live `Address` row.
 
 So this is safe, and is the point of the whole arrangement:
 

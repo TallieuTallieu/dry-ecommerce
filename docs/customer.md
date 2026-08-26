@@ -170,8 +170,6 @@ $address->updated = time();
 $address->customer = $customer;
 $address->setType(AddressType::Billing);
 $address->is_default = 1;
-$address->first_name  = 'Spike';
-$address->last_name   = 'Tester';
 $address->street      = 'Factuurstraat';
 $address->number      = '1';
 $address->postal_code = '9700';

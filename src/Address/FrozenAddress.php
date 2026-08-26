@@ -16,8 +16,6 @@ final class FrozenAddress implements AddressInterface
 {
     /**
      * @param AddressType $type
-     * @param string $firstName
-     * @param string $lastName
      * @param string $street
      * @param string $number
      * @param string $postalCode
@@ -26,8 +24,6 @@ final class FrozenAddress implements AddressInterface
      */
     public function __construct(
         private readonly AddressType $type,
-        private readonly string $firstName,
-        private readonly string $lastName,
         private readonly string $street,
         private readonly string $number,
         private readonly string $postalCode,
@@ -52,22 +48,6 @@ final class FrozenAddress implements AddressInterface
     public function isDefault(): bool
     {
         return false;
-    }
-
-    /**
-     * @return string
-     */
-    public function getFirstName(): string
-    {
-        return $this->firstName;
-    }
-
-    /**
-     * @return string
-     */
-    public function getLastName(): string
-    {
-        return $this->lastName;
     }
 
     /**
@@ -118,9 +98,7 @@ final class FrozenAddress implements AddressInterface
      */
     public function isEmpty(): bool
     {
-        return $this->firstName === '' &&
-            $this->lastName === '' &&
-            $this->street === '' &&
+        return $this->street === '' &&
             $this->number === '' &&
             $this->postalCode === '' &&
             $this->city === '' &&

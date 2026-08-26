@@ -111,10 +111,11 @@ figure, not a shop that will not boot.
 
 ## Migrations
 
-The provider registers a migrator named `ecommerce` with twelve revisions: ten
-create the tables below, and the two after them alter existing tables (the
-frozen `fulfillment_attributes` column on `ecommerce_order`, and the per-line
-`options` columns on both line tables):
+The provider registers a migrator named `ecommerce` with thirteen revisions:
+ten create the tables below, and the ones after them alter existing tables
+(the frozen `fulfillment_attributes` column on `ecommerce_order`, the
+per-line `options` columns on both line tables, and the drop of the address
+name columns):
 
 ```
 ecommerce_customer          ecommerce_cart
@@ -126,14 +127,14 @@ ecommerce_order_item        ecommerce_address
 
 ```sh
 php oak migration migrate
-php oak migration list        # ecommerce (12/12)
+php oak migration list        # ecommerce (13/13)
 ```
 
 Revisions are **appended to the list, never inserted into it.** Oak's migrator
 records how many revisions a shop has run, not which — so adding a new revision
 next to the table it relates to would renumber everything after it and make an
-existing shop run the wrong statement. `CreateAddressTable` and the two `Add*`
-revisions sit at the end for exactly this reason, not because they came last
+existing shop run the wrong statement. `CreateAddressTable` and the revisions
+after it sit at the end for exactly this reason, not because they came last
 conceptually.
 
 ### Upgrading a shop that predates the address book
@@ -146,14 +147,19 @@ only creates the new table; moving the data over is a by-hand step, one
 ```sql
 INSERT INTO ecommerce_address
   (created, updated, customer, type, is_default,
-   first_name, last_name, street, number, postal_code, city, country)
+   street, number, postal_code, city, country)
 SELECT UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), id, 'billing', 1,
-       first_name, last_name, address_street, address_number,
+       address_street, address_number,
        address_postal_code, address_city, address_country
 FROM ecommerce_customer
 WHERE address_street <> '';
 -- and the same again with type 'shipping' from the shipping_* columns
 ```
+
+The old inline columns carried recipient names; the book does not — an address
+is purely a *where*, and the identity an order is placed under is frozen on the
+order itself (see [addresses](addresses.md)). The old name columns are simply
+not carried over.
 
 Adapt the column list to what the old schema actually held, and leave the old
 columns in place until the shop's own code stops reading them. Orders are

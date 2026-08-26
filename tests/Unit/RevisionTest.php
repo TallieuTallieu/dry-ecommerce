@@ -27,6 +27,7 @@ declare(strict_types=1);
 use Tests\Support\CapturingAddFulfillmentAttributesToOrderTable;
 use Tests\Support\CapturingAddOptionsToLineTables;
 use Tests\Support\CapturingCreateAddressTable;
+use Tests\Support\CapturingDropAddressNameColumns;
 use Tests\Support\CapturingCreateCustomerTable;
 use Tests\Support\CapturingCreateOrderItemTable;
 use Tests\Support\CapturingCreateOrderTable;
@@ -148,16 +149,7 @@ it('gives the address book a column for each field', function (
     string $column
 ): void {
     expect(addressTableSql())->toContain('`' . $column . '` VARCHAR(255)');
-})->with([
-    'type',
-    'first_name',
-    'last_name',
-    'street',
-    'number',
-    'postal_code',
-    'city',
-    'country',
-]);
+})->with(['type', 'street', 'number', 'postal_code', 'city', 'country']);
 
 it('ties every address to the customer whose book it is', function (): void {
     // A real foreign key, unlike ecommerce_customer.user: the table it points
@@ -207,6 +199,56 @@ it('records the identity the order was placed with', function (
 ): void {
     expect(orderTableSql())->toContain('`' . $column . '` VARCHAR(255)');
 })->with(['first_name', 'last_name', 'email', 'company', 'vat']);
+
+it('has taken the recipient name off the address concept', function (): void {
+    // sc-11257: an address is purely a where. Who placed the order is frozen
+    // once, on the order itself — the name columns on the address book and on
+    // the frozen blocks said it twice more, for a recipient concept no shop
+    // shipping today uses. One ALTER per table, address book first.
+    $revision = new CapturingDropAddressNameColumns(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(2);
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_address`'
+    );
+    expect($revision->statements[0])->toContain('DROP COLUMN `first_name`');
+    expect($revision->statements[0])->toContain('DROP COLUMN `last_name`');
+
+    expect($revision->statements[1])->toContain(
+        'ALTER TABLE `ecommerce_order`'
+    );
+
+    foreach (
+        [
+            'billing_first_name',
+            'billing_last_name',
+            'shipping_first_name',
+            'shipping_last_name',
+        ]
+        as $column
+    ) {
+        expect($revision->statements[1])->toContain(
+            'DROP COLUMN `' . $column . '`'
+        );
+    }
+});
+
+it('still creates the name columns the drop relies on', function (
+    string $column
+): void {
+    // Pinned history: the create-table revisions run before the drop on a
+    // fresh install, so they must keep building the table as it stood when
+    // shops first ran them — or the drop finds nothing to drop and the
+    // migrator halts.
+    expect(addressTableSql())->toContain('`' . $column . '` VARCHAR(255)');
+    expect(orderTableSql())->toContain(
+        '`billing_' . $column . '` VARCHAR(255)'
+    );
+    expect(orderTableSql())->toContain(
+        '`shipping_' . $column . '` VARCHAR(255)'
+    );
+})->with(['first_name', 'last_name']);
 
 it('never points an order at the address book', function (): void {
     // The whole of sc-11172 in one assertion. A foreign key here would make

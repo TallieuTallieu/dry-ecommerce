@@ -20,8 +20,6 @@ use Tnt\Ecommerce\NotAnAddressType;
  * @property Customer $customer
  * @property string $type
  * @property int $is_default
- * @property string $first_name
- * @property string $last_name
  * @property string $street
  * @property string $number
  * @property string $postal_code
@@ -42,7 +40,6 @@ class Address extends Model implements AddressInterface
     public function __toString(): string
     {
         $lines = array_filter([
-            trim($this->getFirstName() . ' ' . $this->getLastName()),
             trim($this->getStreet() . ' ' . $this->getNumber()),
             trim($this->getPostalCode() . ' ' . $this->getCity()),
             $this->getCountry(),
@@ -82,22 +79,6 @@ class Address extends Model implements AddressInterface
     public function setType(AddressType $type): void
     {
         $this->type = $type->value;
-    }
-
-    /**
-     * @return string
-     */
-    public function getFirstName(): string
-    {
-        return (string) $this->first_name;
-    }
-
-    /**
-     * @return string
-     */
-    public function getLastName(): string
-    {
-        return (string) $this->last_name;
     }
 
     /**

@@ -57,8 +57,6 @@ function anAddress(
     $address->setType($type);
     $address->created = $created;
 
-    $address->first_name = $fields['first_name'] ?? 'Ada';
-    $address->last_name = $fields['last_name'] ?? 'Lovelace';
     $address->street = $fields['street'] ?? 'Kortrijksesteenweg';
     $address->number = $fields['number'] ?? '1144';
     $address->postal_code = $fields['postal_code'] ?? '9051';
@@ -107,8 +105,6 @@ it('freezes both addresses onto the order at checkout', function (): void {
     // Every field of both addresses, so a column wired to the wrong getter
     // cannot pass. The two addresses differ in street, number and postcode on
     // purpose: a billing/shipping transposition fails here.
-    expect($order->billing_first_name)->toBe('Ada');
-    expect($order->billing_last_name)->toBe('Lovelace');
     expect($order->billing_street)->toBe('Gasmeterlaan');
     expect($order->billing_number)->toBe('103');
     expect($order->billing_postal_code)->toBe('9000');
@@ -263,8 +259,6 @@ it('freezes the address the shop said to use', function (): void {
     $office = anAddress(
         AddressType::Shipping,
         [
-            'first_name' => 'Ada',
-            'last_name' => 'Lovelace',
             'street' => 'Bellevue',
             'number' => '5',
             'postal_code' => '9050',

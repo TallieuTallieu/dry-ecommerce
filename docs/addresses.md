@@ -10,8 +10,6 @@ use Tnt\Ecommerce\Model\Address;
 $address = new Address();
 $address->customer = $customer;
 $address->setType(AddressType::Shipping);
-$address->first_name = 'Ada';
-$address->last_name = 'Lovelace';
 $address->street = 'Kortrijksesteenweg';
 $address->number = '1144';
 $address->postal_code = '9051';
@@ -25,8 +23,13 @@ questions a shop asks of an address: where the invoice goes and where the parcel
 goes. A "home" or "work" label is a shop's own vocabulary for its customers'
 addresses and means nothing to a checkout, so it is not modelled here.
 
-The recipient's name lives on the address, not on the customer. A parcel can go
-to somebody else — a gift, a colleague, a neighbour who is in during the day.
+An address carries **no name**. It is purely a *where*; the *who* is frozen once
+on the order itself (`order.first_name` / `order.last_name`). The address book
+used to carry a recipient name per address, on the theory that a parcel can go
+to somebody else — but no shop shipping today uses that, so it was removed
+(sc-11257) rather than left as two more columns that silently duplicate the
+identity. When a carrier integration actually asks for a recipient, that concept
+gets modelled deliberately — likely one name line, not a first/last pair.
 
 ## Reading the book
 
@@ -55,9 +58,9 @@ order's own columns:
 
 ```
 first_name  last_name  email
-billing_first_name  billing_last_name  billing_street  billing_number
-billing_postal_code  billing_city  billing_country
-shipping_… (the same seven)
+billing_street  billing_number  billing_postal_code  billing_city
+billing_country
+shipping_… (the same five)
 ```
 
 The reason is that an address book is *edited*. A customer moves house and
@@ -90,7 +93,7 @@ exports. Inside one customer's book, `Customer::getAddresses()` /
 
 ## Nothing is substituted for a missing address
 
-A customer with a shipping address and no billing address freezes seven blank
+A customer with a shipping address and no billing address freezes five blank
 billing columns, and vice versa. An order carrying an address the customer never
 gave for that purpose is a worse record than one that admits the purpose had no
 address — and it is a record nobody can correct afterwards, because it looks

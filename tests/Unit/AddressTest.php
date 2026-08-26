@@ -55,8 +55,6 @@ it('names the order columns it freezes into', function (
     string $prefix
 ): void {
     expect($type->columns())->toBe([
-        $prefix . 'first_name',
-        $prefix . 'last_name',
         $prefix . 'street',
         $prefix . 'number',
         $prefix . 'postal_code',
@@ -71,8 +69,6 @@ it('names the order columns it freezes into', function (
 it('copies every field of an address into its columns', function (): void {
     $address = new Address();
     $address->setType(AddressType::Shipping);
-    $address->first_name = 'Ada';
-    $address->last_name = 'Lovelace';
     $address->street = 'Kortrijksesteenweg';
     $address->number = '1144';
     $address->postal_code = '9051';
@@ -80,8 +76,6 @@ it('copies every field of an address into its columns', function (): void {
     $address->country = 'BE';
 
     expect(AddressType::Shipping->snapshotOf($address))->toBe([
-        'shipping_first_name' => 'Ada',
-        'shipping_last_name' => 'Lovelace',
         'shipping_street' => 'Kortrijksesteenweg',
         'shipping_number' => '1144',
         'shipping_postal_code' => '9051',
@@ -91,12 +85,10 @@ it('copies every field of an address into its columns', function (): void {
 });
 
 it('reads a missing address as blank and not as null', function (): void {
-    // Seven empty strings rather than seven nulls. The columns are NOT NULL
+    // Five empty strings rather than five nulls. The columns are NOT NULL
     // varchars, and a caller printing an address should not have to tell an
     // absent field from an empty one on every line.
     expect(AddressType::Billing->snapshotOf(null))->toBe([
-        'billing_first_name' => '',
-        'billing_last_name' => '',
         'billing_street' => '',
         'billing_number' => '',
         'billing_postal_code' => '',
@@ -236,8 +228,6 @@ it('lets the shop override which address is used', function (): void {
 it('describes a frozen address without reaching for a row', function (): void {
     $frozen = new FrozenAddress(
         AddressType::Billing,
-        'Ada',
-        'Lovelace',
         'Gasmeterlaan',
         '103',
         '9000',
@@ -246,8 +236,6 @@ it('describes a frozen address without reaching for a row', function (): void {
     );
 
     expect($frozen->getType())->toBe(AddressType::Billing);
-    expect($frozen->getFirstName())->toBe('Ada');
-    expect($frozen->getLastName())->toBe('Lovelace');
     expect($frozen->getStreet())->toBe('Gasmeterlaan');
     expect($frozen->getNumber())->toBe('103');
     expect($frozen->getPostalCode())->toBe('9000');
@@ -257,31 +245,13 @@ it('describes a frozen address without reaching for a row', function (): void {
 });
 
 it('knows when an order recorded no address of a kind', function (): void {
-    $frozen = new FrozenAddress(
-        AddressType::Shipping,
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        ''
-    );
+    $frozen = new FrozenAddress(AddressType::Shipping, '', '', '', '', '');
 
     expect($frozen->isEmpty())->toBeTrue();
 
     // One field is enough to make it a real address: an order that recorded
     // only a country still recorded something.
-    $partial = new FrozenAddress(
-        AddressType::Shipping,
-        '',
-        '',
-        '',
-        '',
-        '',
-        '',
-        'BE'
-    );
+    $partial = new FrozenAddress(AddressType::Shipping, '', '', '', '', 'BE');
 
     expect($partial->isEmpty())->toBeFalse();
 });
@@ -289,15 +259,13 @@ it('knows when an order recorded no address of a kind', function (): void {
 it('reads an address back as one line', function (): void {
     $address = new Address();
     $address->setType(AddressType::Shipping);
-    $address->first_name = 'Ada';
-    $address->last_name = 'Lovelace';
     $address->street = 'Kortrijksesteenweg';
     $address->number = '1144';
     $address->postal_code = '9051';
     $address->city = 'Gent';
     $address->country = 'BE';
 
-    expect((string) $address)->toBe(
-        'Ada Lovelace, Kortrijksesteenweg 1144, 9051 Gent, BE'
-    );
+    // No name line: an address is purely a where — who placed the order is
+    // frozen on the order itself.
+    expect((string) $address)->toBe('Kortrijksesteenweg 1144, 9051 Gent, BE');
 });
