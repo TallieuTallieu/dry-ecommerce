@@ -126,3 +126,69 @@ it('reads a word it does not know as pending', function (): void {
 
     expect($order->getPaymentStatus())->toBe(PaymentStatus::Pending);
 });
+
+it('refuses to leave paid for anything but refunded', function (
+    PaymentStatus $late
+): void {
+    // Webhooks arrive at least once and out of order. An order that has been
+    // paid must not read `expired` because the original session's timeout
+    // notification straggled in afterwards.
+    $order = new InMemoryOrder();
+    $order->setPaymentStatus(PaymentStatus::Paid);
+
+    $order->setPaymentStatus($late);
+
+    expect($order->getPaymentStatus())->toBe(PaymentStatus::Paid);
+})->with([
+    'a late failure' => [PaymentStatus::Failed],
+    'a late cancel' => [PaymentStatus::Canceled],
+    'a late expiry' => [PaymentStatus::Expired],
+    'a replayed pending' => [PaymentStatus::Pending],
+]);
+
+it('still refunds a paid order', function (): void {
+    $order = new InMemoryOrder();
+    $order->setPaymentStatus(PaymentStatus::Paid);
+
+    $order->setPaymentStatus(PaymentStatus::Refunded);
+
+    expect($order->getPaymentStatus())->toBe(PaymentStatus::Refunded);
+});
+
+it('treats refunded as terminal', function (PaymentStatus $late): void {
+    // The money went back; no straggling webhook may claim otherwise.
+    $order = new InMemoryOrder();
+    $order->setPaymentStatus(PaymentStatus::Paid);
+    $order->setPaymentStatus(PaymentStatus::Refunded);
+
+    $order->setPaymentStatus($late);
+
+    expect($order->getPaymentStatus())->toBe(PaymentStatus::Refunded);
+})->with([
+    'paid again' => [PaymentStatus::Paid],
+    'failed' => [PaymentStatus::Failed],
+    'pending' => [PaymentStatus::Pending],
+]);
+
+it('lets a failed payment be retried into paid', function (): void {
+    // Failure states stay open on purpose: a customer whose first attempt
+    // failed and who pays on the second try is the ordinary case.
+    $order = new InMemoryOrder();
+    $order->setPaymentStatus(PaymentStatus::Failed);
+
+    $order->setPaymentStatus(PaymentStatus::Paid);
+
+    expect($order->getPaymentStatus())->toBe(PaymentStatus::Paid);
+});
+
+it('does not save a blocked status write', function (): void {
+    // A refused transition is a no-op, not a persisted correction: the row
+    // must not even be touched for a webhook the guard turned away.
+    $order = new InMemoryOrder();
+    $order->setPaymentStatus(PaymentStatus::Paid);
+    $saves = $order->saveCount;
+
+    $order->setPaymentStatus(PaymentStatus::Expired);
+
+    expect($order->saveCount)->toBe($saves);
+});

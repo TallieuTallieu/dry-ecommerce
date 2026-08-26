@@ -86,6 +86,8 @@ class Order extends Model implements OrderInterface, TotalingInterface
     public function add(CartItemInterface $cartItem)
     {
         $item = $this->newOrderItem();
+        $item->created = time();
+        $item->updated = time();
         $item->order = $this;
         $item->quantity = $cartItem->getQuantity();
         $item->price = $cartItem->getPrice();
@@ -393,6 +395,14 @@ class Order extends Model implements OrderInterface, TotalingInterface
      */
     public function setPaymentStatus(PaymentStatus $status): void
     {
+        // Webhooks arrive at least once and out of order; the current status
+        // decides what may replace it (see PaymentStatus::canTransitionTo()).
+        // A blocked write is a no-op, not an error: a late `expired` for an
+        // order that has since been paid is ordinary traffic.
+        if (!$this->getPaymentStatus()->canTransitionTo($status)) {
+            return;
+        }
+
         $this->payment_status = $status->value;
         $this->save();
     }

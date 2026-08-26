@@ -22,22 +22,25 @@ it('encodes no options as null', function (): void {
     expect(LineOptions::canonical([]))->toBeNull();
 });
 
-it('encodes the same selection identically whatever its order', function (): void {
-    $canonical = LineOptions::canonical([
-        'size' => 'L',
-        'extras' => ['sauce' => 'yes', 'bread' => 'no'],
-    ]);
-
-    // Key order sorted away at every level: assembled backwards, nested level
-    // included, it is byte-for-byte the same string — which is what makes it
-    // usable as a merge key at all.
-    expect(
-        LineOptions::canonical([
-            'extras' => ['bread' => 'no', 'sauce' => 'yes'],
+it(
+    'encodes the same selection identically whatever its order',
+    function (): void {
+        $canonical = LineOptions::canonical([
             'size' => 'L',
-        ])
-    )->toBe($canonical);
-});
+            'extras' => ['sauce' => 'yes', 'bread' => 'no'],
+        ]);
+
+        // Key order sorted away at every level: assembled backwards, nested level
+        // included, it is byte-for-byte the same string — which is what makes it
+        // usable as a merge key at all.
+        expect(
+            LineOptions::canonical([
+                'extras' => ['bread' => 'no', 'sauce' => 'yes'],
+                'size' => 'L',
+            ])
+        )->toBe($canonical);
+    }
+);
 
 it('tells different selections apart', function (): void {
     expect(LineOptions::canonical(['cheese' => 'no goat']))->not->toBe(
