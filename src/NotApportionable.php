@@ -5,29 +5,9 @@ namespace Tnt\Ecommerce;
 use InvalidArgumentException;
 
 /**
- * A split {@see Money::apportion()} cannot make add back up.
- *
- * Apportioning promises one thing: the parts sum to the amount, exactly. It
- * keeps that promise by flooring every share and handing the cents left over
- * to the largest remainders, which works because flooring can only ever leave
- * money on the table — never take more than there was.
- *
- * A negative figure breaks that. `intdiv()` truncates towards zero, so it
- * rounds a negative product *up*, and the floored shares can then overshoot
- * the amount rather than fall short of it. There is nothing left over to hand
- * out, the correction step has nothing to correct, and the parts come back
- * summing to more than they were split from — `apportion(5, [-1, -1, 4])` gave
- * `[-2, -2, 10]`, which is 6. A cent invented in silence, on the discount that
- * decides what a customer is taxed on.
- *
- * So both kinds of negative are refused here rather than approximated, in
- * keeping with the rest of {@see Money}: an amount that is not a positive sum
- * to divide up, and a weight that is not a positive share of it. Neither is
- * reachable from a cart of real prices, which is precisely why an exception
- * beats an answer — whatever produced one is wrong somewhere further up.
- *
- * Extends `InvalidArgumentException`, as do {@see NotAnAmount},
- * {@see AmountTooLarge} and {@see UnsupportedRate}.
+ * A split {@see Money::apportion()} cannot make add back up: a negative
+ * amount or weight makes the floored shares overshoot, so both are refused
+ * rather than approximated. See docs/money.md.
  */
 final class NotApportionable extends InvalidArgumentException
 {

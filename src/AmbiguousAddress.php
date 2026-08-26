@@ -6,34 +6,10 @@ use RuntimeException;
 use Tnt\Ecommerce\Address\AddressType;
 
 /**
- * An address book that cannot say which address a checkout should use.
- *
- * A customer may keep several addresses of a kind — home and work, this
- * warehouse and that one — and one of them is marked the default. When none is
- * marked and there is more than one to choose between, there is no answer, and
- * this is raised rather than one of them being picked.
- *
- * # Why this refuses rather than guesses
- *
- * Because the two failures are not the same size. A checkout that stops asks
- * somebody to mark a default, which takes a moment. A checkout that guesses
- * sends the parcel to the wrong address, and nothing looks wrong until it
- * arrives there — no error, no warning, an order that reads perfectly and a
- * customer who did not get their delivery.
- *
- * The same reasoning as {@see NotAnAddressType}, and the same as the package
- * takes with money: an amount it cannot work out exactly is refused rather
- * than approximated.
- *
- * # Avoiding it
- *
- * Mark one address of each kind as the default, which is what a shop's address
- * book screen is for. Or name the address for this checkout with
- * {@see \Tnt\Ecommerce\Model\Customer::useAddress()}, which overrides the
- * default and settles the question for the request.
- *
- * A book holding one address of a kind is never ambiguous: with nothing to
- * choose between, that one is the answer whether it is marked or not.
+ * An address book that cannot say which address a checkout should use —
+ * several of a kind with no default marked, or more than one marked. Raised
+ * rather than guessed: a wrong parcel looks like a perfect order. Mark a
+ * default or use {@see \Tnt\Ecommerce\Model\Customer::useAddress()}.
  */
 final class AmbiguousAddress extends RuntimeException
 {

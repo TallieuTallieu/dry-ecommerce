@@ -3,24 +3,10 @@
 namespace Tnt\Ecommerce\Contracts;
 
 /**
- * Counts how many of a buyable there are.
- *
- * Reached through {@see HasStockInterface::getStockWorker()}, which is what
- * makes it optional: a buyable that is not counted never produces one of these,
- * and nothing in the cart asks for one.
- *
- * # Quantities are whole
- *
- * Every quantity below is an `int`, matching {@see CartItemInterface} and
- * `ecommerce_stock_item.quantity`, which has been an `int(11)` column since it
- * was created. The `float` these methods used to take was never honoured
- * anywhere: it went into an integer column, came back rounded, and
- * `getQuantity()` cast it back to `int` on the way out. Half a thing was
- * expressible in three signatures and storable in none of them.
- *
- * A shop that genuinely sells by weight — 0.75 kg of cheese — is not served by
- * putting the fraction back here either. Its unit is the gram, and its price is
- * per gram, exactly as its money is in cents rather than in euro.
+ * Counts how many of a buyable there are, reached through
+ * {@see HasStockInterface::getStockWorker()}. Quantities are whole — a shop
+ * selling by weight counts in grams, as its money is in cents. See
+ * docs/stock.md.
  */
 interface StockWorkerInterface
 {
@@ -52,13 +38,9 @@ interface StockWorkerInterface
     ): void;
 
     /**
-     * Take stock out.
-     *
-     * An implementation may refuse to take out more than it holds rather than
-     * go below zero, and whether it does is the shop's to configure:
+     * Take stock out. An implementation may refuse to go below zero —
      * {@see \Tnt\Ecommerce\Stock\StockWorker} refuses by default and raises
-     * {@see \Tnt\Ecommerce\Stock\StockWouldGoNegative}. A caller that has not
-     * checked {@see isAvailable()} first should expect either answer.
+     * {@see \Tnt\Ecommerce\Stock\StockWouldGoNegative}.
      *
      * @param BuyableInterface $buyable
      * @param int $quantity

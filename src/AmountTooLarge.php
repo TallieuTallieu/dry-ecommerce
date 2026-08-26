@@ -5,22 +5,9 @@ namespace Tnt\Ecommerce;
 use InvalidArgumentException;
 
 /**
- * An amount too large for {@see Money::percentageOf()} to stay exact on.
- *
- * Money is an `int` number of cents, and applying a rate to it multiplies it
- * twice: once by the rate, and once more by 2 to round the half away from zero
- * with integers only. Past a certain amount that product no longer fits in a
- * PHP `int`, and PHP would quietly turn it into a `float` — which is the one
- * thing this package exists to keep out of the money path.
- *
- * So the amount is refused instead. The ceiling depends on the rate, and
- * {@see self::getMaximumAmount()} is the largest amount that rate can be
- * applied to: roughly 2.19×10^17 cents at 21%, which is far past any real
- * order. Seeing this exception almost always means an amount is not in cents —
- * a value already multiplied by 100 twice, say.
- *
- * Extends `InvalidArgumentException`, as does {@see UnsupportedRate}, so a
- * caller that wants to catch either can catch that.
+ * An amount too large for {@see Money::percentageOf()} to stay exact on —
+ * refused rather than silently degraded to a float. Seeing this almost always
+ * means an amount is not in cents. See docs/money.md.
  */
 final class AmountTooLarge extends InvalidArgumentException
 {

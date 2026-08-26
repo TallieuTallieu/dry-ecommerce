@@ -7,7 +7,10 @@ use Tnt\Dbi\TableBuilder;
 
 class CreateCustomerTable extends DatabaseRevision implements RevisionInterface
 {
-    public function up()
+    /**
+     * @return void
+     */
+    public function up(): void
     {
         $this->queryBuilder
             ->table('ecommerce_customer')
@@ -20,33 +23,14 @@ class CreateCustomerTable extends DatabaseRevision implements RevisionInterface
                 $table->addColumn('email', 'varchar')->length(255);
 
                 // The account this checkout was made from, or NULL for a
-                // guest. Nullable because guest checkout is a first-class
-                // path, not a degraded one.
-                //
-                // No addForeignKey(), unlike every other relation in this
-                // package. The table it would point at belongs to
-                // dry-accounts, which is a supported pairing and not a
-                // dependency: a shop that sells without accounts has no such
-                // table, and MySQL refuses a constraint against a table that
-                // is not there. Declaring one would break the ecommerce
-                // migrator on exactly the shops this nullable column exists to
-                // keep working. Even where dry-accounts *is* installed the two
-                // packages register separate migrators with no ordering
-                // between them, so there is no point at which the target is
-                // known to exist. The column is an honest int the shop's own
-                // schema can constrain if it wants to.
+                // guest. Deliberately no addForeignKey(): the target table
+                // belongs to dry-accounts, which may not be installed — see
+                // docs/customer.md.
                 $table->addColumn('user', 'int')->length(11)->null();
 
-                // No address columns. There used to be twelve of them — five
-                // address_* and seven shipping_* — and between them they fixed
-                // a customer at exactly one billing and one shipping address
-                // for ever, which is not a shape an address list fits into.
-                // They live in ecommerce_address now, one row per address, as
-                // many as the customer has. See CreateAddressTable.
+                // Addresses live in ecommerce_address (CreateAddressTable),
+                // not here.
 
-                // The two halves of a business identity, together because
-                // that is what they are: an account opened by a company has
-                // both, an account opened by a person has neither.
                 $table->addColumn('company', 'varchar')->length(255);
                 $table->addColumn('vat', 'varchar')->length(255);
 
@@ -57,7 +41,10 @@ class CreateCustomerTable extends DatabaseRevision implements RevisionInterface
         $this->execute();
     }
 
-    public function down()
+    /**
+     * @return void
+     */
+    public function down(): void
     {
         $this->queryBuilder->table('ecommerce_customer')->drop();
         $this->execute();

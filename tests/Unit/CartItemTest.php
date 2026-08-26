@@ -28,6 +28,7 @@ declare(strict_types=1);
  */
 
 use Tests\Support\FakeBuyable;
+use Tnt\Ecommerce\Cart\LineOptions;
 use Tnt\Ecommerce\Model\CartItem;
 
 it('hands back the buyable it was given', function (): void {
@@ -64,6 +65,36 @@ it('records the class and id the storages key on', function (): void {
     // line is found again by these two, and by nothing else.
     expect($item->item_class)->toBe(FakeBuyable::class);
     expect($item->item_id)->toBe(7);
+});
+
+it('reads its options back off the row', function (): void {
+    $item = new CartItem();
+
+    // The column holds what SessionCartStorage::add() writes — LineOptions
+    // canonical JSON — and getOptions() hands the array back sorted the way
+    // the canonical form sorted it. No database in sight: the read is the
+    // row's own text.
+    $item->options = LineOptions::canonical(['size' => 'L', 'gift' => true]);
+
+    expect($item->getOptions())->toBe(['gift' => true, 'size' => 'L']);
+});
+
+it('reads a line without options as none', function (): void {
+    $item = new CartItem();
+
+    // A NULL column — a line added without options, or one from before the
+    // column existed. Both are the same absence of choices.
+    expect($item->getOptions())->toBe([]);
+});
+
+it('reads an unreadable options column as none', function (): void {
+    $item = new CartItem();
+    $item->options = 'not json';
+
+    // A hand-edited column reads as "no options" rather than throwing — the
+    // reader is a basket screen, and an empty selection is something it
+    // already handles.
+    expect($item->getOptions())->toBe([]);
 });
 
 it(

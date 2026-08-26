@@ -3,6 +3,7 @@
 namespace Tnt\Ecommerce\Model;
 
 use dry\orm\Model;
+use Tnt\Ecommerce\Cart\LineOptions;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\OrderItemInterface;
 
@@ -10,7 +11,9 @@ use Tnt\Ecommerce\Contracts\OrderItemInterface;
  * One line of a placed order, as stored in `ecommerce_order_item`.
  *
  * The price is the frozen line total from the cart, in cents, not the
- * buyable's current price.
+ * buyable's current price. The options are frozen the same way: the canonical
+ * JSON the cart line was keyed on, copied at checkout by
+ * {@see Order::add()}, or NULL for a line placed without any.
  *
  * @property int|null $id
  * @property int $created
@@ -20,6 +23,7 @@ use Tnt\Ecommerce\Contracts\OrderItemInterface;
  * @property string $item_class
  * @property int $price
  * @property int $quantity
+ * @property string|null $options
  */
 class OrderItem extends Model implements OrderItemInterface
 {
@@ -48,13 +52,30 @@ class OrderItem extends Model implements OrderItemInterface
     }
 
     /**
-     * The buyable this line points at, loaded once, as on
-     * {@see CartItem::getBuyable()}.
+     * The line total frozen at checkout, in cents — repricing the product
+     * does not restate this line.
      *
-     * Less is riding on it here — the price is frozen on the row, so nothing on
-     * this class needs the buyable to answer a question about the order. It is
-     * a template asking twice that pays, and it pays the same `SELECT` each
-     * time without this.
+     * @return int
+     */
+    public function getPrice(): int
+    {
+        return $this->price;
+    }
+
+    /**
+     * The choices this line was placed with — the order's own frozen copy;
+     * [] for a NULL column.
+     *
+     * @return array<array-key, mixed>
+     */
+    public function getOptions(): array
+    {
+        return LineOptions::decode($this->options);
+    }
+
+    /**
+     * The buyable this line points at, loaded once and memoised, as on
+     * {@see CartItem::getBuyable()}.
      *
      * @return BuyableInterface
      */

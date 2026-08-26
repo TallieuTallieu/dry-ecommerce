@@ -7,6 +7,12 @@ use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Events\Order\Paid;
 
+/**
+ * The shipped dummy gateway: it charges nobody and reports success — a live
+ * risk in a shop that never got round to payment; set a real gateway before
+ * launch. Also the reference shape: dispatch the event that says what the
+ * money did, and let the listeners write `payment_status`. See docs/payment.md.
+ */
 class NullPayment implements PaymentInterface
 {
     /**
@@ -24,6 +30,8 @@ class NullPayment implements PaymentInterface
     }
 
     /**
+     * "Take" the payment: succeed on the spot, synchronously.
+     *
      * @param OrderInterface $order
      * @return mixed|void
      */

@@ -3,16 +3,16 @@
 namespace Tnt\Ecommerce\Model;
 
 use dry\orm\Model;
+use Tnt\Ecommerce\Cart\LineOptions;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Money;
 
 /**
- * One line of a cart, as stored in `ecommerce_cart_item`.
- *
- * The buyable is referenced by class name plus foreign id rather than by a real
- * foreign key, because a buyable can be any model the project cares to make
- * sellable.
+ * One line of a cart, as stored in `ecommerce_cart_item`. The buyable is
+ * referenced by class name plus id; `options` holds the line's choices as
+ * {@see LineOptions} canonical JSON (NULL for none) and is part of the merge
+ * key.
  *
  * @property int|null $id
  * @property int $created
@@ -21,6 +21,7 @@ use Tnt\Ecommerce\Money;
  * @property int $item_id
  * @property string $item_class
  * @property int $quantity
+ * @property string|null $options
  */
 class CartItem extends Model implements CartItemInterface
 {
@@ -35,10 +36,6 @@ class CartItem extends Model implements CartItemInterface
 
     /**
      * The buyable this line points at, once something has asked for it.
-     *
-     * A real property rather than a column: `dry\orm\Model`'s `__get()` and
-     * `__set()` only fire for properties it cannot see, and they key off
-     * `ecommerce_cart_item.<name>` in the row data, which has no `buyable`.
      *
      * @see getBuyable()
      */
@@ -64,21 +61,9 @@ class CartItem extends Model implements CartItemInterface
     }
 
     /**
-     * The buyable this line points at, loaded once.
-     *
-     * `load()` is a plain `SELECT` with no identity map behind it, and almost
-     * everything else on this class goes through here — {@see getTitle()},
-     * {@see getDescription()} and {@see getPrice()} all need the buyable, as do
-     * {@see \Tnt\Ecommerce\Cart\Cart::getSubTotal()} and
-     * {@see \Tnt\Ecommerce\Cart\Cart::getTax()}. Without the memo a cart
-     * template printing a title, a description and a price costs three queries
-     * per line before the cart has totalled anything.
-     *
-     * It holds for the life of this object, which is one request. That matches
-     * {@see \Tnt\Ecommerce\Cart\InMemoryCartItem}, which has held its buyable as
-     * an instance all along — so the two implementations of
-     * {@see \Tnt\Ecommerce\Contracts\CartItemInterface} now answer with the same
-     * lifetime rather than one of them re-reading and the other not.
+     * The buyable this line points at, loaded once and memoised for the life
+     * of this object — without the memo every title/description/price read
+     * costs a query.
      *
      * @return BuyableInterface
      */
@@ -140,5 +125,16 @@ class CartItem extends Model implements CartItemInterface
         $this->quantity = $quantity;
         $this->updated = time();
         $this->save();
+    }
+
+    /**
+     * The choices this line was added with, decoded off the row; [] for a
+     * NULL column.
+     *
+     * @return array<array-key, mixed>
+     */
+    public function getOptions(): array
+    {
+        return LineOptions::decode($this->options);
     }
 }

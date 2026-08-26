@@ -191,6 +191,24 @@ it('hands every line to the order exactly once', function (): void {
     );
 });
 
+it('hands each line over with the options it was added with', function (): void {
+    [$cart] = makeCheckoutCart();
+
+    $cart->add(new FakeBuyable('1', 2000), 1, ['cheese' => 'no goat']);
+    $cart->add(new FakeBuyable('1', 2000), 1, ['cheese' => 'no blue']);
+
+    $cart->checkout(new UnsavedCustomer());
+
+    $lines = $cart->placed()->lines;
+
+    // Two variants of one buyable are two order lines, each carrying its own
+    // selection into Order::add() — the freezing itself is OrderLineTest's
+    // subject; what checkout owes is that nothing merges or drops on the way.
+    expect($lines)->toHaveCount(2);
+    expect($lines[0]->getOptions())->toBe(['cheese' => 'no goat']);
+    expect($lines[1]->getOptions())->toBe(['cheese' => 'no blue']);
+});
+
 it('builds an order id on the id the first save gave it', function (): void {
     [$cart] = makeCheckoutCart();
 

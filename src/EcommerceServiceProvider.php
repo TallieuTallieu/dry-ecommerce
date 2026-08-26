@@ -17,10 +17,18 @@ use Tnt\Ecommerce\Contracts\CartStorageInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
+use Tnt\Ecommerce\Events\Order\OrderEvent;
 use Tnt\Ecommerce\Events\Order\Paid;
+use Tnt\Ecommerce\Events\Order\PaymentCanceled;
+use Tnt\Ecommerce\Events\Order\PaymentExpired;
+use Tnt\Ecommerce\Events\Order\PaymentFailed;
+use Tnt\Ecommerce\Events\Order\PaymentRefunded;
 use Tnt\Ecommerce\Fulfillment\SessionAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Payment\NullPayment;
+use Tnt\Ecommerce\Payment\PaymentStatus;
+use Tnt\Ecommerce\Revisions\AddFulfillmentAttributesToOrderTable;
+use Tnt\Ecommerce\Revisions\AddOptionsToLineTables;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
@@ -42,6 +50,8 @@ class EcommerceServiceProvider extends ServiceProvider
         $this->bootEventListeners($app);
 
         if ($app->isRunningInConsole()) {
+            // getWith() answers plain `object`; narrow before calling on it.
+            /** @var Migrator $migrator */
             $migrator = $app->getWith(Migrator::class, [
                 'name' => 'ecommerce',
             ]);
@@ -57,24 +67,24 @@ class EcommerceServiceProvider extends ServiceProvider
                 CreateStockTable::class,
                 CreateStockItemTable::class,
 
-                // Appended, never inserted. Oak's migrator counts how many
-                // revisions a shop has run rather than remembering which, so
-                // putting a new one next to the table it relates to would
-                // shift everything after it and make an existing shop run the
-                // wrong statement. New revisions go on the end.
+                // Append only, never insert: Oak's migrator counts revisions
+                // run rather than remembering which, so reordering makes an
+                // existing shop run the wrong statement.
                 CreateAddressTable::class,
+                AddFulfillmentAttributesToOrderTable::class,
+                AddOptionsToLineTables::class,
             ]);
 
-            $app->get(MigrationManager::class)->addMigrator($migrator);
+            /** @var MigrationManager $manager */
+            $manager = $app->get(MigrationManager::class);
+            $manager->addMigrator($migrator);
         }
     }
 
     public function register(ContainerInterface $app)
     {
-        // The two seams that keep the domain off the Session facade. Both are
-        // singletons: a shop has one current cart and one bag of fulfillment
-        // attributes per request, and a second instance of either would be a
-        // second, diverging copy of that state.
+        // Singletons: a second instance of either would be a diverging copy
+        // of per-request state.
         $app->singleton(
             AttributeStorageInterface::class,
             SessionAttributeStorage::class
@@ -84,10 +94,7 @@ class EcommerceServiceProvider extends ServiceProvider
         $app->singleton(ShopInterface::class, Shop::class);
         $app->singleton(CartInterface::class, Cart::class);
 
-        // ContainerInterface::get() is typed `class-string<T>|string`, so the
-        // union collapses T to plain `object` and every call on the result is
-        // an unknown method. Narrowing it once here is what lets both bindings
-        // below read as themselves.
+        // ContainerInterface::get() answers plain `object`; narrow once here.
         /** @var RepositoryInterface $config */
         $config = $app->get(RepositoryInterface::class);
 
@@ -100,11 +107,8 @@ class EcommerceServiceProvider extends ServiceProvider
             )
         );
 
-        // Who is signed in, resolved from config exactly as the payment above
-        // is. The default answers "nobody", which is the correct answer for a
-        // shop with no accounts rather than a placeholder for a missing one; a
-        // shop running dry-accounts points this at AccountsUserResolver and
-        // needs no glue of its own.
+        // Who is signed in. The default answers "nobody" — correct for a shop
+        // with no accounts.
         $app->singleton(
             UserResolverInterface::class,
             self::configuredClass(
@@ -114,11 +118,8 @@ class EcommerceServiceProvider extends ServiceProvider
             )
         );
 
-        // How the shop taxes, as one value rather than two loose settings.
-        // Both halves default to leaving an existing shop exactly where it
-        // was: prices that already contain their tax, so getTotal() does not
-        // move, and delivery at 0%, so no figure appears that the shop never
-        // asked for.
+        // How the shop taxes. Both defaults leave an existing shop's totals
+        // where they were: inclusive prices, delivery at 0%.
         $app->singleton(TaxPolicy::class, function () use ($config): TaxPolicy {
             return new TaxPolicy(
                 self::configuredConvention($config),
@@ -126,20 +127,13 @@ class EcommerceServiceProvider extends ServiceProvider
             );
         });
 
-        // StockWorkerInterface is deliberately not bound. A worker counts one
-        // named stock and cannot be built without being told which one, so the
-        // binding that used to sit here could never have been resolved. A
-        // buyable that has stock now hands a worker over itself, through
-        // HasStockInterface.
+        // StockWorkerInterface is deliberately not bound: a worker cannot be
+        // built without being told which stock it counts.
     }
 
     /**
-     * The convention a shop quotes its prices under.
-     *
-     * Anything unset, or set to a word this package does not know, is read as
-     * inclusive. That is the reading that leaves an existing shop's totals
-     * where they are, so a typo costs a wrong tax figure rather than silently
-     * adding tax to every total in the shop.
+     * The convention a shop quotes its prices under. Anything unset or
+     * unrecognised reads as inclusive — the reading that leaves totals alone.
      *
      * @param RepositoryInterface $config
      * @return PriceConvention
@@ -158,16 +152,8 @@ class EcommerceServiceProvider extends ServiceProvider
     }
 
     /**
-     * A rate from configuration, or 0 when the shop has not set one.
-     *
-     * A rate has to arrive as a number to count. Anything else — unset, a
-     * string, a stray `true` — reads as 0 rather than being coerced, so a
-     * mistake in a config file cannot start taxing at a figure nobody chose.
-     *
-     * "Not set" and "set to 0" are the same answer here, on purpose. They
-     * produce the same cents at every rate and under both conventions, and a
-     * package that carried them separately without ever letting a shop tell
-     * them apart would be keeping a distinction it does not honour.
+     * A rate from configuration, or 0 when the shop has not set one. Anything
+     * that is not a number reads as 0 rather than being coerced.
      *
      * @param RepositoryInterface $config
      * @param string $key
@@ -184,17 +170,8 @@ class EcommerceServiceProvider extends ServiceProvider
 
     /**
      * The class a config key names, or the default when it names nothing.
-     *
-     * `RepositoryInterface::get()` answers `mixed` and types its `$default`
-     * parameter as `null`, so the default cannot be passed through it and the
-     * value it does return has to be narrowed before the container will take
-     * it. Both bindings above need the same two steps, so they happen here
-     * once.
-     *
-     * Anything that is not a class name falls back rather than reaching the
-     * container. A config key holding an array or a stray `true` is a mistake
-     * in the shop's config, and the shop it breaks is better served by a
-     * working default than by a container error thrown while booting.
+     * Anything that is not a class name falls back rather than erroring while
+     * booting.
      *
      * @param RepositoryInterface $config
      * @param string $key
@@ -213,9 +190,38 @@ class EcommerceServiceProvider extends ServiceProvider
             : $default;
     }
 
-    private function bootEventListeners(ContainerInterface $app)
+    /**
+     * The payment-event listeners: each event writes its status onto the
+     * order, and {@see Paid} additionally redeems the coupon. Orders that are
+     * not this package's {@see Order} are left alone. See docs/payment.md.
+     *
+     * @param ContainerInterface $app
+     * @return void
+     */
+    private function bootEventListeners(ContainerInterface $app): void
     {
+        /** @var DispatcherInterface $dispatcher */
         $dispatcher = $app->get(DispatcherInterface::class);
+
+        $statuses = [
+            Paid::class => PaymentStatus::Paid,
+            PaymentFailed::class => PaymentStatus::Failed,
+            PaymentCanceled::class => PaymentStatus::Canceled,
+            PaymentExpired::class => PaymentStatus::Expired,
+            PaymentRefunded::class => PaymentStatus::Refunded,
+        ];
+
+        foreach ($statuses as $event => $status) {
+            $dispatcher->addListener($event, function (OrderEvent $event) use (
+                $status
+            ): void {
+                $order = $event->getOrder();
+
+                if ($order instanceof Order) {
+                    $order->setPaymentStatus($status);
+                }
+            });
+        }
 
         $dispatcher->addListener(Paid::class, function (Paid $paidEvent): void {
             $order = $paidEvent->getOrder();

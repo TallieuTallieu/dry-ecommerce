@@ -14,16 +14,9 @@ use Tnt\Ecommerce\Repository\CartRepository;
 
 /**
  * The shipped cart storage: the session says which cart row is the visitor's,
- * and the row plus its lines hold the rest.
- *
- * A row is written only when something is actually put in the cart. That is a
- * bigger change than it looks: the previous design created one from the cart's
- * constructor, so merely resolving the cart out of the container — on any page,
- * for any visitor, crawlers included — wrote a row and started a session.
- * Reading an empty cart now costs one lookup and no writes.
- *
- * The session arrives by injection rather than through its facade, which is
- * what makes {@see Cart} testable at all.
+ * and the row plus its lines hold the rest. A row is written only when
+ * something is actually put in the cart — reading an empty cart costs one
+ * lookup and no writes.
  */
 class SessionCartStorage implements CartStorageInterface
 {
@@ -34,15 +27,11 @@ class SessionCartStorage implements CartStorageInterface
 
     private Session $session;
 
-    /**
-     * The cart resolved for this request, if one has been resolved yet.
-     */
     private ?CartModel $cart = null;
 
     /**
-     * Repositories are built per query rather than injected: a dry-dbi
-     * repository accumulates criteria, so one instance cannot serve two
-     * different questions.
+     * Repositories are built per query, not injected: a dry-dbi repository
+     * accumulates criteria, so one instance cannot serve two questions.
      *
      * @param Session $session
      */
@@ -52,11 +41,8 @@ class SessionCartStorage implements CartStorageInterface
     }
 
     /**
-     * The visitor's cart row if there already is one, without creating it.
-     *
-     * A session pointing at a cart that no longer exists — cleared, pruned,
-     * restored from a backup — is treated as no cart at all rather than as an
-     * error.
+     * The visitor's cart row if there already is one, without creating it. A
+     * session pointing at a vanished cart reads as no cart at all.
      *
      * @return CartModel|null
      */
@@ -138,14 +124,18 @@ class SessionCartStorage implements CartStorageInterface
     /**
      * @param BuyableInterface $buyable
      * @param int $quantity
+     * @param array<array-key, mixed> $options
      * @return void
      */
-    public function add(BuyableInterface $buyable, int $quantity = 1): void
-    {
+    public function add(
+        BuyableInterface $buyable,
+        int $quantity = 1,
+        array $options = []
+    ): void {
         $cart = $this->cart();
 
         $item = CartItemRepository::create()
-            ->forBuyable($cart, $buyable)
+            ->forBuyable($cart, $buyable, $options)
             ->firstOrNull();
 
         if ($item !== null) {
@@ -162,15 +152,18 @@ class SessionCartStorage implements CartStorageInterface
         $item->item_id = (int) $buyable->getId();
         $item->item_class = get_class($buyable);
         $item->quantity = $quantity;
+
+        // The canonical form, or NULL for no options — the same value the
+        // lookup above compares on.
+        $item->options = LineOptions::canonical($options);
         $item->save();
 
         $this->touch($cart);
     }
 
     /**
-     * One indexed lookup on `(cart, item_class, item_id)` — the same query
-     * {@see add()} uses to find the line to merge into, which is what keeps the
-     * two agreeing on what "the same buyable" means.
+     * The sum across every option-variant of the buyable — stock counts the
+     * buyable, not the selection.
      *
      * @param BuyableInterface $buyable
      * @return int
@@ -183,13 +176,23 @@ class SessionCartStorage implements CartStorageInterface
             return 0;
         }
 
-        return CartItemRepository::create()
-            ->forBuyable($cart, $buyable)
-            ->firstOrNull()
-            ?->getQuantity() ?? 0;
+        $quantity = 0;
+
+        $items = CartItemRepository::create()
+            ->forAnyVariantOf($cart, $buyable)
+            ->all();
+
+        foreach ($items as $item) {
+            $quantity += $item->getQuantity();
+        }
+
+        return $quantity;
     }
 
     /**
+     * Removes every variant of the buyable — a caller holding only a buyable
+     * cannot name one.
+     *
      * @param BuyableInterface $buyable
      * @return void
      */
@@ -201,9 +204,63 @@ class SessionCartStorage implements CartStorageInterface
             return;
         }
 
-        $item = CartItemRepository::create()
-            ->forBuyable($cart, $buyable)
-            ->firstOrNull();
+        $removed = false;
+
+        $items = CartItemRepository::create()
+            ->forAnyVariantOf($cart, $buyable)
+            ->all();
+
+        foreach ($items as $item) {
+            $item->delete();
+            $removed = true;
+        }
+
+        if ($removed) {
+            $this->touch($cart);
+        }
+    }
+
+    /**
+     * @param string $itemId
+     * @param int $quantity
+     * @return void
+     */
+    public function updateQuantity(string $itemId, int $quantity): void
+    {
+        $cart = $this->existingCart();
+
+        if ($cart === null) {
+            return;
+        }
+
+        $item = $this->lineOf($cart, $itemId);
+
+        if ($item === null) {
+            return;
+        }
+
+        if ($quantity <= 0) {
+            $item->delete();
+        } else {
+            $item->setQuantity($quantity);
+        }
+
+        $this->touch($cart);
+    }
+
+    /**
+     * @param string $itemId
+     * @return void
+     */
+    public function removeItem(string $itemId): void
+    {
+        $cart = $this->existingCart();
+
+        if ($cart === null) {
+            return;
+        }
+
+        $item = $this->lineOf($cart, $itemId);
 
         if ($item === null) {
             return;
@@ -211,6 +268,27 @@ class SessionCartStorage implements CartStorageInterface
 
         $item->delete();
         $this->touch($cart);
+    }
+
+    /**
+     * The line an id names, if it is a line of *this* visitor's cart — scoped
+     * on purpose, or a basket-form POST could reach into another visitor's
+     * cart by guessing row ids.
+     *
+     * @param CartModel $cart
+     * @param string $itemId
+     * @return CartItem|null
+     */
+    private function lineOf(CartModel $cart, string $itemId): ?CartItem
+    {
+        if (!ctype_digit($itemId)) {
+            return null;
+        }
+
+        return CartItemRepository::create()
+            ->forCart($cart)
+            ->byId((int) $itemId)
+            ->firstOrNull();
     }
 
     /**

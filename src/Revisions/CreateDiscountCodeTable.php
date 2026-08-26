@@ -8,7 +8,10 @@ use Tnt\Dbi\TableBuilder;
 class CreateDiscountCodeTable extends DatabaseRevision implements
     RevisionInterface
 {
-    public function up()
+    /**
+     * @return void
+     */
+    public function up(): void
     {
         $this->queryBuilder
             ->table('ecommerce_discount_code')
@@ -24,7 +27,10 @@ class CreateDiscountCodeTable extends DatabaseRevision implements
         $this->execute();
     }
 
-    public function down()
+    /**
+     * @return void
+     */
+    public function down(): void
     {
         $this->queryBuilder->table('ecommerce_discount_code')->drop();
         $this->execute();

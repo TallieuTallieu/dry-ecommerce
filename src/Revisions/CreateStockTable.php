@@ -7,7 +7,10 @@ use Tnt\Dbi\TableBuilder;
 
 class CreateStockTable extends DatabaseRevision implements RevisionInterface
 {
-    public function up()
+    /**
+     * @return void
+     */
+    public function up(): void
     {
         $this->queryBuilder
             ->table('ecommerce_stock')
@@ -22,7 +25,10 @@ class CreateStockTable extends DatabaseRevision implements RevisionInterface
         $this->execute();
     }
 
-    public function down()
+    /**
+     * @return void
+     */
+    public function down(): void
     {
         $this->queryBuilder->table('ecommerce_stock')->drop();
         $this->execute();
