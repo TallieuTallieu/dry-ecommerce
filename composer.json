@@ -31,8 +31,7 @@
     }
   },
   "scripts": {
-    "phpstan": "phpstan analyse --memory-limit=512M",
-    "phpstan:baseline": "phpstan analyse --memory-limit=512M --generate-baseline"
+    "phpstan": "phpstan analyse --memory-limit=512M"
   },
   "repositories": [
     {

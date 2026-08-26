@@ -30,7 +30,6 @@ help:
 	@echo ""
 	@echo "$(Yellow)Code Quality:$(NC)"
 	@echo "  phpstan        - Run PHPStan static analysis"
-	@echo "  phpstan-baseline - Generate PHPStan baseline"
 	@echo ""
 	@echo "  help           - Show this help message"
 .PHONY: help
@@ -92,10 +91,6 @@ phpstan: docker
 	docker compose exec -T dry-ecommerce-dev composer phpstan
 .PHONY: phpstan
 
-phpstan-baseline: docker
-	docker compose exec -T dry-ecommerce-dev composer phpstan:baseline
-.PHONY: phpstan-baseline
-
 ## DOCUMENTATION SYNC ##
 
 sync-docs:
@@ -118,6 +113,7 @@ sync-docs:
 		--exclude='.DS_Store' \
 		--exclude='*.swp' \
 		--exclude='*~' \
+		--exclude='.claude' \
 		docs/ "$(OBSIDIAN_DOCS_PATH)/"
 	@echo "$(Green)Documentation synced successfully!$(NC)"
 	@echo "$(Cyan)Open Obsidian and navigate to: $(OBSIDIAN_DOCS_PATH)$(NC)"

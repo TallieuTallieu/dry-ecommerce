@@ -25,7 +25,10 @@ abstract class DatabaseRevision
         $this->queryBuilder = $queryBuilder;
     }
 
-    protected function execute()
+    /**
+     * @return void
+     */
+    protected function execute(): void
     {
         $this->queryBuilder->build();
         Connection::get()->query($this->queryBuilder->getQuery());

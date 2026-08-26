@@ -28,7 +28,7 @@ trait CapturesRevisionSql
     /**
      * @return void
      */
-    protected function execute()
+    protected function execute(): void
     {
         $this->queryBuilder->build();
 

@@ -7,26 +7,42 @@ class MissingAttribute extends \Exception
     /**
      * @var string $attributeName
      */
-    private $attributeName;
+    private string $attributeName;
 
     /**
-     * @var $data
+     * Whatever context the thrower wants to attach alongside the name. The
+     * package itself throws without it, so `mixed` is deliberate: this class
+     * cannot know what a shop's fulfillment considers useful debugging
+     * material.
+     *
+     * @var mixed $data
      */
-    private $data;
+    private mixed $data;
 
     /**
      * Exception constructor.
      * @param string $attributeName
-     * @param null $data
+     * @param mixed $data
      */
-    public function __construct(string $attributeName, $data = null)
+    public function __construct(string $attributeName, mixed $data = null)
     {
         $this->attributeName = $attributeName;
         $this->data = $data;
     }
 
-    public function getAttributeName()
+    public function getAttributeName(): string
     {
         return $this->attributeName;
+    }
+
+    /**
+     * The context the thrower attached, or null when — as everywhere in this
+     * package — none was given.
+     *
+     * @return mixed
+     */
+    public function getData(): mixed
+    {
+        return $this->data;
     }
 }

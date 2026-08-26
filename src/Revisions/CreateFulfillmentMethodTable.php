@@ -8,7 +8,10 @@ use Tnt\Dbi\TableBuilder;
 class CreateFulfillmentMethodTable extends DatabaseRevision implements
     RevisionInterface
 {
-    public function up()
+    /**
+     * @return void
+     */
+    public function up(): void
     {
         $this->queryBuilder
             ->table('ecommerce_fulfillment_method')
@@ -23,7 +26,10 @@ class CreateFulfillmentMethodTable extends DatabaseRevision implements
         $this->execute();
     }
 
-    public function down()
+    /**
+     * @return void
+     */
+    public function down(): void
     {
         $this->queryBuilder->table('ecommerce_fulfillment_method')->drop();
         $this->execute();
