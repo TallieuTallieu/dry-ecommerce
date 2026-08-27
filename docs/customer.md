@@ -1,6 +1,27 @@
 # Customer
 
-## One row per account, a fresh row per guest
+## A guest is a null customer
+
+`ecommerce_order.customer` is nullable, and null means guest:
+
+```php
+$order = $cart->checkout(); // no customer at all
+$order->getCustomer(); // null
+```
+
+A guest order needs **no customer row**. Everything an invoice prints —
+identity, addresses — is frozen on the order's own columns, either by
+`freezeCustomer()` when a customer object is handed in, or written
+progressively onto a [draft](orders.md#the-place-step) by the project's own
+checkout form. The customer row is what it is for: **account continuity** —
+the thing that ties this order to the same person's next one.
+
+A shop may still hand `checkout()` a customer for a guest — anything
+implementing `CustomerInterface` works, row or not — and the order freezes its
+identity as always. What no longer exists is the obligation to invent a
+throwaway row just to satisfy a column.
+
+## One row per account
 
 A shop with a signed-in user should check out with the customer row already on
 that account, so the same person keeps the same row:
@@ -14,23 +35,15 @@ That is what makes the address book a book — with a fresh row each checkout
 there is nothing for it to accumulate into, and `ecommerce_address` would hold
 one order's addresses rather than a person's.
 
-A **guest** gets a new row every time, and that is the only correct answer:
-there is nothing to recognise a returning guest by that they could not have made
-up. Do not reuse a row on a matching email — an account has been proved, an
-email address has only been typed, and matching on one would let anybody check
-out into somebody else's address book.
+Never match a visitor to an existing row by email. A row is reused only on the
+strength of a proved account. **An email address is not an identity claim** —
+matching a checkout to an existing row by email would let anyone check out as
+somebody else and merge into their record. `CustomerRepository::byEmail()`
+exists so an admin can _find_ the orders placed from an address; checkout does
+not use it.
 
-Either way the row is not what an invoice reads. The order takes its own copy of
-the name, the email, the VAT number and both addresses at checkout.
-
-An order carries a non-null `customer` either way — guest checkout and account
-checkout are the same code path.
-
-A row is reused only on the strength of a proved account, never on a matching
-email. **An email address is not an identity claim** — matching a checkout to
-an existing row by email would let anyone check out as somebody else and merge
-into their record. `CustomerRepository::byEmail()` exists so an admin can
-*find* the orders placed from an address; checkout does not use it.
+Either way the row is not what an invoice reads. The order takes its own copy
+of the name, the email, the VAT number and both addresses at placement.
 
 `CustomerInterface` is five getters — `getFirstName()`, `getLastName()`,
 `getEmail()`, `getCompanyName()`, `getVatNumber()` — and that is everything a
@@ -56,7 +69,7 @@ That is all. `Cart::checkout()` asks the resolver who is signed in and the
 customer row records the answer; nothing else in the checkout changes, and a
 guest checkout costs no extra query.
 
-The resolver checks *signed in*, deliberately not *activated* — dry-accounts
+The resolver checks _signed in_, deliberately not _activated_ — dry-accounts
 tracks those separately (`isAuthenticatedAndActivated()`). Whether an
 unactivated account may buy is trade policy, and refusing it inside the
 resolver would not block the checkout; it would silently record it as a guest
@@ -68,7 +81,8 @@ accounts installs and runs exactly as before. Anything else implementing
 `UserResolverInterface` works just as well:
 
 ```php
-final class MyAuthResolver implements \Tnt\Ecommerce\Contracts\UserResolverInterface
+final class MyAuthResolver implements
+    \Tnt\Ecommerce\Contracts\UserResolverInterface
 {
     public function getCurrentUserId(): ?int
     {
@@ -103,7 +117,6 @@ also register separate migrators with no ordering between them, so there is no
 point at which the target is known to exist. Add the constraint in your own
 schema if your shop always has both.
 
-
 ## A worked checkout, end to end
 
 The whole pairing, from a signed-in visitor to an order that knows whose account
@@ -133,9 +146,10 @@ use Tnt\Ecommerce\Contracts\UserResolverInterface;
 
 $userId = $app->get(UserResolverInterface::class)->getCurrentUserId();
 
-$customer = $userId !== null
-    ? CustomerRepository::create()->byUser($userId)->firstOrNull()
-    : null;
+$customer =
+    $userId !== null
+        ? CustomerRepository::create()->byUser($userId)->firstOrNull()
+        : null;
 
 if ($customer === null) {
     $customer = new Customer();
@@ -144,17 +158,21 @@ if ($customer === null) {
 }
 
 $customer->first_name = $form->get('first_name');
-$customer->last_name  = $form->get('last_name');
-$customer->email      = $form->get('email');
-$customer->company    = $form->get('company') ?? '';
-$customer->vat        = $form->get('vat') ?? '';
-$customer->comments   = '';
+$customer->last_name = $form->get('last_name');
+$customer->email = $form->get('email');
+$customer->company = $form->get('company') ?? '';
+$customer->vat = $form->get('vat') ?? '';
+$customer->comments = '';
 $customer->first_contact = '';
 $customer->save();
 ```
 
-A signed-in visitor gets the row already on their account, so their address book
-is the one they built last time. A guest gets a fresh row. **Do not** look a
+A signed-in visitor gets the row already on their account, so their address
+book is the one they built last time. A guest whose addresses the shop wants
+frozen through the address-book machinery gets a fresh row (a guest checking
+out with **no** customer at all — `checkout()` — is the
+[null-customer path](#a-guest-is-a-null-customer): the shop then writes
+identity and addresses onto the order or its draft itself). **Do not** look a
 guest up by email — see the note above on why that would be a security hole
 rather than a convenience.
 
@@ -170,11 +188,11 @@ $address->updated = time();
 $address->customer = $customer;
 $address->setType(AddressType::Billing);
 $address->is_default = 1;
-$address->street      = 'Factuurstraat';
-$address->number      = '1';
+$address->street = 'Factuurstraat';
+$address->number = '1';
 $address->postal_code = '9700';
-$address->city        = 'Oudenaarde';
-$address->country     = 'BE';
+$address->city = 'Oudenaarde';
+$address->country = 'BE';
 $address->save();
 ```
 
@@ -213,12 +231,13 @@ One call, guest or account. Inside it, in this order:
 ### 6. What you can ask afterwards
 
 ```php
-$order->getCustomer();        // the row — whose account this is on, today
-$order->getBillingAddress();  // a FrozenAddress — where it actually went
+$order->getCustomer(); // the row — whose account this is on, today —
+// or null for an order placed with no customer
+$order->getBillingAddress(); // a FrozenAddress — where it actually went
 $order->getShippingAddress();
-$order->getEmail();           // the order's copy, not the customer's
+$order->getEmail(); // the order's copy, not the customer's
 
-$customer->getUserId();       // int for an account, null for a guest
+$customer->getUserId(); // int for an account, null for a guest
 ```
 
 The two records of the same person are not redundant. `getCustomer()` is a

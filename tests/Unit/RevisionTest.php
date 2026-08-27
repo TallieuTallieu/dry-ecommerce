@@ -24,13 +24,16 @@ declare(strict_types=1);
  * booted Dry application and a live connection, which the suite does not have.
  */
 
+use Tests\Support\CapturingAddCartLifecycleColumns;
 use Tests\Support\CapturingAddFulfillmentAttributesToOrderTable;
 use Tests\Support\CapturingAddOptionsToLineTables;
+use Tests\Support\CapturingAddOrderStateColumn;
 use Tests\Support\CapturingCreateAddressTable;
 use Tests\Support\CapturingDropAddressNameColumns;
 use Tests\Support\CapturingCreateCustomerTable;
 use Tests\Support\CapturingCreateOrderItemTable;
 use Tests\Support\CapturingCreateOrderTable;
+use Tests\Support\CapturingMakeOrderCustomerNullable;
 use Tnt\Dbi\QueryBuilder;
 use Tnt\Ecommerce\Address\AddressType;
 
@@ -320,6 +323,81 @@ it('compares the options column exactly, not by collation', function (): void {
     foreach ($revision->statements as $statement) {
         expect($statement)->toContain('COLLATE utf8mb4_bin');
     }
+});
+
+it(
+    'makes the order customer column nullable and keeps the key',
+    function (): void {
+        // sc-11260: a guest order has no customer row — null is the guest, not a
+        // throwaway row. One CHANGE, and deliberately no touch on the foreign
+        // key: a non-null value must still name a real customer.
+        $revision = new CapturingMakeOrderCustomerNullable(new QueryBuilder());
+        $revision->up();
+
+        expect($revision->sql)->toContain('ALTER TABLE `ecommerce_order`');
+        expect($revision->sql)->toContain(
+            'CHANGE `customer` `customer` INT(11) NULL'
+        );
+        expect($revision->sql)->not->toContain('FOREIGN KEY');
+    }
+);
+
+it(
+    'adds the state column and backfills existing orders placed',
+    function (): void {
+        // Two statements through two seams: the ALTER through the builder, the
+        // backfill as raw SQL — the builder speaks DDL, not UPDATE. The default
+        // '' is what rows written by pre-state code get, and '' reads as placed,
+        // which is true of every order such code writes.
+        $revision = new CapturingAddOrderStateColumn(new QueryBuilder());
+        $revision->up();
+
+        expect($revision->statements)->toHaveCount(2);
+        expect($revision->statements[0])->toContain(
+            'ALTER TABLE `ecommerce_order`'
+        );
+        expect($revision->statements[0])->toContain(
+            "`state` VARCHAR(255) NOT NULL DEFAULT ''"
+        );
+        expect($revision->statements[1])->toBe(
+            "UPDATE `ecommerce_order` SET `state` = 'placed'"
+        );
+    }
+);
+
+it('gives the cart its afterlife columns', function (): void {
+    // One revision, four columns that only mean something together: the
+    // order link (provenance), the token (what the cookie holds), the
+    // soft-delete mark, and the attribute bag that moved off the session.
+    $revision = new CapturingAddCartLifecycleColumns(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->sql)->toContain('ALTER TABLE `ecommerce_cart`');
+    expect($revision->sql)->toContain('ADD `order` INT(11) NULL');
+    expect($revision->sql)->toContain('ADD `token` VARCHAR(64) NULL');
+    expect($revision->sql)->toContain('ADD `deleted` INT(11) NULL');
+    expect($revision->sql)->toContain('ADD `fulfillment_attributes` TEXT NULL');
+});
+
+it('lets a reaped order leave its cart standing', function (): void {
+    // ON DELETE SET NULL, not CASCADE: deleting an order (the draft reaper)
+    // must not take a living basket with it — and not RESTRICT either, or
+    // the reaper could never delete a linked draft at all.
+    $revision = new CapturingAddCartLifecycleColumns(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->sql)->toContain('REFERENCES `ecommerce_order`');
+    expect($revision->sql)->toContain('ON DELETE SET NULL');
+});
+
+it('lets a token name at most one cart', function (): void {
+    // Unique, because the token is the cart's whole identity to a cookie;
+    // nullable stays possible — every pre-revision cart has none, and MySQL
+    // uniques ignore NULLs.
+    $revision = new CapturingAddCartLifecycleColumns(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->sql)->toContain('UNIQUE (`token`)');
 });
 
 it('keeps the non-money columns as they were', function (): void {

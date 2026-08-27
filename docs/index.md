@@ -14,19 +14,19 @@ rather than guessed at.
 
 ## Concepts
 
-| | |
-| --- | --- |
-| [Buyable](buyable.md) | The contract a sellable model implements, and the two capabilities it can opt into. |
-| [Cart](cart.md) | What is in it, what it costs, and turning it into an order. |
-| [Options and variants](options.md) | Per-line choices: part of the merge key, frozen onto the order line. |
-| [Customer](customer.md) | Guests, accounts, and the dry-accounts pairing. |
-| [Addresses](addresses.md) | The address book, and the copy an order freezes at checkout. |
-| [Orders](orders.md) | What an order records, and the reference a customer quotes. |
-| [Fulfillment](fulfillment.md) | Delivery methods, their cost, and the attributes they collect. |
-| [Discounts and coupons](discounts.md) | Codes, the rules behind them, and when they are spent. |
-| [Stock](stock.md) | Counting what there is, and what happens when it runs out. |
-| [Tax](tax.md) | Rates, and the one fact the package cannot infer: whether your prices include them. |
-| [Payment](payment.md) | The one-method gateway interface, and why the default charges nobody. |
+|                                       |                                                                                     |
+| ------------------------------------- | ----------------------------------------------------------------------------------- |
+| [Buyable](buyable.md)                 | The contract a sellable model implements, and the two capabilities it can opt into. |
+| [Cart](cart.md)                       | What is in it, what it costs, and turning it into an order.                         |
+| [Options and variants](options.md)    | Per-line choices: part of the merge key, frozen onto the order line.                |
+| [Customer](customer.md)               | Guests, accounts, and the dry-accounts pairing.                                     |
+| [Addresses](addresses.md)             | The address book, and the copy an order freezes at checkout.                        |
+| [Orders](orders.md)                   | Drafts and placement, what an order records, and the reference a customer quotes.   |
+| [Fulfillment](fulfillment.md)         | Delivery methods, their cost, and the attributes they collect.                      |
+| [Discounts and coupons](discounts.md) | Codes, the rules behind them, and when they are spent.                              |
+| [Stock](stock.md)                     | Counting what there is, and what happens when it runs out.                          |
+| [Tax](tax.md)                         | Rates, and the one fact the package cannot infer: whether your prices include them. |
+| [Payment](payment.md)                 | The one-method gateway interface, and why the default charges nobody.               |
 
 ## Migrating from 1.x
 
@@ -56,7 +56,7 @@ Honest list, kept here rather than discovered one at a time. Most were found
 by building a full shop (Delhaize Nederename) on the package; that project's
 `docs/dry-ecommerce.md` carries the detailed findings.
 
-(One tax rate per line is *by design*, not a gap — differently-taxed add-ons
+(One tax rate per line is _by design_, not a gap — differently-taxed add-ons
 become their own lines, shop-side. [Options](options.md).)
 
 - **`FulfillmentInterface` has no availability concept.** A method cannot say
@@ -70,8 +70,6 @@ become their own lines, shop-side. [Options](options.md).)
   to `ecommerce_order_item` (a parent link, say) cannot reach a line's row
   through the contract — reading them back means a downcast to the concrete
   model. [Orders](orders.md#order-lines).
-- **`checkout()` does not clear the cart.** Synchronous-gateway shops must
-  remember `$cart->clear()` themselves. [Orders](orders.md).
 - **No write-side default helpers on the address book.** One-default-per-type
   is enforced only by `AmbiguousAddress` at read time.
 - **Checkout needs a web request.** `AccountsUserResolver` reads the session

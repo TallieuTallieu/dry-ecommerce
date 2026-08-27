@@ -2,11 +2,13 @@
 
 use Oak\Contracts\Dispatcher\DispatcherInterface;
 use Oak\Dispatcher\Dispatcher;
+use Tests\Support\FakeCartRelease;
 use Tests\Support\FakePayment;
 use Tests\Support\InMemoryOrderCart;
 use Tests\Support\WebContainer;
 use Tnt\Ecommerce\Account\GuestUserResolver;
 use Tnt\Ecommerce\Cart\Cart;
+use Tnt\Ecommerce\Cart\CartRelease;
 use Tnt\Ecommerce\Cart\InMemoryCartStorage;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
@@ -60,6 +62,13 @@ function bootEcommerce(): DispatcherInterface
     // which is a mistake a test can make, not one the framework makes:
     // Oak\Dispatcher\DispatcherServiceProvider binds this as a singleton.
     $app->singleton(DispatcherInterface::class, Dispatcher::class);
+
+    // The Paid listener resolves CartRelease out of the container, and the
+    // real one queries ecommerce_cart. The fake keeps the production release
+    // logic and answers the one query from memory, so every test here can
+    // dispatch Paid with the container stopped. The tests about the release
+    // itself bind their own and read it back.
+    $app->singleton(CartRelease::class, FakeCartRelease::class);
 
     Oak\Facade::setContainer($app);
 

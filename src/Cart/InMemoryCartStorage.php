@@ -32,6 +32,13 @@ class InMemoryCartStorage implements CartStorageInterface
 
     private ?DiscountCode $discount = null;
 
+    private ?int $orderId = null;
+
+    /**
+     * @var array<string, mixed>
+     */
+    private array $fulfillmentAttributes = [];
+
     /**
      * The merge key: which buyable, and with what selection.
      *
@@ -202,6 +209,8 @@ class InMemoryCartStorage implements CartStorageInterface
         $this->items = [];
         $this->fulfillmentId = null;
         $this->discount = null;
+        $this->orderId = null;
+        $this->fulfillmentAttributes = [];
     }
 
     /**
@@ -236,5 +245,39 @@ class InMemoryCartStorage implements CartStorageInterface
     public function setDiscount(?DiscountCode $discount): void
     {
         $this->discount = $discount;
+    }
+
+    /**
+     * @return int|null
+     */
+    public function getOrderId(): ?int
+    {
+        return $this->orderId;
+    }
+
+    /**
+     * @param int|null $id
+     * @return void
+     */
+    public function setOrderId(?int $id): void
+    {
+        $this->orderId = $id;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getFulfillmentAttributes(): array
+    {
+        return $this->fulfillmentAttributes;
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     * @return void
+     */
+    public function setFulfillmentAttributes(array $attributes): void
+    {
+        $this->fulfillmentAttributes = $attributes;
     }
 }

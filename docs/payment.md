@@ -10,9 +10,12 @@ interface PaymentInterface
 }
 ```
 
-One method. `Cart::checkout()` calls it once, last, after the order and its
-lines are written and the `Created` event has been dispatched — so a gateway
-always receives an order that already exists and has a reference.
+One method. `Cart::checkout()` — and `Cart::place()`, the
+[place-step](orders.md#the-place-step) it is one call into — calls it once,
+last, after the order and its lines are written and the `Created` event has
+been dispatched — so a gateway always receives an order that already exists
+and has a reference. A [re-placement](orders.md#re-placement) calls it again:
+a fresh attempt to pay the same order.
 
 ## Choosing one
 
@@ -50,14 +53,14 @@ know whether payment is synchronous, and it does not own the callback route.
 What a gateway is expected to do is dispatch the right event when it learns the
 outcome:
 
-| Event | Meaning |
-| --- | --- |
-| `Created` | The order exists. Dispatched by the cart, not by the gateway. |
-| `Paid` | The money arrived. |
-| `PaymentFailed` | The attempt failed. |
-| `PaymentCanceled` | The customer backed out. |
-| `PaymentExpired` | The window closed without payment. |
-| `PaymentRefunded` | The money went back. |
+| Event             | Meaning                                                                                                                 |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `Created`         | The order was placed. Dispatched by the cart, not by the gateway — and again on [re-placement](orders.md#re-placement). |
+| `Paid`            | The money arrived.                                                                                                      |
+| `PaymentFailed`   | The attempt failed.                                                                                                     |
+| `PaymentCanceled` | The customer backed out.                                                                                                |
+| `PaymentExpired`  | The window closed without payment.                                                                                      |
+| `PaymentRefunded` | The money went back.                                                                                                    |
 
 ```php
 use Oak\Dispatcher\Facade\Dispatcher;
@@ -68,7 +71,23 @@ Dispatcher::dispatch(Paid::class, new Paid($order));
 
 Every payment event has behaviour attached: the service provider listens for
 each of them and writes the matching status onto the order (see below). `Paid`
-additionally redeems the order's coupon. See [Discounts](discounts.md).
+additionally redeems the order's coupon ([Discounts](discounts.md)) and
+releases the cart (below).
+
+## Paid releases the cart
+
+Placing an order deliberately leaves the cart standing — with an asynchronous
+gateway, a failed or canceled payment must bring the visitor back to a basket
+that is still there. The moment the basket is finally spent is `Paid`, so the
+provider's listener follows the [cart→order link](cart.md#the-cart-order-link)
+and **soft-deletes** the cart: `ecommerce_cart.deleted = time()`, found
+through `CartRepository::byOrder()`. The row survives with its order link
+intact — provenance — and both storages treat it as absent from then on, so
+the payer's next visit starts an empty cart.
+
+Idempotent like the status writes: a replayed `Paid` webhook finds no living
+cart and touches nothing. A synchronous shop that still calls `$cart->clear()`
+after checkout keeps working — the hard delete just gets there first.
 
 ## The status lifecycle
 
@@ -82,13 +101,13 @@ additionally redeems the order's coupon. See [Discounts](discounts.md).
    listener per payment event, each translating the event into a word on the
    column and saving the order:
 
-   | Event | Status written |
-   | --- | --- |
-   | `Paid` | `paid` |
-   | `PaymentFailed` | `failed` |
-   | `PaymentCanceled` | `canceled` |
-   | `PaymentExpired` | `expired` |
-   | `PaymentRefunded` | `refunded` |
+    | Event             | Status written |
+    | ----------------- | -------------- |
+    | `Paid`            | `paid`         |
+    | `PaymentFailed`   | `failed`       |
+    | `PaymentCanceled` | `canceled`     |
+    | `PaymentExpired`  | `expired`      |
+    | `PaymentRefunded` | `refunded`     |
 
 So a gateway never touches the column: it dispatches honestly and the column
 follows. That is deliberate — a gateway that wrote one word and dispatched
@@ -100,7 +119,7 @@ Read it back through the enum:
 ```php
 use Tnt\Ecommerce\Payment\PaymentStatus;
 
-$order->getPaymentStatus();                  // PaymentStatus::Paid
+$order->getPaymentStatus(); // PaymentStatus::Paid
 $order->getPaymentStatus() === PaymentStatus::Paid;
 ```
 

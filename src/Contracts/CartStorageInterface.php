@@ -105,4 +105,39 @@ interface CartStorageInterface
      * @return void
      */
     public function setDiscount(?DiscountCode $discount): void;
+
+    /**
+     * The order this cart is (or became) — the cart→order link. Written by
+     * the package at placement; a project MAY write it earlier, at draft
+     * creation. Null while the cart has led to nothing. See docs/cart.md.
+     *
+     * @return int|null
+     */
+    public function getOrderId(): ?int;
+
+    /**
+     * Point the cart at an order. Writing with no cart yet creates one, the
+     * same rule as {@see add()}.
+     *
+     * @param int|null $id
+     * @return void
+     */
+    public function setOrderId(?int $id): void;
+
+    /**
+     * The fulfillment attributes collected for this cart — a delivery date, a
+     * timeslot — as one bag. Empty when there is no cart or nothing was set.
+     *
+     * @return array<string, mixed>
+     */
+    public function getFulfillmentAttributes(): array;
+
+    /**
+     * Replace the whole bag. Writing with no cart yet creates one, the same
+     * rule as {@see add()}.
+     *
+     * @param array<string, mixed> $attributes
+     * @return void
+     */
+    public function setFulfillmentAttributes(array $attributes): void;
 }

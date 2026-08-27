@@ -6,12 +6,12 @@ the order below is the order things actually have to happen in.
 
 ## Requirements
 
-| | |
-| --- | --- |
-| PHP | `>= 8.4` |
-| dry | `^4.0` |
-| oak | `^3.0` |
-| dry-dbi | `^3.0` |
+|              |                                                |
+| ------------ | ---------------------------------------------- |
+| PHP          | `>= 8.4`                                       |
+| dry          | `^4.0`                                         |
+| oak          | `^3.0`                                         |
+| dry-dbi      | `^3.0`                                         |
 | dry-accounts | `^3` — **optional**, and in `require-dev` here |
 
 dry-accounts is a supported pairing, not a dependency. Exactly one class in
@@ -50,11 +50,11 @@ Two things this breaks that are easy to miss:
 
 - **Docker.** `../dry-ecommerce` is outside the project mount, so the container
   needs it mounted or the symlink in `vendor/` dangles:
-  ```yaml
-  volumes:
-    - .:/var/www/html
-    - ../dry-ecommerce:/var/www/dry-ecommerce
-  ```
+    ```yaml
+    volumes:
+        - .:/var/www/html
+        - ../dry-ecommerce:/var/www/dry-ecommerce
+    ```
 - **Deployment.** A path repository is a development arrangement. Nothing built
   this way is deployable — switch to the tagged release first.
 
@@ -75,19 +75,21 @@ constructed with that package's `AuthenticationInterface`.
 
 The provider binds the cart, the shop, the attribute and cart storages, the
 payment gateway, the user resolver and the tax policy, and — in console context
-only — registers its migrator.
+only — registers its migrator and the `ecommerce:reap-drafts` command
+([the reaper](orders.md#the-reaper)).
 
 ## Configuration
 
 `config/ecommerce.php`. Every key has a default, and every default is the
 reading that leaves a shop's totals where they are.
 
-| Key | Default | What it decides |
-| --- | --- | --- |
-| `payment` | `NullPayment::class` | The gateway. See the warning below. |
-| `user_resolver` | `GuestUserResolver::class` | Whether a checkout can link to an account. |
-| `prices` | `inclusive` | Whether quoted prices already contain their tax. |
-| `delivery_tax_rate` | `0` | The rate charged on fulfillment cost. |
+| Key                 | Default                    | What it decides                                                                                                                                                                                                |
+| ------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payment`           | `NullPayment::class`       | The gateway. See the warning below.                                                                                                                                                                            |
+| `user_resolver`     | `GuestUserResolver::class` | Whether a checkout can link to an account.                                                                                                                                                                     |
+| `prices`            | `inclusive`                | Whether quoted prices already contain their tax.                                                                                                                                                               |
+| `delivery_tax_rate` | `0`                        | The rate charged on fulfillment cost.                                                                                                                                                                          |
+| `cart_lifetime`     | unset                      | Days, `int`. Set and `> 0`: the cart lives in its own cookie for that long ([cookie cart](cart.md#the-cookie-cart)), and the draft reaper measures abandonment against it. Unset: the session cart, as always. |
 
 ```php
 <?php
@@ -97,6 +99,7 @@ return [
     'user_resolver' => \Tnt\Ecommerce\Account\AccountsUserResolver::class,
     'prices' => 'inclusive',
     'delivery_tax_rate' => 0,
+    'cart_lifetime' => 30,
 ];
 ```
 
@@ -111,11 +114,13 @@ figure, not a shop that will not boot.
 
 ## Migrations
 
-The provider registers a migrator named `ecommerce` with thirteen revisions:
+The provider registers a migrator named `ecommerce` with sixteen revisions:
 ten create the tables below, and the ones after them alter existing tables
 (the frozen `fulfillment_attributes` column on `ecommerce_order`, the
-per-line `options` columns on both line tables, and the drop of the address
-name columns):
+per-line `options` columns on both line tables, the drop of the address name
+columns, the nullable `customer` and the `state` column on `ecommerce_order`,
+and the cart's lifecycle columns — `order`, `token`, `deleted`,
+`fulfillment_attributes`):
 
 ```
 ecommerce_customer          ecommerce_cart
@@ -127,7 +132,7 @@ ecommerce_order_item        ecommerce_address
 
 ```sh
 php oak migration migrate
-php oak migration list        # ecommerce (13/13)
+php oak migration list        # ecommerce (16/16)
 ```
 
 Revisions are **appended to the list, never inserted into it.** Oak's migrator
@@ -157,7 +162,7 @@ WHERE address_street <> '';
 ```
 
 The old inline columns carried recipient names; the book does not — an address
-is purely a *where*, and the identity an order is placed under is frozen on the
+is purely a _where_, and the identity an order is placed under is frozen on the
 order itself (see [addresses](addresses.md)). The old name columns are simply
 not carried over.
 
@@ -183,12 +188,24 @@ class Product extends Model implements BuyableInterface
         return (string) $this->id;
     }
 
-    public function getTitle(): string { return $this->name; }
-    public function getDescription(): string { return $this->description; }
-    public function getThumbnailSource(): string { return $this->photo_url; }
+    public function getTitle(): string
+    {
+        return $this->name;
+    }
+    public function getDescription(): string
+    {
+        return $this->description;
+    }
+    public function getThumbnailSource(): string
+    {
+        return $this->photo_url;
+    }
 
     /** In CENTS. €12.50 is 1250. See docs/money.md. */
-    public function getPrice(): int { return $this->price_in_cents; }
+    public function getPrice(): int
+    {
+        return $this->price_in_cents;
+    }
 }
 ```
 
@@ -220,9 +237,9 @@ $cart = $app->get(\Tnt\Ecommerce\Contracts\CartInterface::class);
 
 $cart->add($product, 3);
 
-$cart->getSubTotal();   // cents
-$cart->getTotal();      // cents
-$cart->getTax();        // cents — 0 unless the buyable is Taxable
+$cart->getSubTotal(); // cents
+$cart->getTotal(); // cents
+$cart->getTax(); // cents — 0 unless the buyable is Taxable
 ```
 
 Outside a web request — a console command, a test — the session-backed defaults
