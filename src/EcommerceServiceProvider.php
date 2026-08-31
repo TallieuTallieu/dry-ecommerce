@@ -34,6 +34,7 @@ use Tnt\Ecommerce\Payment\NullPayment;
 use Tnt\Ecommerce\Payment\PaymentStatus;
 use Tnt\Ecommerce\Revisions\AddCartLifecycleColumns;
 use Tnt\Ecommerce\Revisions\AddFulfillmentAttributesToOrderTable;
+use Tnt\Ecommerce\Revisions\AddIndexesToEcommerceTables;
 use Tnt\Ecommerce\Revisions\AddOptionsToLineTables;
 use Tnt\Ecommerce\Revisions\AddOrderStateColumn;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
@@ -86,6 +87,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 MakeOrderCustomerNullable::class,
                 AddOrderStateColumn::class,
                 AddCartLifecycleColumns::class,
+                AddIndexesToEcommerceTables::class,
             ]);
 
             /** @var MigrationManager $manager */
