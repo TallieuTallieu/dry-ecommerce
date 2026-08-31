@@ -50,9 +50,12 @@ first, and reports the count. The lifetime is `ecommerce.cart_lifetime` (days
 — the same knob the [cookie cart](cart.md#the-cookie-cart) lives by), and the
 command **refuses to run when it is unset**: any figure it invented would
 silently delete drafts whose carts the shop considers alive. The clock is the
-draft's own `updated` — touched on every progressive save — deliberately not
-a join through the cart, because a draft need not have a cart link yet.
-Placed orders are never candidates. Run it on a schedule.
+draft's own `updated` — touched on every progressive save; a draft need not
+have a cart link yet. But a stale draft is **spared while its basket is in
+use**: a living cart pointing at the draft, itself touched after the cutoff,
+keeps it — adding a line touches the cart, not the draft, and a visitor who
+kept shopping must not lose their half-filled form. Placed orders are never
+candidates. Run it on a schedule.
 
 ## What placing writes
 
