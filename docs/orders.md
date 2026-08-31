@@ -20,8 +20,11 @@ $order->getState(); // OrderState::Draft | OrderState::Placed
 A **draft** is a checkout form in progress, persisted as a row so it survives
 the visitor leaving: the project writes identity and address columns onto it
 as the form advances, and nothing else exists yet — no lines, no reference, no
-events. A **placed** order has been frozen from the cart by the
-[place-step](#the-place-step). There is deliberately no third state: an
+events. Every column placement writes is nullable, and NULL is what "not
+filled in yet" looks like — a draft's row is honest about its gaps, and the
+partial insert is legal under MySQL's strict mode. The readers cast: an
+unfilled name reads `''`, unfrozen money reads `0`. A **placed** order has
+been frozen from the cart by the [place-step](#the-place-step). There is deliberately no third state: an
 overview/review page renders **live** from the cart, so prices are always
 current, and anything a frozen middle state held would need re-validating at
 accept anyway. "Fixed" — placed and paid — is a query
@@ -50,9 +53,12 @@ first, and reports the count. The lifetime is `ecommerce.cart_lifetime` (days
 — the same knob the [cookie cart](cart.md#the-cookie-cart) lives by), and the
 command **refuses to run when it is unset**: any figure it invented would
 silently delete drafts whose carts the shop considers alive. The clock is the
-draft's own `updated` — touched on every progressive save — deliberately not
-a join through the cart, because a draft need not have a cart link yet.
-Placed orders are never candidates. Run it on a schedule.
+draft's own `updated` — touched on every progressive save; a draft need not
+have a cart link yet. But a stale draft is **spared while its basket is in
+use**: a living cart pointing at the draft, itself touched after the cutoff,
+keeps it — adding a line touches the cart, not the draft, and a visitor who
+kept shopping must not lose their half-filled form. Placed orders are never
+candidates. Run it on a schedule.
 
 ## What placing writes
 

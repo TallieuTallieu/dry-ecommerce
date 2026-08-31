@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace Tnt\Ecommerce\Order;
 
+use Tnt\Ecommerce\Model\Cart as CartModel;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Repository\CartRepository;
 use Tnt\Ecommerce\Repository\OrderRepository;
 
 /**
  * Deletes draft orders nobody has touched within the cart lifetime. A draft
  * is touched on every progressive save, so its own `updated` is the
- * abandonment clock — deliberately not a join through the cart, because a
- * draft need not have a cart link yet. Placed orders are never candidates.
+ * abandonment clock — a draft need not have a cart link yet. But a living
+ * cart pointing at the draft, itself touched after the cutoff, keeps it: a
+ * basket still in use is not abandoned. Placed orders are never candidates.
  * See docs/orders.md.
  */
 class DraftReaper
@@ -38,6 +41,15 @@ class DraftReaper
         $reaped = 0;
 
         foreach ($this->staleDrafts($cutoff) as $draft) {
+            // The visitor may still be shopping: adding a line touches the
+            // cart, not the draft. A living cart touched after the cutoff
+            // spares its draft until the basket goes quiet too.
+            $cart = $this->cartOf($draft);
+
+            if ($cart !== null && (int) $cart->updated >= $cutoff) {
+                continue;
+            }
+
             // Defensively: a draft is not supposed to have lines before
             // placement, but one that somehow does must not leave orphans.
             $draft->clearItems();
@@ -47,6 +59,21 @@ class DraftReaper
         }
 
         return $reaped;
+    }
+
+    /**
+     * The living cart pointing at this draft, or null. A test seam, same
+     * shape as {@see \Tnt\Ecommerce\Cart\CartRelease::cartOf()}.
+     *
+     * @param Order $draft
+     * @return CartModel|null
+     */
+    protected function cartOf(Order $draft): ?CartModel
+    {
+        return CartRepository::create()
+            ->byOrder((int) $draft->id)
+            ->notDeleted()
+            ->firstOrNull();
     }
 
     /**

@@ -72,6 +72,24 @@ it('sets the cookie to live for the configured days', function (): void {
     expect($expiry)->toBeLessThanOrEqual(time() + 30 * 86400 + 5);
 });
 
+it('slides the cookie expiry on every visit', function (): void {
+    [$table, $cookie] = cookieCartShop();
+
+    cookieCartRequest($table, $cookie, 30)->setFulfillmentId('pickup');
+
+    // As if a day went by since the cookie was written.
+    $cookie->expiries[CookieCartStorage::COOKIE_NAME] = time() + 29 * 86400;
+
+    // Merely reading the cart is a visit, and a visit re-stamps the cookie a
+    // full lifetime from now — a basket in daily use never expires.
+    cookieCartRequest($table, $cookie, 30)->getFulfillmentId();
+
+    $expiry = $cookie->expiries[CookieCartStorage::COOKIE_NAME];
+
+    expect($expiry)->toBeGreaterThanOrEqual(time() + 30 * 86400 - 5);
+    expect($expiry)->toBeLessThanOrEqual(time() + 30 * 86400 + 5);
+});
+
 it('finds the same cart back on the next request', function (): void {
     [$table, $cookie] = cookieCartShop();
 
@@ -112,11 +130,18 @@ it('reads a soft-deleted cart as no cart', function (): void {
     $cart = $table->only();
     $cart->deleted = time();
 
+    $sentinel = time() + 12345;
+    $cookie->expiries[CookieCartStorage::COOKIE_NAME] = $sentinel;
+
     $second = cookieCartRequest($table, $cookie);
 
     expect($second->getFulfillmentId())->toBeNull();
     expect($second->getOrderId())->toBeNull();
     expect($second->items())->toBe([]);
+
+    // And finding a dead cart is not a visit: the cookie keeps whatever
+    // expiry it had rather than being re-stamped for a basket that is gone.
+    expect($cookie->expiries[CookieCartStorage::COOKIE_NAME])->toBe($sentinel);
 });
 
 it('refuses cookie values that are not tokens', function (mixed $value): void {

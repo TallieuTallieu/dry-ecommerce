@@ -114,13 +114,16 @@ figure, not a shop that will not boot.
 
 ## Migrations
 
-The provider registers a migrator named `ecommerce` with seventeen revisions:
+The provider registers a migrator named `ecommerce` with eighteen revisions:
 ten create the tables below, and the ones after them alter existing tables
 (the frozen `fulfillment_attributes` column on `ecommerce_order`, the
 per-line `options` columns on both line tables, the drop of the address name
 columns, the nullable `customer` and the `state` column on `ecommerce_order`,
 the cart's lifecycle columns — `order`, `token`, `deleted`,
-`fulfillment_attributes` — and the indexes behind the repository lookups):
+`fulfillment_attributes` — the indexes behind the repository lookups, and
+the nullable placement columns on `ecommerce_order`, so a
+[draft's](orders.md#draft-or-placed-the-order-state) partial row is
+honest and legal under strict `sql_mode`):
 
 ```
 ecommerce_customer          ecommerce_cart
@@ -132,7 +135,7 @@ ecommerce_order_item        ecommerce_address
 
 ```sh
 php oak migration migrate
-php oak migration list        # ecommerce (17/17)
+php oak migration list        # ecommerce (18/18)
 ```
 
 Revisions are **appended to the list, never inserted into it.** Oak's migrator

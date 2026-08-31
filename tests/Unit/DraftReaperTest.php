@@ -8,16 +8,19 @@ declare(strict_types=1);
  * A draft is a half-filled checkout form; abandoned ones would otherwise pile
  * up forever. The clock is the draft's own `updated` — touched on every
  * progressive save — measured against `ecommerce.cart_lifetime`, the same
- * knob the cookie cart lives by. The selection (state = draft, updated before
- * the cutoff) is SQL and is pinned as composed criteria in RepositoryTest;
- * what runs here is everything around it: the cutoff arithmetic, the
- * lines-first delete, the count, the config reading and the command's refusal
- * to invent a lifetime nobody configured.
+ * knob the cookie cart lives by; a stale draft whose living cart was touched
+ * after the cutoff is spared, because a basket in use is not abandoned. The
+ * selection (state = draft, updated before the cutoff) is SQL and is pinned
+ * as composed criteria in RepositoryTest; what runs here is everything around
+ * it: the cutoff arithmetic, the sparing, the lines-first delete, the count,
+ * the config reading and the command's refusal to invent a lifetime nobody
+ * configured.
  */
 
 use Oak\Config\Repository;
 use Tests\Support\FakeConsoleInput;
 use Tests\Support\FakeDraftReaper;
+use Tests\Support\InMemoryCart;
 use Tests\Support\FakeReapDraftsCommand;
 use Tests\Support\InMemoryOrder;
 use Tests\Support\RecordingConsoleOutput;
@@ -47,6 +50,53 @@ it('counts what it reaped', function (): void {
     }
 
     expect((new FakeDraftReaper(30, $drafts))->reap())->toBe(3);
+});
+
+it('spares a stale draft whose basket is still in use', function (): void {
+    // Adding a line touches the cart, not the draft: a visitor who kept
+    // shopping without advancing the checkout form must not lose the form.
+    $draft = new InMemoryOrder();
+    $draft->state = OrderState::Draft->value;
+
+    $cart = new InMemoryCart();
+    $cart->updated = time() - 86400;
+
+    $reaper = new FakeDraftReaper(30, [$draft]);
+    $reaper->attachCart($draft, $cart);
+
+    expect($reaper->reap())->toBe(0);
+    expect($draft->deleted)->toBeFalse();
+});
+
+it('reaps a stale draft once its basket went quiet too', function (): void {
+    $draft = new InMemoryOrder();
+    $draft->state = OrderState::Draft->value;
+
+    $cart = new InMemoryCart();
+    $cart->updated = time() - 31 * 86400;
+
+    $reaper = new FakeDraftReaper(30, [$draft]);
+    $reaper->attachCart($draft, $cart);
+
+    expect($reaper->reap())->toBe(1);
+    expect($draft->deleted)->toBeTrue();
+});
+
+it('reaps a stale draft whose cart was released', function (): void {
+    // A soft-deleted cart is absent everywhere, so it spares nothing —
+    // whatever its updated says.
+    $draft = new InMemoryOrder();
+    $draft->state = OrderState::Draft->value;
+
+    $cart = new InMemoryCart();
+    $cart->updated = time();
+    $cart->deleted = time();
+
+    $reaper = new FakeDraftReaper(30, [$draft]);
+    $reaper->attachCart($draft, $cart);
+
+    expect($reaper->reap())->toBe(1);
+    expect($draft->deleted)->toBeTrue();
 });
 
 it('measures staleness in configured days off updated', function (): void {

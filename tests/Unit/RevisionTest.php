@@ -35,6 +35,7 @@ use Tests\Support\CapturingCreateCustomerTable;
 use Tests\Support\CapturingCreateOrderItemTable;
 use Tests\Support\CapturingCreateOrderTable;
 use Tests\Support\CapturingMakeOrderCustomerNullable;
+use Tests\Support\CapturingMakeOrderPlacementColumnsNullable;
 use Tnt\Dbi\QueryBuilder;
 use Tnt\Ecommerce\Address\AddressType;
 
@@ -365,6 +366,57 @@ it(
         );
     }
 );
+
+it('makes every column placement writes nullable', function (
+    string $column,
+    string $type
+): void {
+    // NULL is "not filled in yet" — a draft is written progressively, a guest
+    // freezes no identity, and until this revision a partial insert leaned on
+    // MySQL's loose sql_mode inventing ''. The readers cast, so NULL and ''
+    // answer the same.
+    $revision = new CapturingMakeOrderPlacementColumnsNullable(
+        new QueryBuilder()
+    );
+    $revision->up();
+
+    expect($revision->sql)->toContain('ALTER TABLE `ecommerce_order`');
+    expect($revision->sql)->toContain(
+        sprintf('CHANGE `%s` `%s` %s NULL', $column, $column, $type)
+    );
+})->with([
+    ['order_id', 'VARCHAR(255)'],
+    ['payment_id', 'VARCHAR(255)'],
+    ['prices', 'VARCHAR(255)'],
+    ['payment_status', 'VARCHAR(255)'],
+    ['first_name', 'VARCHAR(255)'],
+    ['email', 'VARCHAR(255)'],
+    ['vat', 'VARCHAR(255)'],
+    ['billing_street', 'VARCHAR(255)'],
+    ['billing_country', 'VARCHAR(255)'],
+    ['shipping_street', 'VARCHAR(255)'],
+    ['shipping_country', 'VARCHAR(255)'],
+    ['total', 'BIGINT(20)'],
+    ['subtotal', 'BIGINT(20)'],
+    ['reduction', 'BIGINT(20)'],
+    ['fulfillment_cost', 'BIGINT(20)'],
+    ['tax', 'BIGINT(20)'],
+]);
+
+it('leaves the lifecycle columns out of the nullable pass', function (): void {
+    // created/updated are always written, state has its '' default, and the
+    // already-nullable columns have their own revisions. Widening any of them
+    // here would be search-and-replace, not a decision.
+    $revision = new CapturingMakeOrderPlacementColumnsNullable(
+        new QueryBuilder()
+    );
+    $revision->up();
+
+    expect($revision->sql)->not->toContain('`created`');
+    expect($revision->sql)->not->toContain('`updated`');
+    expect($revision->sql)->not->toContain('`state`');
+    expect($revision->sql)->not->toContain('`customer`');
+});
 
 it('gives the cart its afterlife columns', function (): void {
     // One revision, four columns that only mean something together: the

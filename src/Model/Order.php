@@ -31,35 +31,35 @@ use Tnt\Ecommerce\Tax\PriceConvention;
  * @property int|null $id
  * @property int $created
  * @property int $updated
- * @property string $order_id
- * @property string $payment_id
- * @property int $total
- * @property int $subtotal
- * @property int $reduction
- * @property int $fulfillment_cost
- * @property int $tax
- * @property string $prices
+ * @property string|null $order_id
+ * @property string|null $payment_id
+ * @property int|null $total
+ * @property int|null $subtotal
+ * @property int|null $reduction
+ * @property int|null $fulfillment_cost
+ * @property int|null $tax
+ * @property string|null $prices
  * @property string $state
- * @property string $payment_status
+ * @property string|null $payment_status
  * @property string|int|null $fulfillment_method
  * @property string|null $fulfillment_attributes
  * @property DiscountCode|null $discount
  * @property CustomerInterface|null $customer
- * @property string $first_name
- * @property string $last_name
- * @property string $email
- * @property string $company
- * @property string $vat
- * @property string $billing_street
- * @property string $billing_number
- * @property string $billing_postal_code
- * @property string $billing_city
- * @property string $billing_country
- * @property string $shipping_street
- * @property string $shipping_number
- * @property string $shipping_postal_code
- * @property string $shipping_city
- * @property string $shipping_country
+ * @property string|null $first_name
+ * @property string|null $last_name
+ * @property string|null $email
+ * @property string|null $company
+ * @property string|null $vat
+ * @property string|null $billing_street
+ * @property string|null $billing_number
+ * @property string|null $billing_postal_code
+ * @property string|null $billing_city
+ * @property string|null $billing_country
+ * @property string|null $shipping_street
+ * @property string|null $shipping_number
+ * @property string|null $shipping_postal_code
+ * @property string|null $shipping_city
+ * @property string|null $shipping_country
  * @property-read \dry\orm\relationship\HasMany $items
  */
 class Order extends Model implements OrderInterface, TotalingInterface
@@ -332,7 +332,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
      */
     public function getTotal(): int
     {
-        return $this->total;
+        return (int) $this->total;
     }
 
     /**
@@ -340,7 +340,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
      */
     public function getSubTotal(): int
     {
-        return $this->subtotal;
+        return (int) $this->subtotal;
     }
 
     /**
@@ -348,7 +348,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
      */
     public function getReduction(): int
     {
-        return $this->reduction;
+        return (int) $this->reduction;
     }
 
     /**
@@ -361,7 +361,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
      */
     public function getTax(): int
     {
-        return $this->tax;
+        return (int) $this->tax;
     }
 
     /**
