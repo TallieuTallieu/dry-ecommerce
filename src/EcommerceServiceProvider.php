@@ -41,6 +41,7 @@ use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
 use Tnt\Ecommerce\Revisions\DropAddressNameColumns;
 use Tnt\Ecommerce\Revisions\MakeOrderCustomerNullable;
+use Tnt\Ecommerce\Revisions\MakeOrderPlacementColumnsNullable;
 use Tnt\Ecommerce\Shop\Shop;
 use Tnt\Ecommerce\Tax\PriceConvention;
 use Tnt\Ecommerce\Tax\TaxPolicy;
@@ -86,6 +87,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 MakeOrderCustomerNullable::class,
                 AddOrderStateColumn::class,
                 AddCartLifecycleColumns::class,
+                MakeOrderPlacementColumnsNullable::class,
             ]);
 
             /** @var MigrationManager $manager */

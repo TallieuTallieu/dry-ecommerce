@@ -20,8 +20,11 @@ $order->getState(); // OrderState::Draft | OrderState::Placed
 A **draft** is a checkout form in progress, persisted as a row so it survives
 the visitor leaving: the project writes identity and address columns onto it
 as the form advances, and nothing else exists yet — no lines, no reference, no
-events. A **placed** order has been frozen from the cart by the
-[place-step](#the-place-step). There is deliberately no third state: an
+events. Every column placement writes is nullable, and NULL is what "not
+filled in yet" looks like — a draft's row is honest about its gaps, and the
+partial insert is legal under MySQL's strict mode. The readers cast: an
+unfilled name reads `''`, unfrozen money reads `0`. A **placed** order has
+been frozen from the cart by the [place-step](#the-place-step). There is deliberately no third state: an
 overview/review page renders **live** from the cart, so prices are always
 current, and anything a frozen middle state held would need re-validating at
 accept anyway. "Fixed" — placed and paid — is a query
