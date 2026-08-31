@@ -26,6 +26,7 @@ declare(strict_types=1);
 
 use Tests\Support\CapturingAddCartLifecycleColumns;
 use Tests\Support\CapturingAddFulfillmentAttributesToOrderTable;
+use Tests\Support\CapturingAddIndexesToEcommerceTables;
 use Tests\Support\CapturingAddOptionsToLineTables;
 use Tests\Support\CapturingAddOrderStateColumn;
 use Tests\Support\CapturingCreateAddressTable;
@@ -398,6 +399,149 @@ it('lets a token name at most one cart', function (): void {
     $revision->up();
 
     expect($revision->sql)->toContain('UNIQUE (`token`)');
+});
+
+it('indexes the columns the repositories filter on', function (): void {
+    // sc-11263: the package defined no indexes at all, so every repository
+    // filter below was a full table scan. One ALTER per table, hottest
+    // first. The composite column orders are load-bearing — each leading
+    // column is the one the query equality-matches first, and the trailing
+    // `created` serves the ORDER BY created DESC that init() adds.
+    $revision = new CapturingAddIndexesToEcommerceTables(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(5);
+
+    // StockItemRepository::forBuyable(): the FK index on `stock` alone is
+    // nearly worthless (one or two stocks per shop); the buyable columns
+    // are the selective part, and the `stock` prefix keeps forStock() served.
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_stock_item`'
+    );
+    expect($revision->statements[0])->toContain(
+        'ADD INDEX `idx_stock_item_class_item_id` ' .
+            '(`stock`, `item_class`, `item_id`)'
+    );
+
+    // byPaymentId() (the webhook), byOrderId() (the public reference),
+    // placed()/drafts() with the created sort, forCustomer() with the same
+    // sort, and the admin's frozen-email lookup.
+    expect($revision->statements[1])->toContain(
+        'ALTER TABLE `ecommerce_order`'
+    );
+    expect($revision->statements[1])->toContain(
+        'ADD INDEX `idx_payment_id` (`payment_id`)'
+    );
+    expect($revision->statements[1])->toContain(
+        'ADD INDEX `idx_order_id` (`order_id`)'
+    );
+    expect($revision->statements[1])->toContain(
+        'ADD INDEX `idx_state_created` (`state`, `created`)'
+    );
+    expect($revision->statements[1])->toContain(
+        'ADD INDEX `idx_customer_created` (`customer`, `created`)'
+    );
+    expect($revision->statements[1])->toContain(
+        'ADD INDEX `idx_email` (`email`)'
+    );
+
+    // DiscountCodeRepository::byCode() — every coupon submission.
+    expect($revision->statements[2])->toContain(
+        'ALTER TABLE `ecommerce_discount_code`'
+    );
+    expect($revision->statements[2])->toContain(
+        'ADD INDEX `idx_code` (`code`)'
+    );
+
+    // CustomerRepository::byUser() — the address-book lookup, plus its sort.
+    expect($revision->statements[3])->toContain(
+        'ALTER TABLE `ecommerce_customer`'
+    );
+    expect($revision->statements[3])->toContain(
+        'ADD INDEX `idx_user_created` (`user`, `created`)'
+    );
+
+    expect($revision->statements[4])->toContain(
+        'ALTER TABLE `ecommerce_stock`'
+    );
+});
+
+it('constrains only the stock hid unique', function (): void {
+    // The one UNIQUE in the revision, and it is integrity rather than speed:
+    // hid is how StockWorker addresses a stock, so a duplicate already makes
+    // byHid() ambiguous, and the table holds a handful of hand-made rows.
+    // Everywhere else plain indexes on purpose — order_id ('' on every
+    // unplaced draft), payment_id ('' before payment), code and the stock
+    // lines (existing shop data may hold duplicates, and the migration must
+    // not be the thing that finds out).
+    $revision = new CapturingAddIndexesToEcommerceTables(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements[4])->toContain(
+        'ADD CONSTRAINT `uq_hid` UNIQUE (`hid`)'
+    );
+
+    foreach ($revision->statements as $i => $statement) {
+        if ($i !== 4) {
+            expect($statement)->not->toContain('UNIQUE');
+        }
+    }
+});
+
+it('drops on the way down exactly what it added', function (): void {
+    // down() names the same identifiers up() created, reverse table order,
+    // so migrating down and up again is clean — verified against the compose
+    // MySQL 8.0.34, which is also where the FK re-adds below come from.
+    $revision = new CapturingAddIndexesToEcommerceTables(new QueryBuilder());
+    $revision->down();
+
+    expect($revision->statements)->toHaveCount(5);
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_stock`'
+    );
+    expect($revision->statements[0])->toContain('DROP INDEX `uq_hid`');
+    expect($revision->statements[1])->toContain(
+        'DROP INDEX `idx_user_created`'
+    );
+    expect($revision->statements[2])->toContain('DROP INDEX `idx_code`');
+
+    foreach (
+        [
+            'idx_email',
+            'idx_customer_created',
+            'idx_state_created',
+            'idx_order_id',
+            'idx_payment_id',
+        ]
+        as $identifier
+    ) {
+        expect($revision->statements[3])->toContain(
+            'DROP INDEX `' . $identifier . '`'
+        );
+    }
+
+    expect($revision->statements[4])->toContain(
+        'DROP INDEX `idx_stock_item_class_item_id`'
+    );
+});
+
+it('hands each foreign key its index back on the way down', function (): void {
+    // Adding an index whose leftmost column is a foreign key's column makes
+    // InnoDB silently drop the implicit index behind the constraint as
+    // redundant — so down() cannot just drop what up() added: MySQL refuses
+    // ("needed in a foreign key constraint") unless the same statement gives
+    // the constraint an index again, under the implicit index's own name.
+    $revision = new CapturingAddIndexesToEcommerceTables(new QueryBuilder());
+    $revision->down();
+
+    expect($revision->statements[3])->toContain(
+        'ADD INDEX `fk_ecommerce_order_customer_ecommerce_customer_id` ' .
+            '(`customer`)'
+    );
+    expect($revision->statements[4])->toContain(
+        'ADD INDEX `fk_ecommerce_stock_item_stock_ecommerce_stock_id` ' .
+            '(`stock`)'
+    );
 });
 
 it('keeps the non-money columns as they were', function (): void {
