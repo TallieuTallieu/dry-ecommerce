@@ -76,6 +76,42 @@ it('refuses to read a missing required attribute', function (): void {
     );
 });
 
+it('peeks at a required attribute without the throw', function (): void {
+    // attributeOr() is the peek beside getAttribute()'s guarded read: a
+    // prefill wants "the chosen point, or my placeholder", and unset-required
+    // must not stop the page that exists to get it set. A separate method
+    // rather than a default parameter on getAttribute(), because an explicit
+    // null default there could not be told apart from no argument at all.
+    $fulfillment = new FakeFulfillment('pickup', 0, ['pickup_point']);
+
+    expect($fulfillment->attributeOr('pickup_point', 'GENT'))->toBe('GENT');
+    expect($fulfillment->attributeOr('pickup_point', null))->toBeNull();
+
+    // The guarded read is untouched: required-but-unset still throws.
+    expect(fn() => $fulfillment->getAttribute('pickup_point'))->toThrow(
+        MissingAttribute::class
+    );
+});
+
+it('answers the set value over any default', function (): void {
+    $fulfillment = new FakeFulfillment('pickup', 0, ['pickup_point']);
+    $fulfillment->setAttribute('pickup_point', 42);
+
+    expect($fulfillment->attributeOr('pickup_point', 'GENT'))->toBe(42);
+
+    // A stored null reads as unset — the storages' has() is isset() — so
+    // the default answers, consistent with hasAttribute() everywhere else.
+    $fulfillment->setAttribute('note', null);
+
+    expect($fulfillment->attributeOr('note', 'fallback'))->toBe('fallback');
+});
+
+it('defaults an unset optional attribute too', function (): void {
+    $fulfillment = new FakeFulfillment('post', 475);
+
+    expect($fulfillment->attributeOr('note', 'none given'))->toBe('none given');
+});
+
 it('validates once every required attribute is set', function (): void {
     $fulfillment = new FakeFulfillment('pickup', 0, ['pickup_point', 'date']);
 

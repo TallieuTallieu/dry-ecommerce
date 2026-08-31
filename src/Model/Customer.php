@@ -2,6 +2,7 @@
 
 namespace Tnt\Ecommerce\Model;
 
+use dry\db\DuplicateEntryException;
 use dry\orm\Model;
 use dry\orm\relationship\HasMany;
 use Tnt\Ecommerce\Address\AddressType;
@@ -9,14 +10,18 @@ use Tnt\Ecommerce\AmbiguousAddress;
 use Tnt\Ecommerce\Contracts\AddressInterface;
 use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\HasAddressesInterface;
+use Tnt\Ecommerce\Repository\CustomerRepository;
 
 /**
  * The person an order was placed by, as stored in `ecommerce_customer`: one
- * row per account, a fresh row per guest — never matched by email, which is
- * not an identity claim. Keeps the address book ({@see Address}); the order
+ * row per account — schema-enforced by the UNIQUE on `user`; {@see forUser()}
+ * is the lookup — a fresh row per guest, never matched by email, which is not
+ * an identity claim. Keeps the address book ({@see Address}); the order
  * takes its own copy of everything an invoice prints. See docs/customer.md.
  *
  * @see \Tnt\Ecommerce\Contracts\UserResolverInterface
+ *
+ * @phpstan-consistent-constructor
  *
  * @property int|null $id
  * @property int|null $user The signed-in user's id, or null for a guest.
@@ -43,6 +48,63 @@ class Customer extends Model implements CustomerInterface, HasAddressesInterface
      * @see useAddress()
      */
     private array $chosen = [];
+
+    /**
+     * The one row on this account, creating it if this is the account's first
+     * brush with the shop. Race-safe find-or-create: losing the insert race
+     * throws into the UNIQUE index on `user` and re-reads the winner — the
+     * same fingerprint pattern as ADN's ProductConfiguration. The email seed
+     * keeps the package id-only: the shop passes what it knows, and only a
+     * fresh row takes it — an existing row's email is not touched here (for
+     * account customers the account owns it; see {@see \Tnt\Ecommerce\Account\SyncsCustomer}).
+     * See docs/customer.md.
+     *
+     * @param int $userId
+     * @param string $email Seed for a freshly created row only.
+     * @return self
+     */
+    public static function forUser(int $userId, string $email = ''): self
+    {
+        $existing = static::findByUser($userId);
+
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $customer = new static();
+        $customer->created = time();
+        $customer->updated = time();
+        $customer->user = $userId;
+        $customer->email = $email;
+        $customer->first_name = '';
+        $customer->last_name = '';
+        $customer->company = '';
+        $customer->vat = '';
+        $customer->comments = '';
+        $customer->first_contact = '';
+
+        try {
+            $customer->save();
+        } catch (DuplicateEntryException $lost) {
+            // Another request minted the row between the find and the save.
+            // The unique index is the lock; the winner's row is the answer.
+            return static::findByUser($userId) ?? throw $lost;
+        }
+
+        return $customer;
+    }
+
+    /**
+     * The row already on an account, or null — {@see forUser()}'s find, split
+     * out so a test can run the race without a connection.
+     *
+     * @param int $userId
+     * @return self|null
+     */
+    protected static function findByUser(int $userId): ?self
+    {
+        return CustomerRepository::create()->byUser($userId)->firstOrNull();
+    }
 
     public function __toString(): string
     {

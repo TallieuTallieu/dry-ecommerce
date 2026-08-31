@@ -391,6 +391,22 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
+     * Whether {@see \Tnt\Ecommerce\Cart\Cart::place()} would accept this
+     * existing order again: placed, and the money never arrived — the same
+     * transition rule the webhook listeners write through
+     * ({@see PaymentStatus::canTransitionTo()}). This is the one spelling of
+     * that rule; place()'s own guard reads through it. A draft is placeable
+     * but not RE-placeable — it has no placement to repeat. See docs/orders.md.
+     *
+     * @return bool
+     */
+    public function isRePlaceable(): bool
+    {
+        return $this->getState() === OrderState::Placed &&
+            $this->getPaymentStatus()->canTransitionTo(PaymentStatus::Pending);
+    }
+
+    /**
      * Delete every line off this order. Re-placement re-freezes the same row,
      * so the lines about to be copied fresh must not stack on the old ones.
      * A test seam like {@see newOrderItem()} — override to keep to memory.

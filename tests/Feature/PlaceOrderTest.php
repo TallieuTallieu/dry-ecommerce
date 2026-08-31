@@ -259,3 +259,45 @@ it('refuses a refunded order too', function (): void {
 
     expect(fn() => $cart->place($draft))->toThrow(AlreadyPaid::class);
 });
+
+it('guards re-placement through isRePlaceable itself', function (): void {
+    // sc-11258: one source of truth. The order's answer is forced against
+    // what its columns say, and place() follows the ANSWER — so the guard
+    // reads through Order::isRePlaceable() rather than re-deriving the rule,
+    // and the two can never drift.
+    [$cart] = makeCheckoutCart();
+    $order = new Tests\Support\ForcedRePlaceabilityOrder();
+    $order->created = time();
+    $order->updated = time();
+
+    $cart->add(new FakeBuyable('1', 2000));
+    $cart->place($order);
+
+    // Placed and pending — re-placeable on its columns — but the forced "no"
+    // must refuse it all the same.
+    $order->rePlaceable = false;
+
+    expect(fn() => $cart->place($order))->toThrow(AlreadyPaid::class);
+
+    // And the forced "yes" is followed just as blindly.
+    $order->rePlaceable = true;
+    $order->payment_status = PaymentStatus::Paid->value;
+
+    expect($cart->place($order))->toBe($order);
+});
+
+it('places a draft isRePlaceable says no to', function (): void {
+    // The distinction in one test: a draft is placeable but not RE-placeable
+    // — it has no placement to repeat — so place() must accept it without
+    // ever asking isRePlaceable().
+    [$cart] = makeCheckoutCart();
+    $draft = draftInProgress();
+
+    expect($draft->isRePlaceable())->toBeFalse();
+
+    $cart->add(new FakeBuyable('1', 2000));
+
+    expect($cart->place($draft))->toBe($draft);
+    expect($draft->getState())->toBe(OrderState::Placed);
+    expect($draft->isRePlaceable())->toBeTrue();
+});

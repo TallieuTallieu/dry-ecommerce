@@ -23,17 +23,34 @@ throwaway row just to satisfy a column.
 
 ## One row per account
 
-A shop with a signed-in user should check out with the customer row already on
-that account, so the same person keeps the same row:
+**The invariant:** one account user ↔ one customer row, and since the
+`MakeCustomerUserUnique` revision the schema enforces it — `UNIQUE` on
+`ecommerce_customer.user`. The column stays nullable and MySQL uniques ignore
+NULLs, so guests keep getting a fresh row each; only real accounts are held to
+one.
+
+`Customer::forUser()` is the lookup, and the only correct way to get an
+account's row:
 
 ```php
-$customer =
-    $customerRepository->byUser($userId)->firstOrNull() ?? new Customer();
+$customer = Customer::forUser($userId, $email);
 ```
 
-That is what makes the address book a book — with a fresh row each checkout
-there is nothing for it to accumulate into, and `ecommerce_address` would hold
-one order's addresses rather than a person's.
+Find-or-create, race-safe: two requests hitting it at once both come back with
+the same row, because the loser's `INSERT` bounces off the unique index and
+re-reads the winner — the index is the lock. The optional `$email` seeds a
+**freshly created** row only; an existing row's email is never touched here
+(see [who owns the email](#the-account-owns-the-email)). Everything else the
+schema requires starts `''`, for the shop's checkout form to fill in.
+
+One row per account is what makes the address book a book — with a fresh row
+each checkout there is nothing for it to accumulate into, and
+`ecommerce_address` would hold one order's addresses rather than a person's.
+
+> **Upgrading:** a shop that raced its way into two rows for one account
+> before the constraint existed will fail the `MakeCustomerUserUnique`
+> migration loudly (duplicate entry). Merge those rows by hand first — repoint
+> the orders and addresses at the survivor, delete the rest.
 
 Never match a visitor to an existing row by email. A row is reused only on the
 strength of a proved account. **An email address is not an identity claim** —
@@ -91,8 +108,8 @@ final class MyAuthResolver implements
 }
 ```
 
-A returning account checks out with the row already linked to its user — the
-`byUser()` lookup above finds it. To read the account back:
+A returning account checks out with the row already linked to its user —
+`Customer::forUser()` finds it. To read the account back:
 
 ```php
 $userId = $order->getCustomer()->getUserId(); // int|null
@@ -116,6 +133,54 @@ on exactly the shops the nullable column exists to support. The two packages
 also register separate migrators with no ordering between them, so there is no
 point at which the target is known to exist. Add the constraint in your own
 schema if your shop always has both.
+
+## Keeping the row in step: `SyncsCustomer`
+
+With one row per account, identity can still drift: the account's email
+changes, the customer row keeps the old one, and nothing says which is
+authoritative. The `SyncsCustomer` trait settles it — put it on **your**
+account-user model, and every account save copies the mapped fields onto the
+coupled customer row:
+
+```php
+use Tnt\Ecommerce\Account\SyncsCustomer;
+
+class User extends \dry\orm\Model
+{
+    use SyncsCustomer;
+
+    // Optionally, map more than the default (email):
+    protected function customerAttributes(): array
+    {
+        return parent::customerAttributes() + [
+            'first_name' => (string) $this->first_name,
+            'last_name' => (string) $this->last_name,
+        ];
+    }
+}
+```
+
+Opt-in glue with the same zero-dependency stance as `AccountsUserResolver`:
+the trait names no dry-accounts type — any dry ORM model with an `id` and an
+`email` qualifies — and a shop that never uses it never loads it. Three rules,
+each deliberate:
+
+- **No row is created.** An account that never shopped has no customer row,
+  and signing up must not mint one — creation is `Customer::forUser()`'s job,
+  at the first checkout. The sync finds no row and does nothing.
+- **No pointless writes.** An account save whose mapped fields already match
+  the row costs no second query.
+- **The account save always runs first.** The row copies from an account
+  already written.
+
+### The account owns the email
+
+The consequence to design your checkout around: for account customers the
+**account** is authoritative for the email (and whatever else you map). A
+checkout form that writes the typed email onto the customer row is writing a
+value the next account save will overwrite — freeze the typed value onto the
+order (which checkout does anyway; the order's copy is what a confirmation
+mail should use) and leave the row's email to the account.
 
 ## A worked checkout, end to end
 
@@ -141,40 +206,39 @@ listen for, and no second code path for guests.
 
 ```php
 use Tnt\Ecommerce\Model\Customer;
-use Tnt\Ecommerce\Repository\CustomerRepository;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
 
 $userId = $app->get(UserResolverInterface::class)->getCurrentUserId();
 
-$customer =
-    $userId !== null
-        ? CustomerRepository::create()->byUser($userId)->firstOrNull()
-        : null;
-
-if ($customer === null) {
+if ($userId !== null) {
+    // Find-or-create, race-safe; the email seeds a fresh row only.
+    $customer = Customer::forUser($userId, $account->email);
+} else {
     $customer = new Customer();
     $customer->created = time();
     $customer->updated = time();
+    $customer->email = $form->get('email');
+    $customer->comments = '';
+    $customer->first_contact = '';
 }
 
 $customer->first_name = $form->get('first_name');
 $customer->last_name = $form->get('last_name');
-$customer->email = $form->get('email');
 $customer->company = $form->get('company') ?? '';
 $customer->vat = $form->get('vat') ?? '';
-$customer->comments = '';
-$customer->first_contact = '';
 $customer->save();
 ```
 
 A signed-in visitor gets the row already on their account, so their address
-book is the one they built last time. A guest whose addresses the shop wants
-frozen through the address-book machinery gets a fresh row (a guest checking
-out with **no** customer at all — `checkout()` — is the
-[null-customer path](#a-guest-is-a-null-customer): the shop then writes
-identity and addresses onto the order or its draft itself). **Do not** look a
-guest up by email — see the note above on why that would be a security hole
-rather than a convenience.
+book is the one they built last time — and note the email is **not** written
+from the form on that branch: [the account owns it](#the-account-owns-the-email),
+and the order freezes its own copy of whatever was typed either way. A guest
+whose addresses the shop wants frozen through the address-book machinery gets
+a fresh row (a guest checking out with **no** customer at all — `checkout()` —
+is the [null-customer path](#a-guest-is-a-null-customer): the shop then
+writes identity and addresses onto the order or its draft itself). **Do not**
+look a guest up by email — see the note above on why that would be a security
+hole rather than a convenience.
 
 ### 3. Put addresses in the book
 
@@ -257,11 +321,14 @@ Order::load($order->id)->getBillingAddress()->getStreet();
 
 ### Showing a customer their orders
 
-One query against one column, which is what the `user` id exists for:
+One query, joined through the account's single customer row:
 
 ```php
-$customers = CustomerRepository::create()->byUser($userId)->all();
+$orders = OrderRepository::create()->forUser($userId)->placed()->all();
 ```
+
+`placed()` keeps half-filled drafts out, as every customer-facing list
+should. See [Orders](orders.md#finding-orders).
 
 ### One caveat
 

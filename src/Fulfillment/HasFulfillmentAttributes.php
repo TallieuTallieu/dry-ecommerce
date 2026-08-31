@@ -54,6 +54,21 @@ trait HasFulfillmentAttributes
     }
 
     /**
+     * The peek beside {@see getAttribute()}'s guarded read: never a throw,
+     * so a prefill can look at a required attribute nobody set yet.
+     *
+     * @param string $name
+     * @param mixed $default
+     * @return mixed
+     */
+    public function attributeOr(string $name, mixed $default): mixed
+    {
+        return $this->hasAttribute($name)
+            ? $this->attributeStorage()->get($name)
+            : $default;
+    }
+
+    /**
      * @param string $name
      * @param mixed $value
      * @return void

@@ -46,6 +46,7 @@ interface FulfillmentInterface
     public function getCost(CartInterface $cart): int;  // CENTS
 
     public function getAttribute(string $name);
+    public function attributeOr(string $name, mixed $default): mixed;
     public function setAttribute(string $name, $value);
     public function hasAttribute(string $name): bool;
     public function requireAttributes(): array;
@@ -110,6 +111,20 @@ class Pickup implements FulfillmentInterface
 - any other unset attribute answers `null`.
 
 So `requireAttributes()` is not documentation, it changes behaviour.
+
+The throw is right at freeze time and wrong for a mere peek — a form
+prefilling "the chosen point, or a placeholder" must not blow up on the very
+page that exists to get the attribute set. `attributeOr()` is the peek:
+
+```php
+$method->attributeOr('pickup_point', null); // set → the value; unset → null
+$method->attributeOr('timeslot', 'morning'); // any default you like
+```
+
+Never a throw, required or not. It is a separate method rather than a default
+parameter on `getAttribute()` because an explicit `null` default would be
+indistinguishable from no argument there — and `getAttribute()`'s guarded
+read behaves exactly as it always did.
 
 ### Give the method the shop's storage
 
