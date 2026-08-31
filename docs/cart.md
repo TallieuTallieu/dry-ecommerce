@@ -84,7 +84,7 @@ is found again:
 |                                | Row found by                            | Survives                       |
 | ------------------------------ | --------------------------------------- | ------------------------------ |
 | `SessionCartStorage` (default) | its id, kept in the session             | the session                    |
-| `CookieCartStorage`            | its `token`, kept in a dedicated cookie | `ecommerce.cart_lifetime` days |
+| `CookieCartStorage`            | its `token`, kept in a dedicated cookie | `ecommerce.cart_lifetime` days past the last visit |
 
 ### The cookie cart
 
@@ -102,8 +102,14 @@ that does not look like a token is ignored, and a token pointing at a missing
 **or soft-deleted** cart reads as no cart at all: the visitor starts fresh,
 which is the honest answer for a reaped or spent basket.
 
+The expiry **slides**: every request that finds the cart writes the cookie
+again, a full lifetime from that moment. The lifetime therefore measures
+inactivity — a basket in daily use never expires; one left alone for
+`cart_lifetime` days does.
+
 The same lifetime is what the [draft reaper](orders.md#the-reaper) measures
-abandonment against — one knob, two consumers, deliberately.
+abandonment against — one knob, two consumers, and the same reading twice:
+days since anybody last touched the thing.
 
 ## The cart→order link
 

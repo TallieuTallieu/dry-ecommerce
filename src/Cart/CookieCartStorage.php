@@ -12,8 +12,10 @@ use Tnt\Ecommerce\Repository\CartRepository;
  * A cart that outlives the session: a dedicated cookie holds the cart row's
  * `token` — never the row id, which is guessable — and the row is found by
  * it. A token pointing at a missing or soft-deleted cart reads as no cart at
- * all. Bound instead of {@see SessionCartStorage} when
- * `ecommerce.cart_lifetime` is set; see docs/cart.md.
+ * all. The expiry slides: finding the cart writes the cookie again, so the
+ * lifetime counts from the visitor's last visit, not their first item. Bound
+ * instead of {@see SessionCartStorage} when `ecommerce.cart_lifetime` is set;
+ * see docs/cart.md.
  */
 class CookieCartStorage extends DatabaseCartStorage
 {
@@ -56,7 +58,17 @@ class CookieCartStorage extends DatabaseCartStorage
             return null;
         }
 
-        return $this->loadByToken($token);
+        $cart = $this->loadByToken($token);
+
+        // A living cart found is a visit, and a visit re-stamps the cookie a
+        // full lifetime from now — otherwise a basket in daily use would
+        // still expire `cart_lifetime` days after its FIRST item, while the
+        // draft reaper reads the same knob as days-since-last-touch.
+        if ($cart !== null && $cart->deleted === null) {
+            $this->remember($cart);
+        }
+
+        return $cart;
     }
 
     /**
