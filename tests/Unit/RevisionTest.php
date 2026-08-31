@@ -453,12 +453,16 @@ it('indexes the columns the repositories filter on', function (): void {
         'ADD INDEX `idx_code` (`code`)'
     );
 
-    // CustomerRepository::byUser() — the address-book lookup, plus its sort.
+    // CustomerRepository::byUser() — the address-book lookup, plus its
+    // sort — and byEmail(), how an admin finds a customer's orders.
     expect($revision->statements[3])->toContain(
         'ALTER TABLE `ecommerce_customer`'
     );
     expect($revision->statements[3])->toContain(
         'ADD INDEX `idx_user_created` (`user`, `created`)'
+    );
+    expect($revision->statements[3])->toContain(
+        'ADD INDEX `idx_email` (`email`)'
     );
 
     expect($revision->statements[4])->toContain(
@@ -500,6 +504,9 @@ it('drops on the way down exactly what it added', function (): void {
         'ALTER TABLE `ecommerce_stock`'
     );
     expect($revision->statements[0])->toContain('DROP INDEX `uq_hid`');
+    expect($revision->statements[1])->toContain(
+        'DROP INDEX `idx_email`'
+    );
     expect($revision->statements[1])->toContain(
         'DROP INDEX `idx_user_created`'
     );

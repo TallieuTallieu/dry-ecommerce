@@ -87,14 +87,20 @@ class AddIndexesToEcommerceTables extends DatabaseRevision implements
         $this->execute();
         $this->queryBuilder = new QueryBuilder();
 
-        // CustomerRepository::byUser() — the address-book lookup — plus the
-        // created DESC sort init() adds. Deliberately an index and not a
-        // foreign key: the users table belongs to dry-accounts, which may
-        // not be installed (see docs/customer.md).
         $this->queryBuilder
             ->table('ecommerce_customer')
             ->alter(function (TableBuilder $table) {
+                // CustomerRepository::byUser() — the address-book lookup —
+                // plus the created DESC sort init() adds. Deliberately an
+                // index and not a foreign key: the users table belongs to
+                // dry-accounts, which may not be installed (see
+                // docs/customer.md).
                 $table->addIndex(['user', 'created']);
+
+                // CustomerRepository::byEmail() — how an admin finds the
+                // orders placed from an address (docs/customer.md). Plain,
+                // not UNIQUE: guests repeat an email across checkouts.
+                $table->addIndex('email');
             });
 
         $this->execute();
@@ -132,6 +138,7 @@ class AddIndexesToEcommerceTables extends DatabaseRevision implements
         $this->queryBuilder
             ->table('ecommerce_customer')
             ->alter(function (TableBuilder $table) {
+                $table->dropIndex('email');
                 $table->dropIndex(['user', 'created']);
             });
 
