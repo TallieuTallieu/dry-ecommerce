@@ -3,9 +3,12 @@
 namespace Tnt\Ecommerce\Repository;
 
 use Tnt\Dbi\Criteria\Equals;
+use Tnt\Dbi\Criteria\LessThan;
+use Tnt\Dbi\Criteria\NotEquals;
 use Tnt\Dbi\Criteria\OrderBy;
 use Tnt\Ecommerce\Model\Customer;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Order\OrderState;
 use Tnt\Ecommerce\Payment\PaymentStatus;
 
 /**
@@ -62,6 +65,48 @@ class OrderRepository extends Repository
     public function forCustomer(Customer $customer): static
     {
         $this->addCriteria(new Equals('customer', $customer->id));
+
+        return $this;
+    }
+
+    /**
+     * Only placed orders. Every list an admin or a customer sees should go
+     * through this: a draft is a half-filled form, not an order, and must not
+     * show up anywhere an order does. Spelled "not draft" rather than
+     * "= placed" so legacy rows — whose column holds '' but which were all
+     * real orders — stay in. See docs/orders.md.
+     *
+     * @return static
+     */
+    public function placed(): static
+    {
+        $this->addCriteria(new NotEquals('state', OrderState::Draft->value));
+
+        return $this;
+    }
+
+    /**
+     * Only drafts — what the reaper deletes, and nothing a list should show.
+     *
+     * @return static
+     */
+    public function drafts(): static
+    {
+        $this->addCriteria(new Equals('state', OrderState::Draft->value));
+
+        return $this;
+    }
+
+    /**
+     * Orders not touched since a moment. A draft is touched on every
+     * progressive save, so its own `updated` is its abandonment clock.
+     *
+     * @param int $timestamp Unix time; strictly before it matches.
+     * @return static
+     */
+    public function updatedBefore(int $timestamp): static
+    {
+        $this->addCriteria(new LessThan('updated', $timestamp));
 
         return $this;
     }

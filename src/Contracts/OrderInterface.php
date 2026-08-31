@@ -26,9 +26,12 @@ interface OrderInterface
     public function setCustomer(CustomerInterface $customer);
 
     /**
-     * @return CustomerInterface
+     * The account link, or null for a guest order — the identity an order was
+     * placed under is frozen on the order itself. See docs/customer.md.
+     *
+     * @return CustomerInterface|null
      */
-    public function getCustomer(): CustomerInterface;
+    public function getCustomer(): ?CustomerInterface;
 
     /**
      * @param FulfillmentInterface $fulfillmentMethod

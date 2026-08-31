@@ -43,6 +43,18 @@ final class InMemoryOrder extends Order
     public array $lines = [];
 
     /**
+     * How many times `clearItems()` was called — re-placement clears before
+     * it copies, and only the count can tell "cleared then refilled" from
+     * "never cleared" once the lines look right.
+     */
+    public int $clearCount = 0;
+
+    /**
+     * Whether `delete()` — what the draft reaper does — happened.
+     */
+    public bool $deleted = false;
+
+    /**
      * Stands in for the auto-increment, so that `order_id` has an id to build
      * on and comes out the same on every run.
      *
@@ -71,5 +83,25 @@ final class InMemoryOrder extends Order
     public function add(CartItemInterface $cartItem)
     {
         $this->lines[] = $cartItem;
+    }
+
+    /**
+     * The production body walks the line rows through the database; here the
+     * lines are the array `add()` kept.
+     *
+     * @return void
+     */
+    public function clearItems(): void
+    {
+        $this->clearCount++;
+        $this->lines = [];
+    }
+
+    /**
+     * @return void
+     */
+    public function delete()
+    {
+        $this->deleted = true;
     }
 }

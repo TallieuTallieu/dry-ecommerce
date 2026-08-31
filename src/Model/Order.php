@@ -15,14 +15,16 @@ use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\OrderItemInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Facade\Shop;
+use Tnt\Ecommerce\Order\OrderState;
 use Tnt\Ecommerce\Payment\PaymentStatus;
 use Tnt\Ecommerce\Tax\PriceConvention;
 
 /**
- * A placed order, as stored in `ecommerce_order`. Totals, identity and
- * addresses are frozen onto the row at checkout rather than recomputed;
- * {@see $customer} is the account link, the frozen columns are what an invoice
- * prints. Money columns are integer cents. See docs/orders.md.
+ * An order, as stored in `ecommerce_order` — a draft being filled in, or a
+ * placed one. Totals, identity and addresses are frozen onto the row at
+ * placement rather than recomputed; {@see $customer} is the account link
+ * (null for a guest), the frozen columns are what an invoice prints. Money
+ * columns are integer cents. See docs/orders.md.
  *
  * @see \Tnt\Ecommerce\Money
  *
@@ -37,11 +39,12 @@ use Tnt\Ecommerce\Tax\PriceConvention;
  * @property int $fulfillment_cost
  * @property int $tax
  * @property string $prices
+ * @property string $state
  * @property string $payment_status
  * @property string|int|null $fulfillment_method
  * @property string|null $fulfillment_attributes
  * @property DiscountCode|null $discount
- * @property CustomerInterface $customer
+ * @property CustomerInterface|null $customer
  * @property string $first_name
  * @property string $last_name
  * @property string $email
@@ -124,9 +127,12 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
-     * @return CustomerInterface
+     * The account link, or null for a guest order. The frozen columns below —
+     * not this row — are what an invoice prints.
+     *
+     * @return CustomerInterface|null
      */
-    public function getCustomer(): CustomerInterface
+    public function getCustomer(): ?CustomerInterface
     {
         return $this->customer;
     }
@@ -134,14 +140,19 @@ class Order extends Model implements OrderInterface, TotalingInterface
     /**
      * Take this order's own copy of who placed it and where it goes — an
      * address book is edited, and an invoice is a statement about the past.
-     * A missing address freezes blank; nothing is substituted. See
-     * docs/addresses.md.
+     * A missing address freezes blank; nothing is substituted. Null freezes
+     * NOTHING: a draft's identity columns were written progressively and must
+     * not be blanked by a place-step with no customer. See docs/addresses.md.
      *
-     * @param CustomerInterface $customer
+     * @param CustomerInterface|null $customer
      * @return void
      */
-    public function freezeCustomer(CustomerInterface $customer): void
+    public function freezeCustomer(?CustomerInterface $customer): void
     {
+        if ($customer === null) {
+            return;
+        }
+
         $this->first_name = $customer->getFirstName();
         $this->last_name = $customer->getLastName();
         $this->email = $customer->getEmail();
@@ -363,6 +374,35 @@ class Order extends Model implements OrderInterface, TotalingInterface
     {
         return PriceConvention::tryFrom((string) $this->prices) ??
             PriceConvention::Inclusive;
+    }
+
+    /**
+     * Draft or placed. A column this package cannot read — legacy `''`, or an
+     * unknown word — reads as {@see OrderState::Placed}: every order from
+     * before the state existed was a real one, exactly as
+     * {@see getPaymentStatus()} reads legacy rows as the status that claims
+     * nothing. See docs/orders.md.
+     *
+     * @return OrderState
+     */
+    public function getState(): OrderState
+    {
+        return OrderState::tryFrom((string) $this->state) ?? OrderState::Placed;
+    }
+
+    /**
+     * Delete every line off this order. Re-placement re-freezes the same row,
+     * so the lines about to be copied fresh must not stack on the old ones.
+     * A test seam like {@see newOrderItem()} — override to keep to memory.
+     *
+     * @return void
+     */
+    public function clearItems(): void
+    {
+        /** @var OrderItem $item */
+        foreach ($this->items as $item) {
+            $item->delete();
+        }
     }
 
     /**

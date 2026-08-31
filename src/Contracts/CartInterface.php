@@ -3,6 +3,7 @@
 namespace Tnt\Ecommerce\Contracts;
 
 use Tnt\Ecommerce\Model\DiscountCode;
+use Tnt\Ecommerce\Model\Order;
 
 /**
  * Interface CartInterface
@@ -110,10 +111,32 @@ interface CartInterface
     public function getDiscount(): ?DiscountCode;
 
     /**
-     * @param CustomerInterface $customer
+     * Turn the cart into a placed order in one go. Null customer is a guest
+     * order — no customer row, identity frozen from nothing. See
+     * docs/orders.md.
+     *
+     * @param CustomerInterface|null $customer
      * @return OrderInterface
      */
-    public function checkout(CustomerInterface $customer): OrderInterface;
+    public function checkout(
+        ?CustomerInterface $customer = null
+    ): OrderInterface;
+
+    /**
+     * Place an existing order — a draft, or a placed-but-unpaid one being
+     * re-placed — from this cart. A paid order throws
+     * {@see \Tnt\Ecommerce\AlreadyPaid}. See docs/orders.md.
+     *
+     * @param Order $order
+     * @param CustomerInterface|null $customer Freezes identity when given;
+     *                                         null leaves the draft's own
+     *                                         columns standing.
+     * @return OrderInterface
+     */
+    public function place(
+        Order $order,
+        ?CustomerInterface $customer = null
+    ): OrderInterface;
 
     /**
      * The sum of the line totals, in cents.

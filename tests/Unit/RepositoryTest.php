@@ -86,6 +86,34 @@ it('composes filters fluently', function (): void {
     )->toBe($repository);
 });
 
+it('composes the order state scopes fluently', function (): void {
+    // placed() for every list a shop shows — spelled "state != draft" so
+    // legacy rows, whose column holds '', stay in — drafts() for the reaper,
+    // updatedBefore() for its abandonment cutoff.
+    $repository = OrderRepository::create();
+
+    expect($repository->placed()->updatedBefore(time()))->toBe($repository);
+
+    $repository = OrderRepository::create();
+
+    expect($repository->drafts()->updatedBefore(time()))->toBe($repository);
+});
+
+it('composes the cart afterlife lookups fluently', function (): void {
+    // byToken() is the cookie storage's lookup, byOrder() the Paid
+    // listener's, and notDeleted() scopes both: a soft-deleted cart is
+    // absent everywhere it could read as a visitor's cart.
+    $repository = CartRepository::create();
+
+    expect($repository->byToken(str_repeat('ab', 16))->notDeleted())->toBe(
+        $repository
+    );
+
+    $repository = CartRepository::create();
+
+    expect($repository->byOrder(12)->notDeleted())->toBe($repository);
+});
+
 it('composes the cart line lookups fluently', function (): void {
     // Both spellings of "find the line": the full merge key with options —
     // which takes the IS NULL branch when there are none and the equality

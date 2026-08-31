@@ -3,6 +3,7 @@
 namespace Tnt\Ecommerce;
 
 use Oak\Contracts\Config\RepositoryInterface;
+use Oak\Contracts\Console\KernelInterface;
 use Oak\Contracts\Container\ContainerInterface;
 use Oak\Contracts\Dispatcher\DispatcherInterface;
 use Oak\Migration\MigrationManager;
@@ -10,7 +11,11 @@ use Oak\Migration\Migrator;
 use Oak\ServiceProvider;
 use Tnt\Ecommerce\Account\GuestUserResolver;
 use Tnt\Ecommerce\Cart\Cart;
+use Tnt\Ecommerce\Cart\CartLifetime;
+use Tnt\Ecommerce\Cart\CartRelease;
+use Tnt\Ecommerce\Cart\CookieCartStorage;
 use Tnt\Ecommerce\Cart\SessionCartStorage;
+use Tnt\Ecommerce\Console\ReapDraftsCommand;
 use Tnt\Ecommerce\Contracts\AttributeStorageInterface;
 use Tnt\Ecommerce\Contracts\CartInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
@@ -23,16 +28,19 @@ use Tnt\Ecommerce\Events\Order\PaymentCanceled;
 use Tnt\Ecommerce\Events\Order\PaymentExpired;
 use Tnt\Ecommerce\Events\Order\PaymentFailed;
 use Tnt\Ecommerce\Events\Order\PaymentRefunded;
-use Tnt\Ecommerce\Fulfillment\SessionAttributeStorage;
+use Tnt\Ecommerce\Fulfillment\CartAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Payment\NullPayment;
 use Tnt\Ecommerce\Payment\PaymentStatus;
+use Tnt\Ecommerce\Revisions\AddCartLifecycleColumns;
 use Tnt\Ecommerce\Revisions\AddFulfillmentAttributesToOrderTable;
 use Tnt\Ecommerce\Revisions\AddOptionsToLineTables;
+use Tnt\Ecommerce\Revisions\AddOrderStateColumn;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
 use Tnt\Ecommerce\Revisions\DropAddressNameColumns;
+use Tnt\Ecommerce\Revisions\MakeOrderCustomerNullable;
 use Tnt\Ecommerce\Shop\Shop;
 use Tnt\Ecommerce\Tax\PriceConvention;
 use Tnt\Ecommerce\Tax\TaxPolicy;
@@ -75,30 +83,66 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddFulfillmentAttributesToOrderTable::class,
                 AddOptionsToLineTables::class,
                 DropAddressNameColumns::class,
+                MakeOrderCustomerNullable::class,
+                AddOrderStateColumn::class,
+                AddCartLifecycleColumns::class,
             ]);
 
             /** @var MigrationManager $manager */
             $manager = $app->get(MigrationManager::class);
             $manager->addMigrator($migrator);
+
+            // getWith()/get() answer plain `object`; narrow before calling.
+            /** @var KernelInterface $kernel */
+            $kernel = $app->get(KernelInterface::class);
+            $kernel->registerCommand(ReapDraftsCommand::class);
         }
     }
 
     public function register(ContainerInterface $app)
     {
+        // ContainerInterface::get() answers plain `object`; narrow once here.
+        /** @var RepositoryInterface $config */
+        $config = $app->get(RepositoryInterface::class);
+
         // Singletons: a second instance of either would be a diverging copy
-        // of per-request state.
+        // of per-request state. The attributes live on the cart row through
+        // whichever cart storage is bound below; SessionAttributeStorage
+        // still exists for shops that bind it back themselves.
         $app->singleton(
             AttributeStorageInterface::class,
-            SessionAttributeStorage::class
+            CartAttributeStorage::class
         );
-        $app->singleton(CartStorageInterface::class, SessionCartStorage::class);
+
+        // With a lifetime configured the cart lives in a cookie of its own
+        // and survives the session; without one, today's session-backed
+        // behaviour. Same fallback style as the tax policy below: an unset
+        // or unusable value changes nothing.
+        $lifetime = CartLifetime::days($config);
+
+        if ($lifetime !== null) {
+            $app->singleton(
+                CartStorageInterface::class,
+                CookieCartStorage::class
+            );
+            $app->whenAsksGive(
+                CookieCartStorage::class,
+                'lifetimeDays',
+                $lifetime
+            );
+        } else {
+            $app->singleton(
+                CartStorageInterface::class,
+                SessionCartStorage::class
+            );
+        }
 
         $app->singleton(ShopInterface::class, Shop::class);
         $app->singleton(CartInterface::class, Cart::class);
 
-        // ContainerInterface::get() answers plain `object`; narrow once here.
-        /** @var RepositoryInterface $config */
-        $config = $app->get(RepositoryInterface::class);
+        if ($app->isRunningInConsole()) {
+            $app->set(ReapDraftsCommand::class, ReapDraftsCommand::class);
+        }
 
         $app->singleton(
             PaymentInterface::class,
@@ -194,8 +238,9 @@ class EcommerceServiceProvider extends ServiceProvider
 
     /**
      * The payment-event listeners: each event writes its status onto the
-     * order, and {@see Paid} additionally redeems the coupon. Orders that are
-     * not this package's {@see Order} are left alone. See docs/payment.md.
+     * order, and {@see Paid} additionally redeems the coupon and soft-deletes
+     * the cart behind the order ({@see CartRelease}). Orders that are not
+     * this package's {@see Order} are left alone. See docs/payment.md.
      *
      * @param ContainerInterface $app
      * @return void
@@ -243,6 +288,24 @@ class EcommerceServiceProvider extends ServiceProvider
             if ($coupon !== null && $coupon->isRedeemable($order)) {
                 $coupon->redeem($order);
             }
+        });
+
+        // Paid also releases the basket: soft-delete, through the cart→order
+        // link, so the row and its provenance survive. Resolved through the
+        // container at dispatch time — the default queries ecommerce_cart,
+        // and a test substitutes its own CartRelease binding.
+        $dispatcher->addListener(Paid::class, function (Paid $paidEvent) use (
+            $app
+        ): void {
+            $order = $paidEvent->getOrder();
+
+            if (!($order instanceof Order)) {
+                return;
+            }
+
+            /** @var CartRelease $release */
+            $release = $app->get(CartRelease::class);
+            $release->release($order);
         });
     }
 }

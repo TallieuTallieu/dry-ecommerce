@@ -3,8 +3,10 @@
 namespace Tnt\Ecommerce\Cart;
 
 use Closure;
+use Tnt\Ecommerce\AlreadyPaid;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Model\Customer;
+use Tnt\Ecommerce\Order\OrderState;
 use Oak\Dispatcher\Facade\Dispatcher;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Events\Order\Created;
@@ -354,28 +356,69 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
-     * Turn the cart into an order placed by this customer. Guest and account
+     * Turn the cart into a placed order, in one go. Guest (null) and account
      * checkout are the same call; the order freezes its own copy of the money,
      * the identity, the addresses and the fulfillment attributes. See
      * docs/orders.md.
      *
-     * @param CustomerInterface $customer
+     * @param CustomerInterface|null $customer
      * @param (Closure(OrderInterface): void)|null $callback
      * @return OrderInterface
      */
     public function checkout(
-        CustomerInterface $customer,
+        ?CustomerInterface $customer = null,
         ?Closure $callback = null
     ): OrderInterface {
+        $order = $this->newOrder();
+        $order->created = time();
+
+        return $this->place($order, $customer, $callback);
+    }
+
+    /**
+     * Place an order from this cart — a fresh one ({@see checkout()}), a
+     * draft a project filled in progressively, or a placed-but-unpaid order
+     * being re-placed. Placement copies the lines, freezes the money, the
+     * convention and the fulfillment method with its attributes, freezes the
+     * identity IF a customer is given (a draft's own identity columns are
+     * left standing otherwise), makes the reference if there is none yet,
+     * sets the state placed, links the cart to the order, dispatches
+     * {@see Created} and calls pay(). See docs/orders.md.
+     *
+     * @param Order $order
+     * @param CustomerInterface|null $customer
+     * @param (Closure(OrderInterface): void)|null $callback
+     * @return OrderInterface
+     *
+     * @throws AlreadyPaid If money already arrived for this order —
+     *                     re-freezing it would rewrite what was paid for.
+     */
+    public function place(
+        Order $order,
+        ?CustomerInterface $customer = null,
+        ?Closure $callback = null
+    ): OrderInterface {
+        // The same guard the webhook listeners write through: pending may not
+        // replace paid (or refunded). Loud here rather than a silent no-op —
+        // a shop about to re-freeze a paid order is about to lose an invoice.
+        if (
+            !$order->getPaymentStatus()->canTransitionTo(PaymentStatus::Pending)
+        ) {
+            throw AlreadyPaid::order($order);
+        }
+
         if ($customer instanceof Customer) {
             $customer->linkTo($this->users->getCurrentUserId());
         }
 
         $fulfillment = $this->getFulfillment();
 
-        // Create the order
-        $order = $this->newOrder();
-        $order->created = time();
+        // Re-placement re-freezes the SAME row: its old lines go first, or
+        // the copy below would stack a second basket on the first.
+        if ($order->id !== null) {
+            $order->clearItems();
+        }
+
         $order->updated = time();
         $order->total = $this->getTotal();
         $order->subtotal = $this->getSubTotal();
@@ -388,36 +431,49 @@ class Cart implements CartInterface, TotalingInterface
         $order->prices = $this->tax->convention()->value;
         $order->fulfillment_method = $fulfillment?->getId();
 
-        // The order's own copy: the session holding these dies long before
+        // The order's own copy: the cart holding these dies long before
         // anybody fulfills the order.
         $order->fulfillment_attributes = self::frozenFulfillmentAttributes(
             $fulfillment
         );
 
-        // From birth, before pay() runs — a gateway only ever moves the
-        // status forward.
+        $order->state = OrderState::Placed->value;
+
+        // Before pay() runs — a gateway only ever moves the status forward.
+        // The guard above is what makes this bare write legal.
         $order->payment_status = PaymentStatus::Pending->value;
 
         $order->discount = $this->getDiscount();
-        $order->customer = $customer;
 
-        // The foreign key above answers "whose account"; this freezes the
-        // order's own copy of who placed it and where it went, which is the
-        // only thing safe to print. See Order::freezeCustomer().
-        $order->freezeCustomer($customer);
+        if ($customer !== null) {
+            // The foreign key answers "whose account"; freezeCustomer() takes
+            // the order's own copy of who placed it and where it went, the
+            // only thing safe to print. With no customer both stay as the
+            // draft wrote them — a guest draft already carries its identity.
+            $order->customer = $customer;
+            $order->freezeCustomer($customer);
+        }
 
         $order->save();
 
-        // Generate an order id
-        $order->order_id = $this->newOrderReference((int) $order->id);
-        $order->save();
+        // The reference is made once and kept: a re-placed order stays the
+        // order the customer was quoted.
+        if ((string) $order->order_id === '') {
+            $order->order_id = $this->newOrderReference((int) $order->id);
+            $order->save();
+        }
 
-        // Add all items to the order
+        // Copy every cart line onto the order
         foreach ($this->items() as $item) {
             $order->add($item);
         }
 
-        // Dispatch an order created event
+        // The cart→order link — what the Paid listener follows back to
+        // soft-delete this cart once the money arrives.
+        $this->storage->setOrderId((int) $order->id);
+
+        // Created means placement — a re-placed order announces itself again,
+        // so a listener on it must be idempotent per order id.
         Dispatcher::dispatch(Created::class, new Created($order));
 
         if ($callback) {

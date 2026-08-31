@@ -19,7 +19,7 @@ path that does not touch the project's own models.
 
 The reason is accumulation: the package adds money up in loops, and float
 accumulation drifts. `bigint` rather than `int` because PHP's integer is signed
-64-bit and `int(11)` would have stopped at €21,474,836.47 — *less* range than
+64-bit and `int(11)` would have stopped at €21,474,836.47 — _less_ range than
 the `decimal(10,2)` it replaced.
 
 A project moving over converts its price columns, or converts in `getPrice()`.
@@ -43,8 +43,14 @@ stock, and a `NullTaxRate` that taxed nothing.
 capabilities a buyable opts into, one interface each:
 
 ```php
-interface HasStockInterface { public function getStockWorker(): StockWorkerInterface; }
-interface TaxableInterface extends BuyableInterface { public function getTaxRate(): TaxRateInterface; }
+interface HasStockInterface
+{
+    public function getStockWorker(): StockWorkerInterface;
+}
+interface TaxableInterface extends BuyableInterface
+{
+    public function getTaxRate(): TaxRateInterface;
+}
 ```
 
 Implement neither, either or both. A buyable implementing neither is complete,
@@ -96,7 +102,7 @@ for ever.
 
 **Now:** a one-to-many into `ecommerce_address`, with an `AddressType` of
 `Billing` or `Shipping` and a default flag per kind. An address carries no
-recipient name — it is purely a *where*, and the identity an order is placed
+recipient name — it is purely a _where_, and the identity an order is placed
 under is frozen on the order itself. See [Addresses](addresses.md).
 
 Two things follow that used to be the same thing:
@@ -148,23 +154,49 @@ sit on several lines, lines also have usable identity:
 `CartItemInterface::getId()`, and `remove($buyable)` removes every variant.
 
 Old projects that made the configuration a buyable of its own to keep
-selections apart no longer need to — unless the configuration *prices* the
+selections apart no longer need to — unless the configuration _prices_ the
 selection, which is still the shop's job. See [Options](options.md).
 
 ### Contract changes at a glance
 
-A project that ships its **own implementation** of any of these five contracts
-has to follow the changed members on upgrade; a project that only *consumes*
-them is untouched (`add()`'s new parameter defaults to no options, and callers
-of the removed address getters read the identity off the order instead).
+A project that ships its **own implementation** of any of these contracts has
+to follow the changed members on upgrade; a project that only _consumes_ them
+is untouched (`add()`'s new parameter defaults to no options, `checkout()`'s
+customer stays passable, and callers of the removed address getters read the
+identity off the order instead — only code assuming `getCustomer()` is
+non-null needs a look).
 
-| Contract | Changed | New |
-| --- | --- | --- |
-| `CartInterface` | `add()` gains `array $options = []`; `remove()` now removes every option-variant | `updateQuantity(string $itemId, int $quantity)`, `removeItem(string $itemId)` |
-| `CartStorageInterface` | `add()` gains `$options`; `quantityOf()` sums across variants | `updateQuantity()`, `removeItem()` |
-| `CartItemInterface` | — | `getOptions(): array` |
-| `OrderItemInterface` | — | `getPrice(): int`, `getOptions(): array` |
-| `AddressInterface` | `getFirstName()` and `getLastName()` **removed** — an address is purely a *where*; the who stays frozen on the order | — |
+| Contract               | Changed                                                                                                                                      | New                                                                                                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CartInterface`        | `add()` gains `array $options = []`; `remove()` now removes every option-variant; `checkout()`'s customer is now `?CustomerInterface = null` | `updateQuantity(string $itemId, int $quantity)`, `removeItem(string $itemId)`, `place(Order $order, ?CustomerInterface $customer = null)`            |
+| `CartStorageInterface` | `add()` gains `$options`; `quantityOf()` sums across variants                                                                                | `updateQuantity()`, `removeItem()`, `getOrderId(): ?int`, `setOrderId(?int)`, `getFulfillmentAttributes(): array`, `setFulfillmentAttributes(array)` |
+| `CartItemInterface`    | —                                                                                                                                            | `getOptions(): array`                                                                                                                                |
+| `OrderInterface`       | `getCustomer()` returns `?CustomerInterface` — null is a guest order                                                                         | —                                                                                                                                                    |
+| `OrderItemInterface`   | —                                                                                                                                            | `getPrice(): int`, `getOptions(): array`                                                                                                             |
+| `AddressInterface`     | `getFirstName()` and `getLastName()` **removed** — an address is purely a _where_; the who stays frozen on the order                         | —                                                                                                                                                    |
+
+## Orders gained a lifecycle of their own
+
+New in 4.x, alongside the payment status: `ecommerce_order.state` is `draft`
+or `placed` (`OrderState`), and `ecommerce_order.customer` is **nullable** —
+a guest order carries no customer row at all, and the identity it was placed
+under lives on the order's own frozen columns as it always did.
+
+A **draft** is a checkout form in progress persisted as a row: the project
+writes columns onto it as the form advances, and `Cart::place($draft)`
+freezes it from the cart when the customer accepts — lines copied, money
+frozen, reference minted, `Created` dispatched, `pay()` called. A
+placed-but-unpaid order can be **re-placed**: same row, lines replaced,
+`Created` re-fired; a paid one throws `AlreadyPaid`. Plain `checkout()` is
+unchanged — it is now one call into the same place-step with a fresh order.
+
+Every pre-4.x row is backfilled `placed` (and `''` reads as placed either
+way); `OrderRepository::placed()` is the scope every list should use, and the
+`ecommerce:reap-drafts` command deletes drafts nobody touched within
+`ecommerce.cart_lifetime` days. The cart, meanwhile, gained a token (the
+[cookie cart](cart.md#the-cookie-cart)), a link to the order it became, and a
+soft-delete written when that order is paid. See [Orders](orders.md) and
+[Cart](cart.md).
 
 ## The cart stopped writing a row just for existing
 
