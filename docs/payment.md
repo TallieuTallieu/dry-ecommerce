@@ -198,6 +198,12 @@ Three rules hidden in those few lines:
 - **Amounts come from `Money::toDecimal()`.** The order's money is integer
   cents; providers want `'12.50'` strings. The conversion exists and is
   tested — do not divide by 100.
+- **A refused payment is an outcome.** When the provider rejects the
+  create call, dispatch `PaymentFailed` and return without redirecting:
+  the listener writes `failed`, the order stays
+  [re-placeable](orders.md#re-placement), and the visitor is still in the
+  shop with the basket standing. Swallowing the rejection would leave the
+  order pending forever with nobody on the way to pay it.
 
 **The webhook half is `statusOf()`.** When the provider announces a change,
 the package's `PaymentWebhook` finds the order by the posted payment id and
