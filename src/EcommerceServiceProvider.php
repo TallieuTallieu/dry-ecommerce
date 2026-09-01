@@ -19,7 +19,9 @@ use Tnt\Ecommerce\Console\ReapDraftsCommand;
 use Tnt\Ecommerce\Contracts\AttributeStorageInterface;
 use Tnt\Ecommerce\Contracts\CartInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
+use Tnt\Ecommerce\Contracts\PaymentGatewayInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
+use Tnt\Ecommerce\Contracts\RedirectorInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\Events\Order\OrderEvent;
@@ -30,6 +32,7 @@ use Tnt\Ecommerce\Events\Order\PaymentFailed;
 use Tnt\Ecommerce\Events\Order\PaymentRefunded;
 use Tnt\Ecommerce\Fulfillment\CartAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Payment\HttpRedirector;
 use Tnt\Ecommerce\Payment\NullPayment;
 use Tnt\Ecommerce\Payment\PaymentStatus;
 use Tnt\Ecommerce\Revisions\AddCartLifecycleColumns;
@@ -150,14 +153,25 @@ class EcommerceServiceProvider extends ServiceProvider
             $app->set(ReapDraftsCommand::class, ReapDraftsCommand::class);
         }
 
-        $app->singleton(
-            PaymentInterface::class,
-            self::configuredClass(
-                $config,
-                'ecommerce.payment',
-                NullPayment::class
-            )
+        $gateway = self::configuredClass(
+            $config,
+            'ecommerce.payment',
+            NullPayment::class
         );
+
+        $app->singleton(PaymentInterface::class, $gateway);
+
+        // The webhook handler asks for the richer contract by name, so a
+        // gateway that implements it is bound under that name too — and a
+        // shop on a synchronous gateway fails to resolve PaymentWebhook
+        // loudly instead of half-working.
+        if (is_subclass_of($gateway, PaymentGatewayInterface::class)) {
+            $app->singleton(PaymentGatewayInterface::class, $gateway);
+        }
+
+        // Where a gateway sends the visitor. A seam rather than a direct
+        // call to dry's Response so pay() can run in a test without exiting.
+        $app->singleton(RedirectorInterface::class, HttpRedirector::class);
 
         // Who is signed in. The default answers "nobody" — correct for a shop
         // with no accounts.

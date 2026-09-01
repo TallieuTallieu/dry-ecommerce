@@ -49,6 +49,9 @@ needs.
 `pay()` is where a gateway redirects, or calls out, or does nothing and waits
 for a webhook. The package deliberately says nothing about which — it does not
 know whether payment is synchronous, and it does not own the callback route.
+The full shape a real provider implements — the redirect, the webhook, the
+amounts — is the harness described in
+[Writing a gateway](#writing-a-gateway).
 
 What a gateway is expected to do is dispatch the right event when it learns the
 outcome:
@@ -136,6 +139,110 @@ it separately.
 `payment_id` is the gateway's to fill in — it is where a Mollie or Stripe
 transaction id belongs, and it is what a webhook looks an order up by.
 `NullPayment` has no transaction to reference and leaves it blank.
+
+## Writing a gateway
+
+`PaymentInterface` is all a synchronous gateway needs — `NullPayment` is the
+worked example. A real provider needs two more answers: how the visitor gets
+to the provider's checkout, and how the provider's report gets back in. Both
+are the harness's, so no gateway reinvents them:
+
+```php
+interface PaymentGatewayInterface extends PaymentInterface
+{
+    public function statusOf(string $paymentId): PaymentStatus;
+}
+```
+
+Set the gateway the usual way — `'payment' => \Tnt\Mollie\MolliePayment::class`
+— and the provider binds it under both names. Everything below follows from
+the one contract.
+
+### The two halves
+
+**`pay()` creates the provider-side payment and redirects.** Ask the provider
+for a payment (amount, description, the shop's return URL, the shop's webhook
+URL), write its id onto the order, save, and send the visitor away:
+
+```php
+public function pay(OrderInterface $order)
+{
+    $payment = $this->provider->createPayment([
+        'amount' => Money::toDecimal($order->getTotal()), // cents -> '12.50'
+        // description, return URL, webhook URL: yours, from config
+    ]);
+
+    if ($order instanceof Order) {
+        $order->payment_id = $payment->id;
+        $order->save();
+    }
+
+    $this->redirector->redirect($payment->checkoutUrl);
+}
+```
+
+Three rules hidden in those few lines:
+
+- **The redirect goes through `RedirectorInterface`** — constructor-inject it;
+  the provider binds the dry implementation, which sends a `302` and exits.
+  The redirect is performed by the gateway rather than answered to the
+  caller because `Cart::place()` returns the order, not what `pay()` returns
+  — a redirect value handed back would be discarded by the only code that
+  calls `pay()`. The seam is what keeps that testable: a test binds a
+  recorder and `pay()` runs to the end.
+- **`payment_id` is overwritten, never guarded.** A
+  [re-placement](orders.md#re-placement) calls `pay()` again on the same
+  order; the old payment is dead at the provider and the fresh attempt's id
+  replaces it. A webhook for the dead attempt then finds no order — the
+  right answer for it.
+- **Amounts come from `Money::toDecimal()`.** The order's money is integer
+  cents; providers want `'12.50'` strings. The conversion exists and is
+  tested — do not divide by 100.
+
+**The webhook half is `statusOf()`.** When the provider announces a change,
+the package's `PaymentWebhook` finds the order by the posted payment id and
+asks the gateway where the money stands. Interrogate the provider's API —
+never trust the webhook body — and map its vocabulary onto
+`PaymentStatus`: the five reporting statuses each dispatch their event, and
+`Pending` is the answer that dispatches nothing (a payment still open is not
+a report). The handler dispatches; your gateway never does it from the
+webhook path, and **neither half ever writes `payment_status`** — the
+listeners own the column, exactly as for `NullPayment`.
+
+### What the project wires
+
+The package is route-agnostic, so a project on an asynchronous gateway
+registers exactly one webhook route and points it at the handler:
+
+```php
+// The provider POSTs its payment id; hand it to the package.
+'payment-webhook/' => function ($request) use ($app) {
+    $app->get(\Tnt\Ecommerce\Payment\PaymentWebhook::class)->handle(
+        $request->post->string('id')
+    );
+},
+```
+
+`handle()` throws `UnknownPayment` when no order carries the id — answer the
+provider with a 404 and let it retry or give up; swallowing it would tell a
+provider posting garbage that all is well.
+
+The **return page** — where the provider sends the visitor back — reads the
+order's own state and nothing else. The webhook may or may not have arrived
+first, so the page asks `getPaymentStatus()` and renders accordingly:
+`Paid` is a thank-you, `Pending` is "we are confirming your payment", and a
+failed/canceled/expired attempt offers the still-standing cart again
+([re-placement](orders.md#re-placement)). Never conclude anything from query
+parameters: the visitor's return proves only that they came back.
+
+### Idempotency is the guard's job
+
+Webhooks arrive at least once and out of order. Dispatch honestly every time
+and let `PaymentStatus::canTransitionTo()` — which every listener writes
+through — refuse what must not land: a replayed `Paid` writes nothing, a late
+`expired` after the money arrived writes nothing, and `Refunded` is the one
+exit from `Paid`. A gateway that tries to be clever about replays is
+second-guessing a guard that already answered.
 
 ## Available gateways
 
