@@ -86,6 +86,42 @@ it('composes filters fluently', function (): void {
     )->toBe($repository);
 });
 
+it('reads an account\'s order history in one query', function (): void {
+    // sc-11258: forUser() joins through the account's single customer row —
+    // UNIQUE on `user`, so the join cannot fan out — instead of the N-query
+    // merge every project used to hand-roll. The SQL is read off the builder
+    // the repository would run, one step short of the connection.
+    $repository = OrderRepository::create()->forUser(7)->placed();
+
+    $method = new ReflectionMethod(
+        Tnt\Dbi\Repository::class,
+        'createQueryBuilder'
+    );
+    $builder = $method->invoke($repository);
+    assert($builder instanceof Tnt\Dbi\QueryBuilder);
+
+    $builder->selectAll();
+    $builder->build();
+
+    expect($builder->getQuery())->toBe(
+        'SELECT `ecommerce_order`.* FROM `ecommerce_order`' .
+            ' INNER JOIN `ecommerce_customer`' .
+            ' ON `ecommerce_customer`.`id` = `ecommerce_order`.`customer`' .
+            ' WHERE `ecommerce_customer`.`user` = ?' .
+            ' AND `ecommerce_order`.`state` != ?' .
+            ' ORDER BY `ecommerce_order`.`created` DESC'
+    );
+    expect($builder->getParameters())->toBe([7, 'draft']);
+});
+
+it('composes forUser with the other order scopes', function (): void {
+    // One repository call chain for a customer-facing history page: the
+    // account's orders, drafts out, newest first (init()'s sort).
+    $repository = OrderRepository::create();
+
+    expect($repository->forUser(7)->placed())->toBe($repository);
+});
+
 it('composes the order state scopes fluently', function (): void {
     // placed() for every list a shop shows — spelled "state != draft" so
     // legacy rows, whose column holds '', stay in — drafts() for the reaper,

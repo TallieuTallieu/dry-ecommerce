@@ -398,11 +398,14 @@ class Cart implements CartInterface, TotalingInterface
         ?CustomerInterface $customer = null,
         ?Closure $callback = null
     ): OrderInterface {
-        // The same guard the webhook listeners write through: pending may not
-        // replace paid (or refunded). Loud here rather than a silent no-op —
-        // a shop about to re-freeze a paid order is about to lose an invoice.
+        // One source of truth: a draft may always be placed (its money never
+        // arrived — pay() only runs after placement), anything already placed
+        // only while Order::isRePlaceable() says so. Loud rather than a
+        // silent no-op — a shop about to re-freeze a paid order is about to
+        // lose an invoice.
         if (
-            !$order->getPaymentStatus()->canTransitionTo(PaymentStatus::Pending)
+            $order->getState() !== OrderState::Draft &&
+            !$order->isRePlaceable()
         ) {
             throw AlreadyPaid::order($order);
         }

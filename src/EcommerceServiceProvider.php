@@ -41,6 +41,7 @@ use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
 use Tnt\Ecommerce\Revisions\DropAddressNameColumns;
+use Tnt\Ecommerce\Revisions\MakeCustomerUserUnique;
 use Tnt\Ecommerce\Revisions\MakeOrderCustomerNullable;
 use Tnt\Ecommerce\Revisions\MakeOrderPlacementColumnsNullable;
 use Tnt\Ecommerce\Shop\Shop;
@@ -90,6 +91,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddCartLifecycleColumns::class,
                 AddIndexesToEcommerceTables::class,
                 MakeOrderPlacementColumnsNullable::class,
+                MakeCustomerUserUnique::class,
             ]);
 
             /** @var MigrationManager $manager */

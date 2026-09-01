@@ -139,6 +139,15 @@ customer by email would let anybody check out into somebody else's address book.
 `UserResolverInterface` is the whole of the accounts pairing — one method,
 answering an id or null. See [Customer](customer.md).
 
+The invariant is now **schema-enforced and package-served**: `UNIQUE` on
+`ecommerce_customer.user` (the `MakeCustomerUserUnique` revision — a shop
+holding duplicate rows for one account must merge them by hand before
+migrating), `Customer::forUser($userId, $email = '')` as the race-safe
+find-or-create, `OrderRepository::forUser($userId)` for an account's order
+history in one query, and the opt-in `SyncsCustomer` trait for the project's
+account model, after which the **account owns the row's email**. See
+[Customer](customer.md#one-row-per-account).
+
 ## Cart lines gained per-line options
 
 New in 4.x; the 1.x line has nothing like it. A line used to be
@@ -174,6 +183,7 @@ non-null needs a look).
 | `OrderInterface`       | `getCustomer()` returns `?CustomerInterface` — null is a guest order                                                                         | —                                                                                                                                                    |
 | `OrderItemInterface`   | —                                                                                                                                            | `getPrice(): int`, `getOptions(): array`                                                                                                             |
 | `AddressInterface`     | `getFirstName()` and `getLastName()` **removed** — an address is purely a _where_; the who stays frozen on the order                         | —                                                                                                                                                    |
+| `FulfillmentInterface` | —                                                                                                                                            | `attributeOr(string $name, mixed $default): mixed` — the never-throwing peek beside `getAttribute()`'s guarded read; free via `HasFulfillmentAttributes`, a hand-rolled implementation adds one method |
 
 ## Orders gained a lifecycle of their own
 

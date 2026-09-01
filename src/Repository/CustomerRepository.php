@@ -30,7 +30,9 @@ class CustomerRepository extends Repository
 
     /**
      * Filter by the account the customer belongs to — the lookup that makes
-     * an address book a book. Safe in a way {@see byEmail()} is not: an
+     * an address book a book, and the find behind
+     * {@see \Tnt\Ecommerce\Model\Customer::forUser()}. At most one row
+     * matches (UNIQUE on `user`). Safe in a way {@see byEmail()} is not: an
      * account has been proved, an email has only been typed.
      *
      * @param int $userId

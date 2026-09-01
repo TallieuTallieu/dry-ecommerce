@@ -34,6 +34,7 @@ use Tests\Support\CapturingDropAddressNameColumns;
 use Tests\Support\CapturingCreateCustomerTable;
 use Tests\Support\CapturingCreateOrderItemTable;
 use Tests\Support\CapturingCreateOrderTable;
+use Tests\Support\CapturingMakeCustomerUserUnique;
 use Tests\Support\CapturingMakeOrderCustomerNullable;
 use Tests\Support\CapturingMakeOrderPlacementColumnsNullable;
 use Tnt\Dbi\QueryBuilder;
@@ -556,9 +557,7 @@ it('drops on the way down exactly what it added', function (): void {
         'ALTER TABLE `ecommerce_stock`'
     );
     expect($revision->statements[0])->toContain('DROP INDEX `uq_hid`');
-    expect($revision->statements[1])->toContain(
-        'DROP INDEX `idx_email`'
-    );
+    expect($revision->statements[1])->toContain('DROP INDEX `idx_email`');
     expect($revision->statements[1])->toContain(
         'DROP INDEX `idx_user_created`'
     );
@@ -601,6 +600,48 @@ it('hands each foreign key its index back on the way down', function (): void {
         'ADD INDEX `fk_ecommerce_stock_item_stock_ecommerce_stock_id` ' .
             '(`stock`)'
     );
+});
+
+it('holds every account to one customer row', function (): void {
+    // sc-11258: UNIQUE on ecommerce_customer.user — the schema now enforces
+    // what was convention, and it is the lock Customer::forUser() leans on
+    // when two requests race the same insert. The column stays nullable and
+    // MySQL uniques ignore NULLs, so every guest-era row is untouched.
+    $revision = new CapturingMakeCustomerUserUnique(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->sql)->toContain('ALTER TABLE `ecommerce_customer`');
+    expect($revision->sql)->toContain(
+        'ADD CONSTRAINT `uq_user` UNIQUE (`user`)'
+    );
+});
+
+it('drops the composite the unique makes redundant', function (): void {
+    // The judgement call, recorded: revision 17's idx_user_created existed to
+    // serve byUser() plus its created DESC sort, but under UNIQUE(user) at
+    // most one row matches any user, so the sort suffix orders nothing and
+    // the unique serves the equality by itself. Safe because `user` carries
+    // no foreign key (by design — the target table belongs to dry-accounts),
+    // so no constraint is leaning on either index; verified against the
+    // compose MySQL 8.0.34, both directions.
+    $revision = new CapturingMakeCustomerUserUnique(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->sql)->toContain('DROP INDEX `idx_user_created`');
+});
+
+it('reverses the unique exactly on the way down', function (): void {
+    // down() restores idx_user_created under its own name, so revision 17's
+    // down() still finds what it expects to drop.
+    $revision = new CapturingMakeCustomerUserUnique(new QueryBuilder());
+    $revision->down();
+
+    expect($revision->sql)->toContain('ALTER TABLE `ecommerce_customer`');
+    expect($revision->sql)->toContain('DROP INDEX `uq_user`');
+    expect($revision->sql)->toContain(
+        'ADD INDEX `idx_user_created` (`user`, `created`)'
+    );
+    expect($revision->sql)->not->toContain('UNIQUE');
 });
 
 it('keeps the non-money columns as they were', function (): void {

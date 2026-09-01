@@ -127,6 +127,19 @@ reference kept, and `Created` re-fired. This is the asynchronous-gateway
 shape: place → payment fails → the basket is still there → the customer edits
 it and accepts again, and no sibling order is ever born.
 
+The order can say itself whether this is legal:
+
+```php
+$order->isRePlaceable(); // placed, and the money never arrived
+```
+
+That is the rule a "try again" button re-derived in every project — state
+placed **and** `getPaymentStatus()->canTransitionTo(Pending)`, the same
+transition the webhook listeners write through — spelled once, on the order.
+`place()`'s own guard reads through it, so the button and the guard cannot
+drift. A draft answers `false`: it is _placeable_ but not _RE-placeable_ —
+it has no placement to repeat.
+
 Two consequences:
 
 - **`Created` listeners must be idempotent per order.** A confirmation mail
@@ -134,10 +147,8 @@ Two consequences:
   the order id, or send from `Paid`.
 - **A paid order refuses loudly.** `place()` throws
   `Tnt\Ecommerce\AlreadyPaid` — re-freezing would rewrite what the money
-  already arrived for. A refunded order refuses for the same reason: the
-  guard is `PaymentStatus::canTransitionTo(Pending)`, the same one the
-  webhook listeners write through. A correction to a paid order is a refund
-  and a new order, not a rewrite.
+  already arrived for. A refunded order refuses for the same reason. A
+  correction to a paid order is a refund and a new order, not a rewrite.
 
 ## The two records of the customer
 
@@ -329,9 +340,16 @@ OrderRepository::create()->placed()->all(); // never drafts
 OrderRepository::create()->byOrderId('12-K4M7QX9RTB')->firstOrNull();
 OrderRepository::create()->byPaymentId($mollieId)->firstOrNull();
 OrderRepository::create()->forCustomer($customer)->all();
+OrderRepository::create()->forUser($userId)->placed()->all(); // order history
 OrderRepository::create()->withPaymentStatus(PaymentStatus::Paid)->all();
 OrderRepository::create()->drafts()->updatedBefore($cutoff)->all(); // the reaper's
 ```
+
+`forUser()` is an account's order history in **one query** — an inner join
+through the account's single customer row (`UNIQUE` on
+`ecommerce_customer.user`, so the join cannot fan out) — and it composes with
+the other scopes: `forUser($id)->placed()` is what a customer-facing history
+page wants. See [Customer](customer.md#one-row-per-account).
 
 `placed()` is spelled `state != 'draft'` rather than `= 'placed'` on purpose,
 so legacy rows — whose column holds `''` — stay in every list they have

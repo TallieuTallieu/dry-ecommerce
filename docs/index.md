@@ -64,8 +64,6 @@ become their own lines, shop-side. [Options](options.md).)
   side service the contract never mentions. [Fulfillment](fulfillment.md).
 - **Frozen fulfillment attributes hold ids, not display values**, and there is
   no query surface over the frozen JSON.
-- **`OrderRepository` has no `forUser()`.** An account's order history across
-  its customer rows is N queries plus a PHP-side merge.
 - **`OrderItemInterface` has no `getId()`.** A shop that adds its own columns
   to `ecommerce_order_item` (a parent link, say) cannot reach a line's row
   through the contract — reading them back means a downcast to the concrete

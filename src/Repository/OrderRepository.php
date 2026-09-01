@@ -6,6 +6,7 @@ use Tnt\Dbi\Criteria\Equals;
 use Tnt\Dbi\Criteria\LessThan;
 use Tnt\Dbi\Criteria\NotEquals;
 use Tnt\Dbi\Criteria\OrderBy;
+use Tnt\Dbi\QueryBuilder;
 use Tnt\Ecommerce\Model\Customer;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Order\OrderState;
@@ -65,6 +66,28 @@ class OrderRepository extends Repository
     public function forCustomer(Customer $customer): static
     {
         $this->addCriteria(new Equals('customer', $customer->id));
+
+        return $this;
+    }
+
+    /**
+     * An account's orders, in one query: an inner join through the account's
+     * single `ecommerce_customer` row (UNIQUE on `user`, so the join cannot
+     * fan out). Composes with the other scopes — a customer-facing history
+     * is `forUser($id)->placed()`. See docs/orders.md.
+     *
+     * @param int $userId
+     * @return static
+     */
+    public function forUser(int $userId): static
+    {
+        $this->useQueryBuilder(function (QueryBuilder $query): void {
+            $query
+                ->innerJoin('ecommerce_customer')
+                ->on('ecommerce_customer.id', '=', 'ecommerce_order.customer');
+        });
+
+        $this->addCriteria(new Equals('ecommerce_customer.user', $userId));
 
         return $this;
     }
