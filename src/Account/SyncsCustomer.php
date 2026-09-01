@@ -29,9 +29,12 @@ trait SyncsCustomer
     /**
      * The account save, then the customer row it drags along.
      *
-     * @return void
+     * Declared `: void` deliberately: dry's base Model::save() is untyped, but
+     * the likeliest host — a dry-accounts User subclass — sits under a
+     * `save(): void` parent, and a trait method without the type fatals there.
+     * `: void` satisfies both (proven in the tests by the void-parent host).
      */
-    public function save()
+    public function save(): void
     {
         parent::save();
         $this->syncCustomer();

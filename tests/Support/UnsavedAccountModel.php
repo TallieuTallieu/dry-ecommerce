@@ -26,9 +26,11 @@ class UnsavedAccountModel extends Model
     public int $accountSaves = 0;
 
     /**
-     * @return void
+     * `: void`, like dry-accounts' User::save() — the parent shape that made
+     * the trait's own `: void` necessary. Keeping it here pins that a
+     * SyncsCustomer host under a void-typed parent composes without a fatal.
      */
-    public function save()
+    public function save(): void
     {
         $this->accountSaves++;
     }
