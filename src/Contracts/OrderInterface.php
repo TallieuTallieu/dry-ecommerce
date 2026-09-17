@@ -9,15 +9,35 @@ namespace Tnt\Ecommerce\Contracts;
 interface OrderInterface
 {
     /**
+     * Freeze one cart line onto this order, and answer the line that was
+     * written — {@see \Tnt\Ecommerce\Cart\Cart::place()} needs it to copy
+     * the parent/child links once every line exists.
+     *
      * @param CartItemInterface $cartItem
-     * @return mixed
+     * @return OrderItemInterface
      */
-    public function add(CartItemInterface $cartItem);
+    public function add(CartItemInterface $cartItem): OrderItemInterface;
 
     /**
      * @return iterable<int, OrderItemInterface>
      */
     public function getItems();
+
+    /**
+     * The provider's id for the attempt this order is currently waiting on,
+     * or null. A gateway's `resumeUrl()` takes this. See docs/payment.md.
+     *
+     * @return string|null
+     */
+    public function getPaymentId(): ?string;
+
+    /**
+     * The key a gateway hands its provider so a double-submit is answered
+     * with one payment. Re-minted at every placement.
+     *
+     * @return string
+     */
+    public function getPaymentKey(): string;
 
     /**
      * @param CustomerInterface $customer

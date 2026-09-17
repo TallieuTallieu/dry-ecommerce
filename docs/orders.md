@@ -121,7 +121,8 @@ moment: `Created` means placement, not draft birth.
 ### Re-placement
 
 Placing an order that is already placed but **not paid** — pending, failed,
-canceled or expired — is legal and re-freezes the same order: its old lines
+canceled, expired, or refunded in full — is legal and re-freezes the same
+order: its old lines
 are deleted, the cart's current lines copied fresh, the money re-frozen, the
 reference kept, and `Created` re-fired. This is the asynchronous-gateway
 shape: place → payment fails → the basket is still there → the customer edits
@@ -147,8 +148,24 @@ Two consequences:
   the order id, or send from `Paid`.
 - **A paid order refuses loudly.** `place()` throws
   `Tnt\Ecommerce\AlreadyPaid` — re-freezing would rewrite what the money
-  already arrived for. A refunded order refuses for the same reason. A
-  correction to a paid order is a refund and a new order, not a rewrite.
+  already arrived for. A **partially** refunded order refuses for the same
+  reason: most of the money is still here, so it is still an order somebody
+  paid for. A correction to a paid order is a refund and a new order, not a
+  rewrite.
+- **A fully refunded order does not refuse.** All of the money went back, so
+  nobody has paid for it any more and asking again is exactly what
+  re-placement is for. This matters most where it is least visible: a gateway
+  that maps *any* refund to `refunded` would otherwise end an order's life
+  over a goodwill gesture. See
+  [the two kinds of refund](payment.md#the-two-kinds-of-refund).
+
+Placement also starts the payment over: `payment_id` is cleared, so the order
+is waiting on nothing until the gateway starts its next attempt, and
+`payment_key` is re-minted. The previous attempt is not lost — it lives on in
+`ecommerce_payment_attempt` and its webhooks are still answered. The
+**reference** is the one thing that does not move: a re-placed order stays the
+order the customer was quoted. See
+[every attempt leaves a record](payment.md#every-attempt-leaves-a-record).
 
 ## The two records of the customer
 
@@ -232,8 +249,9 @@ use Tnt\Ecommerce\Payment\PaymentStatus;
 $order->getPaymentStatus(); // PaymentStatus::Pending | Paid | Failed | ...
 ```
 
-Written by the package: `pending` at checkout, and every later value by the
-event listeners. An order from before the lifecycle existed — or one carrying a
+The seven words are `pending`, `paid`, `failed`, `canceled`, `expired`,
+`partially_refunded` and `refunded`. Written by the package: `pending` at
+checkout, and every later value by the event listeners. An order from before the lifecycle existed — or one carrying a
 word this package does not know — reads as `Pending`, the one status that
 claims nothing. This is the payment's state, not a fulfillment status. See
 [Payment](payment.md#the-status-lifecycle).
@@ -292,9 +310,21 @@ foreach ($order->getItems() as $line) {
     $line->getQuantity(); // int
     $line->getPrice(); // the frozen line total, in cents
     $line->getOptions(); // the frozen selection, or [] — incl. pre-options lines
+    $line->getParent(); // the line this one hangs off, or null
     $line->getBuyable(); // the LIVE model — see below
 }
 ```
+
+`getParent()` is the cart's parent/child link, frozen along with everything
+else — a deposit under its crate, a returnable container under what it
+contains. See [lines that hang off other
+lines](cart.md#lines-that-hang-off-other-lines).
+
+It is written in a **second pass**, after every line has a row: the cart hands
+its lines over in whatever order it holds them, and nothing says a parent
+comes first. `Order::add()` therefore answers with the line it wrote, and
+`place()` walks the list again to join them up. A link whose parent is not on
+this order is dropped rather than half-written.
 
 ### What a line does _not_ freeze
 

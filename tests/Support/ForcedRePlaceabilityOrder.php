@@ -6,6 +6,7 @@ namespace Tests\Support;
 
 use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Model\OrderItem;
 
 /**
  * An in-memory order whose {@see Order::isRePlaceable()} answer can be forced.
@@ -50,11 +51,13 @@ final class ForcedRePlaceabilityOrder extends Order
 
     /**
      * @param CartItemInterface $cartItem
-     * @return void
+     * @return OrderItem
      */
-    public function add(CartItemInterface $cartItem)
+    public function add(CartItemInterface $cartItem): OrderItem
     {
         $this->lines[] = $cartItem;
+
+        return new InMemoryOrderItem();
     }
 
     /**

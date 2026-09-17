@@ -11,6 +11,7 @@ use Oak\Dispatcher\Facade\Dispatcher;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Events\Order\Created;
 use Tnt\Ecommerce\Contracts\CartInterface;
+use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\CouponInterface;
@@ -94,9 +95,21 @@ class Cart implements CartInterface, TotalingInterface
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
-        array $options = []
+        array $options = [],
+        ?CartItemInterface $parent = null
     ) {
-        $this->storage->add($buyable, $quantity, $options);
+        $this->storage->add($buyable, $quantity, $options, $parent);
+    }
+
+    /**
+     * The lines hanging off one line, oldest first, or [].
+     *
+     * @param CartItemInterface $parent
+     * @return array<int, CartItemInterface>
+     */
+    public function childrenOf(CartItemInterface $parent): array
+    {
+        return $this->storage->childrenOf($parent);
     }
 
     /**
@@ -446,6 +459,15 @@ class Cart implements CartInterface, TotalingInterface
         // The guard above is what makes this bare write legal.
         $order->payment_status = PaymentStatus::Pending->value;
 
+        // A placement is a fresh go at the money. The previous attempt's id
+        // stops belonging to this order — it survives in
+        // `ecommerce_payment_attempt`, so a late webhook about it still finds
+        // its order instead of a 404 on the provider's full retry schedule —
+        // and the key a gateway hands its provider is re-minted, or the
+        // provider would answer with the payment the customer abandoned.
+        $order->payment_id = null;
+        $order->payment_key = bin2hex(random_bytes(16));
+
         $order->discount = $this->getDiscount();
 
         if ($customer !== null) {
@@ -466,9 +488,36 @@ class Cart implements CartInterface, TotalingInterface
             $order->save();
         }
 
-        // Copy every cart line onto the order
-        foreach ($this->items() as $item) {
-            $order->add($item);
+        // Copy every cart line onto the order. Read the lines once: the
+        // second pass below walks the same list, and a storage answers items()
+        // with a query.
+        $cartItems = $this->items();
+
+        /** @var array<string, \Tnt\Ecommerce\Model\OrderItem> $frozen */
+        $frozen = [];
+
+        foreach ($cartItems as $item) {
+            $frozen[$item->getId()] = $order->add($item);
+        }
+
+        // Then the parent/child links, once every line has a row — a deposit
+        // may well be copied before the crate it hangs off. A link whose
+        // parent is not on this order is dropped rather than half-written.
+        foreach ($cartItems as $item) {
+            $parent = $item->getParent();
+
+            if ($parent === null) {
+                continue;
+            }
+
+            $line = $frozen[$item->getId()] ?? null;
+            $parentLine = $frozen[$parent->getId()] ?? null;
+
+            if ($line === null || $parentLine === null) {
+                continue;
+            }
+
+            $line->setParent($parentLine);
         }
 
         // The cart→order link — what the Paid listener follows back to

@@ -10,9 +10,12 @@ use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Events\Order\PaymentCanceled;
 use Tnt\Ecommerce\Events\Order\PaymentExpired;
 use Tnt\Ecommerce\Events\Order\PaymentFailed;
+use Tnt\Ecommerce\Events\Order\PaymentPartiallyRefunded;
 use Tnt\Ecommerce\Events\Order\PaymentRefunded;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Model\PaymentAttempt;
 use Tnt\Ecommerce\Repository\OrderRepository;
+use Tnt\Ecommerce\Repository\PaymentAttemptRepository;
 use Tnt\Ecommerce\UnknownPayment;
 
 /**
@@ -62,19 +65,40 @@ class PaymentWebhook
      */
     public function handle(string $paymentId): void
     {
-        $order = $this->findOrder($paymentId);
+        // The attempt first: a re-placed order no longer carries its old id,
+        // and the attempt row is what still answers for it. The order's own
+        // column is the fallback, for a gateway that writes `payment_id` by
+        // hand rather than through Order::startPaymentAttempt().
+        $attempt = $this->findAttempt($paymentId);
+        $order =
+            $attempt === null ? $this->findOrder($paymentId) : $attempt->order;
 
         if ($order === null) {
             throw UnknownPayment::id($paymentId);
         }
 
-        $event = match ($this->gateway->statusOf($paymentId)) {
+        $status = $this->gateway->statusOf($paymentId);
+
+        // Every attempt keeps its own record, live or superseded — that is
+        // what makes "which attempt was this webhook about" answerable.
+        $attempt?->setStatus($status);
+
+        // Only the attempt the order is waiting on may move the order. News
+        // about a superseded attempt is recorded above and goes no further:
+        // the order has since been re-placed and is owed a different payment.
+        if ($attempt !== null && (string) $order->payment_id !== $paymentId) {
+            return;
+        }
+
+        $event = match ($status) {
             PaymentStatus::Pending => null,
             PaymentStatus::Paid => Paid::class,
             PaymentStatus::Failed => PaymentFailed::class,
             PaymentStatus::Canceled => PaymentCanceled::class,
             PaymentStatus::Expired => PaymentExpired::class,
             PaymentStatus::Refunded => PaymentRefunded::class,
+            PaymentStatus::PartiallyRefunded
+                => PaymentPartiallyRefunded::class,
         };
 
         if ($event === null) {
@@ -95,6 +119,20 @@ class PaymentWebhook
     protected function findOrder(string $paymentId): ?Order
     {
         return OrderRepository::create()
+            ->byPaymentId($paymentId)
+            ->firstOrNull();
+    }
+
+    /**
+     * The attempt a payment id names, or null when the gateway never
+     * recorded one. A protected seam, like {@see findOrder()}.
+     *
+     * @param string $paymentId
+     * @return PaymentAttempt|null
+     */
+    protected function findAttempt(string $paymentId): ?PaymentAttempt
+    {
+        return PaymentAttemptRepository::create()
             ->byPaymentId($paymentId)
             ->firstOrNull();
     }

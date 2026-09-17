@@ -12,11 +12,24 @@ $address->customer = $customer;
 $address->setType(AddressType::Shipping);
 $address->street = 'Kortrijksesteenweg';
 $address->number = '1144';
+$address->box = '2B'; // the bus, when there is one
 $address->postal_code = '9051';
 $address->city = 'Gent';
 $address->country = 'BE';
 $address->save();
 ```
+
+`box` is the bus or box number **within** the building, kept apart from
+`number`, which is the building itself. In Belgium an address missing its bus
+is frequently undeliverable, so it is a field of the address rather than
+something a shop bolts on: a host that added its own column got an address
+object that could not show it, and every caller had to bypass
+`getBillingAddress()` and read the order's raw column instead. It is `''` for
+an address that has none, like every other field here.
+
+Coordinates for a place picker — `lat`, `lng`, a provider's place id — are
+deliberately **not** here. They belong to whatever picks the address, not to
+the address, and a shop that wants them keeps its own columns.
 
 `AddressType` has two cases, `Billing` and `Shipping`, because those are the two
 questions a shop asks of an address: where the invoice goes and where the parcel
@@ -58,9 +71,9 @@ order's own columns:
 
 ```
 first_name  last_name  email
-billing_street  billing_number  billing_postal_code  billing_city
-billing_country
-shipping_… (the same five)
+billing_street  billing_number  billing_box  billing_postal_code
+billing_city  billing_country
+shipping_… (the same six)
 ```
 
 The reason is that an address book is *edited*. A customer moves house and
@@ -79,6 +92,7 @@ $order->getFirstName();        // as it was at checkout
 $order->getEmail();
 $order->getShippingAddress();  // Tnt\Ecommerce\Address\FrozenAddress
 $order->getBillingAddress();
+$order->getShippingAddress()->getBox(); // the bus, frozen like the rest
 ```
 
 `FrozenAddress` implements the same `AddressInterface` as `Address`, so one
@@ -93,7 +107,7 @@ exports. Inside one customer's book, `Customer::getAddresses()` /
 
 ## Nothing is substituted for a missing address
 
-A customer with a shipping address and no billing address freezes five blank
+A customer with a shipping address and no billing address freezes six blank
 billing columns, and vice versa. An order carrying an address the customer never
 gave for that purpose is a worse record than one that admits the purpose had no
 address — and it is a record nobody can correct afterwards, because it looks

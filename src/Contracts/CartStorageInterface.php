@@ -26,13 +26,27 @@ interface CartStorageInterface
      * @param BuyableInterface $buyable
      * @param int $quantity
      * @param array<array-key, mixed> $options
+     * @param CartItemInterface|null $parent The line this one hangs off, and
+     *                                       the rest of the merge key: the
+     *                                       same buyable under two parents is
+     *                                       two lines.
      * @return void
      */
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
-        array $options = []
+        array $options = [],
+        ?CartItemInterface $parent = null
     ): void;
+
+    /**
+     * The lines hanging off one line, oldest first, or [] — a deposit under
+     * its crate. Removing a line removes these with it.
+     *
+     * @param CartItemInterface $parent
+     * @return array<int, CartItemInterface>
+     */
+    public function childrenOf(CartItemInterface $parent): array;
 
     /**
      * How many of one buyable the cart holds, summed across every

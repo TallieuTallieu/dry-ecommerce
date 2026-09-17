@@ -29,6 +29,7 @@ use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
+use Tnt\Ecommerce\Contracts\OrderItemInterface;
 use Tnt\Ecommerce\Events\Order\Paid;
 
 // bootEcommerce() — the booted package and the dispatcher its listeners are
@@ -108,7 +109,20 @@ it('takes no interest in an order it did not write', function (): void {
     // Anything else implementing OrderInterface has no discount column to read
     // and is passed over rather than guessed at.
     $foreign = new class implements OrderInterface {
-        public function add(CartItemInterface $cartItem) {}
+        public function add(CartItemInterface $cartItem): OrderItemInterface
+        {
+            throw new LogicException('Not needed for this test.');
+        }
+
+        public function getPaymentId(): ?string
+        {
+            return null;
+        }
+
+        public function getPaymentKey(): string
+        {
+            return '';
+        }
 
         public function getItems()
         {

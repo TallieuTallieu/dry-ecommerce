@@ -22,6 +22,7 @@ use Tnt\Ecommerce\NotAnAddressType;
  * @property int $is_default
  * @property string $street
  * @property string $number
+ * @property string $box
  * @property string $postal_code
  * @property string $city
  * @property string $country
@@ -40,7 +41,12 @@ class Address extends Model implements AddressInterface
     public function __toString(): string
     {
         $lines = array_filter([
-            trim($this->getStreet() . ' ' . $this->getNumber()),
+            trim(
+                $this->getStreet() .
+                    ' ' .
+                    $this->getNumber() .
+                    ($this->getBox() === '' ? '' : ' bus ' . $this->getBox())
+            ),
             trim($this->getPostalCode() . ' ' . $this->getCity()),
             $this->getCountry(),
         ]);
@@ -95,6 +101,14 @@ class Address extends Model implements AddressInterface
     public function getNumber(): string
     {
         return (string) $this->number;
+    }
+
+    /**
+     * @return string
+     */
+    public function getBox(): string
+    {
+        return (string) $this->box;
     }
 
     /**

@@ -22,6 +22,7 @@ use Tnt\Ecommerce\Money;
  * @property string $item_class
  * @property int $quantity
  * @property string|null $options
+ * @property CartItem|null $parent
  */
 class CartItem extends Model implements CartItemInterface
 {
@@ -32,6 +33,7 @@ class CartItem extends Model implements CartItemInterface
      */
     public static $special_fields = [
         'cart' => Cart::class,
+        'parent' => self::class,
     ];
 
     /**
@@ -136,5 +138,43 @@ class CartItem extends Model implements CartItemInterface
     public function getOptions(): array
     {
         return LineOptions::decode($this->options);
+    }
+
+    /**
+     * The line this one hangs off, or null.
+     *
+     * @return CartItemInterface|null
+     */
+    public function getParent(): ?CartItemInterface
+    {
+        return $this->parent;
+    }
+
+    /**
+     * Does not save — {@see \Tnt\Ecommerce\Cart\DatabaseCartStorage::add()}
+     * sets this on a line it is about to write, and saving twice would show
+     * the row without its parent in between.
+     *
+     * Refuses a parent from another storage rather than dropping it: a row can
+     * only point at a row, and a link that went missing quietly would show up
+     * as a basket rendering a deposit with nothing under it.
+     *
+     * @param CartItemInterface|null $parent
+     * @return void
+     *
+     * @throws \InvalidArgumentException If the parent is not a row of this
+     *                                   table.
+     */
+    public function setParent(?CartItemInterface $parent): void
+    {
+        if ($parent !== null && !($parent instanceof self)) {
+            throw new \InvalidArgumentException(
+                'A cart row can only hang off another cart row, not a ' .
+                    get_class($parent) .
+                    '.'
+            );
+        }
+
+        $this->parent = $parent;
     }
 }

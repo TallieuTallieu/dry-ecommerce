@@ -6,6 +6,8 @@ namespace Tests\Support;
 
 use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Model\OrderItem;
+use Tnt\Ecommerce\Model\PaymentAttempt;
 
 /**
  * An order that keeps to memory instead of a table.
@@ -43,6 +45,14 @@ final class InMemoryOrder extends Order
     public array $lines = [];
 
     /**
+     * The line `add()` answered for each cart line id — what `place()`'s
+     * second pass writes the parent links onto.
+     *
+     * @var array<string, InMemoryOrderItem>
+     */
+    public array $frozen = [];
+
+    /**
      * How many times `clearItems()` was called — re-placement clears before
      * it copies, and only the count can tell "cleared then refilled" from
      * "never cleared" once the lines look right.
@@ -78,11 +88,34 @@ final class InMemoryOrder extends Order
      * that `checkout()` hands every line over exactly once.
      *
      * @param CartItemInterface $cartItem
-     * @return mixed|void
+     * @return OrderItem
      */
-    public function add(CartItemInterface $cartItem)
+    public function add(CartItemInterface $cartItem): OrderItem
     {
         $this->lines[] = $cartItem;
+
+        // place() keys its parent-link pass on what add() answers, so the
+        // stand-in has to answer with a line of its own — one per call, kept
+        // out of the database like everything else here.
+        return $this->frozen[$cartItem->getId()] = new InMemoryOrderItem();
+    }
+
+    /**
+     * The attempts `startPaymentAttempt()` wrote, in order.
+     *
+     * @var array<int, InMemoryPaymentAttempt>
+     */
+    public array $attempts = [];
+
+    /**
+     * @return PaymentAttempt
+     */
+    protected function newPaymentAttempt(): PaymentAttempt
+    {
+        $attempt = new InMemoryPaymentAttempt();
+        $this->attempts[] = $attempt;
+
+        return $attempt;
     }
 
     /**

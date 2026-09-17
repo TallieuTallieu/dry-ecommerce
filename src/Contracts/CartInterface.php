@@ -21,13 +21,28 @@ interface CartInterface
      * @param array<array-key, mixed> $options Part of the line's identity;
      *                                         copied onto the order line at
      *                                         checkout.
+     * @param CartItemInterface|null $parent The line this one hangs off — a
+     *                                       deposit under its crate. Also
+     *                                       part of the line's identity, and
+     *                                       copied onto the order at
+     *                                       checkout. See docs/cart.md.
      * @return mixed
      */
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
-        array $options = []
+        array $options = [],
+        ?CartItemInterface $parent = null
     );
+
+    /**
+     * The lines hanging off one line, oldest first, or [] — what a basket
+     * renders a deposit under. See docs/cart.md.
+     *
+     * @param CartItemInterface $parent
+     * @return array<int, CartItemInterface>
+     */
+    public function childrenOf(CartItemInterface $parent): array;
 
     /**
      * Whether the stock would cover the total the cart would then hold of this

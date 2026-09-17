@@ -114,18 +114,24 @@ figure, not a shop that will not boot.
 
 ## Migrations
 
-The provider registers a migrator named `ecommerce` with nineteen revisions:
-ten create the tables below, and the ones after them alter existing tables
-(the frozen `fulfillment_attributes` column on `ecommerce_order`, the
-per-line `options` columns on both line tables, the drop of the address name
-columns, the nullable `customer` and the `state` column on `ecommerce_order`,
-the cart's lifecycle columns — `order`, `token`, `deleted`,
-`fulfillment_attributes` — the indexes behind the repository lookups, the
-nullable placement columns on `ecommerce_order`, so a
+The provider registers a migrator named `ecommerce` with twenty-three
+revisions. Eleven create the tables below; the rest alter existing tables,
+and one of the creates (`ecommerce_payment_attempt`) sits at the very end for
+the append-only reason given further down. What the alters add: the frozen `fulfillment_attributes` column on
+`ecommerce_order`, the per-line `options` columns on both line tables, the
+drop of the address name columns, the nullable `customer` and the `state`
+column on `ecommerce_order`, the cart's lifecycle columns — `order`, `token`,
+`deleted`, `fulfillment_attributes` — the indexes behind the repository
+lookups, the nullable placement columns on `ecommerce_order`, so a
 [draft's](orders.md#draft-or-placed-the-order-state) partial row is
-honest and legal under strict `sql_mode`, and the `UNIQUE` on
+honest and legal under strict `sql_mode`, the `UNIQUE` on
 `ecommerce_customer.user` that enforces
-[one row per account](customer.md#one-row-per-account)):
+[one row per account](customer.md#one-row-per-account), the index on the
+buyable behind `ecommerce_order_item` and on `ecommerce_order`'s fulfillment
+method, the `parent` column on both line tables for
+[lines that hang off other lines](cart.md#lines-that-hang-off-other-lines),
+and the `box` column for the
+[bus number](addresses.md) on the address book and both frozen blocks):
 
 ```
 ecommerce_customer          ecommerce_cart
@@ -133,11 +139,12 @@ ecommerce_discount_code     ecommerce_cart_item
 ecommerce_fulfillment_method ecommerce_stock
 ecommerce_order             ecommerce_stock_item
 ecommerce_order_item        ecommerce_address
+ecommerce_payment_attempt
 ```
 
 ```sh
 php oak migration migrate
-php oak migration list        # ecommerce (19/19)
+php oak migration list        # ecommerce (23/23)
 ```
 
 Revisions are **appended to the list, never inserted into it.** Oak's migrator
@@ -146,6 +153,15 @@ next to the table it relates to would renumber everything after it and make an
 existing shop run the wrong statement. `CreateAddressTable` and the revisions
 after it sit at the end for exactly this reason, not because they came last
 conceptually.
+
+### If your project already added one of these columns
+
+Revisions are hardcoded, so a project that added `ecommerce_order_item.parent`
+or a `box` column itself — as several did, because the package had no room for
+either — will halt the migration on a duplicate column. Drop the project's own
+revision **and** the column before running, or rename the column out of the
+way, and let the package's revision put it back. The package now owns the
+concept; a project-side copy of it has nothing left to do.
 
 ### Upgrading a shop that predates the address book
 
@@ -157,9 +173,9 @@ only creates the new table; moving the data over is a by-hand step, one
 ```sql
 INSERT INTO ecommerce_address
   (created, updated, customer, type, is_default,
-   street, number, postal_code, city, country)
+   street, number, box, postal_code, city, country)
 SELECT UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), id, 'billing', 1,
-       address_street, address_number,
+       address_street, address_number, '',
        address_postal_code, address_city, address_country
 FROM ecommerce_customer
 WHERE address_street <> '';

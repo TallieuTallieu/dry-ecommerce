@@ -38,9 +38,11 @@ it('re-places exactly the placed-but-unpaid orders', function (
     bool $expected
 ): void {
     // The same transition rule the webhook listeners write through:
-    // canTransitionTo(Pending). Paid refuses (re-freezing would rewrite what
-    // the money arrived for) and refunded refuses (its money already went
-    // back once); everything short of money arriving is a retry.
+    // canTransitionTo(Pending). Paid refuses — re-freezing would rewrite what
+    // the money arrived for — and so does a partial refund, which is still an
+    // order somebody paid for. A FULL refund accepts (sc-11448): nobody has
+    // paid for that order any more. Everything short of money arriving is a
+    // retry.
     expect(orderIn(OrderState::Placed->value, $status)->isRePlaceable())->toBe(
         $expected
     );
@@ -50,7 +52,8 @@ it('re-places exactly the placed-but-unpaid orders', function (
     'canceled' => [PaymentStatus::Canceled->value, true],
     'expired' => [PaymentStatus::Expired->value, true],
     'paid' => [PaymentStatus::Paid->value, false],
-    'refunded' => [PaymentStatus::Refunded->value, false],
+    'refunded' => [PaymentStatus::Refunded->value, true],
+    'partially refunded' => [PaymentStatus::PartiallyRefunded->value, false],
 ]);
 
 it('never calls a draft re-placeable', function (): void {

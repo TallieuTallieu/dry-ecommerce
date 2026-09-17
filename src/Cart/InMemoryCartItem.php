@@ -27,6 +27,11 @@ class InMemoryCartItem implements CartItemInterface
     private readonly array $options;
 
     /**
+     * The line this one hangs off, or null.
+     */
+    private ?CartItemInterface $parent = null;
+
+    /**
      * @param string $id The line's id, issued by the storage that made it.
      * @param BuyableInterface $buyable
      * @param int $quantity
@@ -127,5 +132,22 @@ class InMemoryCartItem implements CartItemInterface
     public function getOptions(): array
     {
         return $this->options;
+    }
+
+    /**
+     * @return CartItemInterface|null
+     */
+    public function getParent(): ?CartItemInterface
+    {
+        return $this->parent;
+    }
+
+    /**
+     * @param CartItemInterface|null $parent
+     * @return void
+     */
+    public function setParent(?CartItemInterface $parent): void
+    {
+        $this->parent = $parent;
     }
 }
