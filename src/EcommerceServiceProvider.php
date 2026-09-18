@@ -2,6 +2,8 @@
 
 namespace Tnt\Ecommerce;
 
+use dry\admin\Module;
+use dry\admin\Portal;
 use Oak\Contracts\Config\RepositoryInterface;
 use Oak\Contracts\Console\KernelInterface;
 use Oak\Contracts\Container\ContainerInterface;
@@ -10,6 +12,7 @@ use Oak\Migration\MigrationManager;
 use Oak\Migration\Migrator;
 use Oak\ServiceProvider;
 use Tnt\Ecommerce\Account\GuestUserResolver;
+use Tnt\Ecommerce\Admin\LedgerManager;
 use Tnt\Ecommerce\Cart\Cart;
 use Tnt\Ecommerce\Cart\CartLifetime;
 use Tnt\Ecommerce\Cart\CartRelease;
@@ -19,6 +22,7 @@ use Tnt\Ecommerce\Console\ReapDraftsCommand;
 use Tnt\Ecommerce\Contracts\AttributeStorageInterface;
 use Tnt\Ecommerce\Contracts\CartInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
+use Tnt\Ecommerce\Contracts\LedgerPortalInterface;
 use Tnt\Ecommerce\Contracts\PaymentGatewayInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\RedirectorInterface;
@@ -200,8 +204,33 @@ class EcommerceServiceProvider extends ServiceProvider
             );
         });
 
+        // The read-only ledger screen. Built only when asked for, and never
+        // added to the admin by the package: a project opts in from its
+        // admin.inc.php. See docs/admin.md.
+        $app->singleton(
+            LedgerPortalInterface::class,
+            static fn(): Portal => self::ledgerPortal()
+        );
+
         // StockWorkerInterface is deliberately not bound: a worker cannot be
         // built without being told which stock it counts.
+    }
+
+    /**
+     * The admin portal holding the ledger screen.
+     *
+     * @return Portal
+     */
+    private static function ledgerPortal(): Portal
+    {
+        return new Portal(
+            'payments',
+            'Payments',
+            [new LedgerManager()],
+            [
+                'icon' => Module::ICON_CURRENCY,
+            ]
+        );
     }
 
     /**
