@@ -8,7 +8,7 @@ rather than guessed at.
 
 ## Requirements
 
-PHP `>= 8.4`, dry `^4.0`, oak `^3.0`, dry-dbi `^3.0`. dry-accounts `^3` is a
+PHP `^8.4`, dry `^4.0`, oak `^3.0 || ^4.0`, dry-dbi `^3.0`. dry-accounts `^3` is a
 supported pairing, not a dependency.
 
 ## Install

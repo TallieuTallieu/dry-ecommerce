@@ -5,10 +5,10 @@
   "license": "proprietary",
   "minimum-stability": "beta",
   "require": {
-    "php": ">=8.4",
+    "php": "^8.4",
     "tallieutallieu/dry": "^4.0",
     "tallieutallieu/dry-dbi": "^3.13",
-    "tallieutallieu/oak": "^3.0"
+    "tallieutallieu/oak": "^3.0 || ^4.0"
   },
   "require-dev": {
     "pestphp/pest": "^3.8",

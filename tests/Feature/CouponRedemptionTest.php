@@ -22,6 +22,7 @@ declare(strict_types=1);
  * through would look wrong.
  */
 
+use Oak\Contracts\Dispatcher\EventInterface;
 use Tests\Support\FakeCoupon;
 use Tests\Support\FakeDiscountCode;
 use Tests\Support\InMemoryOrder;
@@ -71,9 +72,9 @@ it('redeems it once per payment, not once per listener', function (): void {
     // count of listeners.
     $alsoHeard = 0;
 
-    $dispatcher->addListener(Paid::class, function (Paid $event) use (
-        &$alsoHeard
-    ): void {
+    $dispatcher->addListener(Paid::class, function (
+        ?EventInterface $event
+    ) use (&$alsoHeard): void {
         $alsoHeard++;
     });
 

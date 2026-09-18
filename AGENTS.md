@@ -60,8 +60,8 @@ project.
 
 | Dependency | Constraint |
 |---|---|
-| PHP | `^8.2` (CI runs 8.4) |
-| `tallieutallieu/oak` | `^3.0` |
+| PHP | `^8.4` |
+| `tallieutallieu/oak` | `^3.0 \|\| ^4.0` |
 | `tallieutallieu/dry` | v4 |
 | `tallieutallieu/dry-dbi` | `^3` |
 | `tallieutallieu/dry-accounts` | `^3` — supported pairing, not a hard dependency |

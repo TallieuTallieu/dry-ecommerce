@@ -8,9 +8,9 @@ the order below is the order things actually have to happen in.
 
 |              |                                                |
 | ------------ | ---------------------------------------------- |
-| PHP          | `>= 8.4`                                       |
+| PHP          | `^8.4`                                         |
 | dry          | `^4.0`                                         |
-| oak          | `^3.0`                                         |
+| oak          | `^3.0 \|\| ^4.0`                               |
 | dry-dbi      | `^3.0`                                         |
 | dry-accounts | `^3` — **optional**, and in `require-dev` here |
 
