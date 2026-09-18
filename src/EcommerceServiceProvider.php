@@ -44,7 +44,6 @@ use Tnt\Ecommerce\Revisions\AddBoxToAddresses;
 use Tnt\Ecommerce\Revisions\AddOrderLineIndexes;
 use Tnt\Ecommerce\Revisions\AddOrderStateColumn;
 use Tnt\Ecommerce\Revisions\AddParentToLineTables;
-use Tnt\Ecommerce\Revisions\CreatePaymentAttemptTable;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
@@ -103,7 +102,6 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddOrderLineIndexes::class,
                 AddParentToLineTables::class,
                 AddBoxToAddresses::class,
-                CreatePaymentAttemptTable::class,
             ]);
 
             /** @var MigrationManager $manager */

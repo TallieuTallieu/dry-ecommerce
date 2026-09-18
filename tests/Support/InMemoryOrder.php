@@ -7,7 +7,6 @@ namespace Tests\Support;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Model\OrderItem;
-use Tnt\Ecommerce\Model\PaymentAttempt;
 
 /**
  * An order that keeps to memory instead of a table.
@@ -98,24 +97,6 @@ final class InMemoryOrder extends Order
         // stand-in has to answer with a line of its own — one per call, kept
         // out of the database like everything else here.
         return $this->frozen[$cartItem->getId()] = new InMemoryOrderItem();
-    }
-
-    /**
-     * The attempts `startPaymentAttempt()` wrote, in order.
-     *
-     * @var array<int, InMemoryPaymentAttempt>
-     */
-    public array $attempts = [];
-
-    /**
-     * @return PaymentAttempt
-     */
-    protected function newPaymentAttempt(): PaymentAttempt
-    {
-        $attempt = new InMemoryPaymentAttempt();
-        $this->attempts[] = $attempt;
-
-        return $attempt;
     }
 
     /**

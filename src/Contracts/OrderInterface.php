@@ -24,22 +24,6 @@ interface OrderInterface
     public function getItems();
 
     /**
-     * The provider's id for the attempt this order is currently waiting on,
-     * or null. A gateway's `resumeUrl()` takes this. See docs/payment.md.
-     *
-     * @return string|null
-     */
-    public function getPaymentId(): ?string;
-
-    /**
-     * The key a gateway hands its provider so a double-submit is answered
-     * with one payment. Re-minted at every placement.
-     *
-     * @return string
-     */
-    public function getPaymentKey(): string;
-
-    /**
      * @param CustomerInterface $customer
      * @return mixed
      */

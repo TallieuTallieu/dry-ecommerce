@@ -33,7 +33,6 @@ use Tnt\Ecommerce\Tax\PriceConvention;
  * @property int $updated
  * @property string|null $order_id
  * @property string|null $payment_id
- * @property string|null $payment_key
  * @property int|null $total
  * @property int|null $subtotal
  * @property int|null $reduction
@@ -443,75 +442,6 @@ class Order extends Model implements OrderInterface, TotalingInterface
     {
         return PaymentStatus::tryFrom((string) $this->payment_status) ??
             PaymentStatus::Pending;
-    }
-
-    /**
-     * The provider's id for the attempt this order is currently waiting on,
-     * or null once it has been re-placed and nothing has been started yet.
-     * Superseded ids live on in `ecommerce_payment_attempt`.
-     *
-     * @return string|null
-     */
-    public function getPaymentId(): ?string
-    {
-        $paymentId = (string) $this->payment_id;
-
-        return $paymentId === '' ? null : $paymentId;
-    }
-
-    /**
-     * The key a gateway hands its provider so that two simultaneous "pay"
-     * posts are answered with one payment rather than two. Re-minted by
-     * {@see \Tnt\Ecommerce\Cart\Cart::place()} on every placement — a
-     * re-placed order asking under the old key would be handed back the
-     * payment its customer already abandoned. '' for an order placed before
-     * the column existed. See docs/payment.md.
-     *
-     * @return string
-     */
-    public function getPaymentKey(): string
-    {
-        return (string) $this->payment_key;
-    }
-
-    /**
-     * Start a go at paying this order: point the order at the provider's id
-     * and write the attempt that outlives it.
-     *
-     * This is what a gateway calls from `pay()` instead of assigning
-     * `payment_id` itself. A gateway that has not been updated still works —
-     * the webhook falls back to the order's own column — but its superseded
-     * attempts leave no record, which is the whole point of this table.
-     *
-     * @param string $paymentId The provider's own id.
-     * @return PaymentAttempt
-     */
-    public function startPaymentAttempt(string $paymentId): PaymentAttempt
-    {
-        $this->payment_id = $paymentId;
-        $this->save();
-
-        $attempt = $this->newPaymentAttempt();
-        $attempt->created = time();
-        $attempt->updated = time();
-        $attempt->order = $this;
-        $attempt->payment_id = $paymentId;
-        $attempt->status = PaymentStatus::Pending->value;
-        $attempt->payment_key = $this->getPaymentKey();
-        $attempt->save();
-
-        return $attempt;
-    }
-
-    /**
-     * The empty attempt {@see startPaymentAttempt()} is about to fill in — a
-     * test seam, same shape as {@see newOrderItem()}.
-     *
-     * @return PaymentAttempt
-     */
-    protected function newPaymentAttempt(): PaymentAttempt
-    {
-        return new PaymentAttempt();
     }
 
     /**

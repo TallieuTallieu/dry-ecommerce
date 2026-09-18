@@ -114,16 +114,6 @@ it('takes no interest in an order it did not write', function (): void {
             throw new LogicException('Not needed for this test.');
         }
 
-        public function getPaymentId(): ?string
-        {
-            return null;
-        }
-
-        public function getPaymentKey(): string
-        {
-            return '';
-        }
-
         public function getItems()
         {
             return [];

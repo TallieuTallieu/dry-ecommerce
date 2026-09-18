@@ -459,15 +459,6 @@ class Cart implements CartInterface, TotalingInterface
         // The guard above is what makes this bare write legal.
         $order->payment_status = PaymentStatus::Pending->value;
 
-        // A placement is a fresh go at the money. The previous attempt's id
-        // stops belonging to this order — it survives in
-        // `ecommerce_payment_attempt`, so a late webhook about it still finds
-        // its order instead of a 404 on the provider's full retry schedule —
-        // and the key a gateway hands its provider is re-minted, or the
-        // provider would answer with the payment the customer abandoned.
-        $order->payment_id = null;
-        $order->payment_key = bin2hex(random_bytes(16));
-
         $order->discount = $this->getDiscount();
 
         if ($customer !== null) {

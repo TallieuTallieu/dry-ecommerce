@@ -159,14 +159,6 @@ Two consequences:
   over a goodwill gesture. See
   [the two kinds of refund](payment.md#the-two-kinds-of-refund).
 
-Placement also starts the payment over: `payment_id` is cleared, so the order
-is waiting on nothing until the gateway starts its next attempt, and
-`payment_key` is re-minted. The previous attempt is not lost — it lives on in
-`ecommerce_payment_attempt` and its webhooks are still answered. The
-**reference** is the one thing that does not move: a re-placed order stays the
-order the customer was quoted. See
-[every attempt leaves a record](payment.md#every-attempt-leaves-a-record).
-
 ## The two records of the customer
 
 Not redundant, and the difference matters:

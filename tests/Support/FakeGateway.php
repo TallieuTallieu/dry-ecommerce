@@ -75,22 +75,4 @@ final class FakeGateway implements PaymentGatewayInterface
     {
         return $this->reports[$paymentId] ?? PaymentStatus::Pending;
     }
-
-    /**
-     * The checkout page pay() sent the visitor to, as long as the provider
-     * still says the payment is waiting — a settled payment has no page left.
-     *
-     * @param string $paymentId
-     * @return string|null
-     */
-    public function resumeUrl(string $paymentId): ?string
-    {
-        $status = $this->reports[$paymentId] ?? PaymentStatus::Pending;
-
-        if ($status !== PaymentStatus::Pending) {
-            return null;
-        }
-
-        return 'https://pay.example/checkout/' . $paymentId;
-    }
 }

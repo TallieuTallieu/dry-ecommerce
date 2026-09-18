@@ -29,19 +29,4 @@ interface PaymentGatewayInterface extends PaymentInterface
      * @return PaymentStatus
      */
     public function statusOf(string $paymentId): PaymentStatus;
-
-    /**
-     * Where to send a visitor to finish a payment they walked away from, or
-     * null when the provider has no page left to offer — it expired, it was
-     * canceled, it is already paid.
-     *
-     * Without this a shop that wants to offer "continue where you left off"
-     * has to reach past this interface to the concrete provider's SDK, and
-     * the gateway stops being swappable. Take the id from
-     * {@see \Tnt\Ecommerce\Contracts\OrderInterface::getPaymentId()}.
-     *
-     * @param string $paymentId The provider's own id.
-     * @return string|null
-     */
-    public function resumeUrl(string $paymentId): ?string;
 }

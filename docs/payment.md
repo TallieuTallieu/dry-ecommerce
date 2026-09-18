@@ -166,83 +166,6 @@ Neither word can be talked back down. Once a refund is recorded, a straggling
 has exactly one door out, and it is `pending`, which only
 [re-placement](orders.md#re-placement) walks through.
 
-### Every attempt leaves a record
-
-An order can be placed more than once, so it can be paid for more than once —
-and `ecommerce_order.payment_id` holds only the attempt it is waiting on
-**now**. Placement clears it, and the previous id would otherwise belong to no
-order at all. The provider then calls back about that dead id, the shop
-answers 404, the provider retries on its full schedule, and a provider that
-sees an endpoint keep failing disables it — taking the orders that do matter
-with it.
-
-`ecommerce_payment_attempt` is where those attempts go. One row per go at the
-money: the order, the provider's id, where that attempt got to, and the
-payment key it was made under.
-
-A gateway opts in by starting its attempt through the order rather than
-assigning the column itself:
-
-```php
-public function pay(OrderInterface $order)
-{
-    $payment = $this->mollie->payments->create([
-        // ...
-    ]);
-
-    $order->startPaymentAttempt($payment->id);
-
-    $this->redirector->redirect($payment->getCheckoutUrl());
-}
-```
-
-That writes `payment_id` *and* the attempt row. A gateway that assigns
-`payment_id` by hand still works — the webhook falls back to the order's own
-column — but leaves no history, which is the whole point of the table.
-
-What the webhook then does with a superseded attempt: records its status
-against that attempt, and stops. The order has since been re-placed and is
-owed a different payment, so it must not be told that the abandoned one
-expired. Nothing is 404'd, and "which attempt was this webhook about" is
-answerable.
-
-### The payment key
-
-`ecommerce_order.payment_key` is re-minted on every placement, unlike
-`order_id`, which a re-placed order deliberately keeps. Hand it to the
-provider as an idempotency key:
-
-```php
-$order->getPaymentKey(); // '9f2c…'
-```
-
-Two simultaneous "pay" posts then ask the provider under one key and get one
-payment back, instead of creating two live payments of which the loser is
-unreachable. This narrows the window rather than closing it — dry-dbi has no
-`FOR UPDATE`, so the package cannot lock the row — but the losing attempt is
-now recorded rather than lost.
-
-The key is re-minted rather than kept because a re-placed order asking under
-the old key would be handed back the payment its customer already walked away
-from.
-
-### Sending a visitor back to an unfinished payment
-
-`resumeUrl()` is the third thing a gateway answers:
-
-```php
-$url = $gateway->resumeUrl($order->getPaymentId());
-
-if ($url !== null) {
-    // "Continue where you left off"
-}
-```
-
-Null means the provider has no page left to offer — it expired, it was
-canceled, it is already paid. Without this a shop reaches past
-`PaymentGatewayInterface` into the provider's SDK, and the gateway stops being
-swappable no matter what the config says.
-
 ## Writing a gateway
 
 `PaymentInterface` is all a synchronous gateway needs — `NullPayment` is the
@@ -276,7 +199,8 @@ public function pay(OrderInterface $order)
     ]);
 
     if ($order instanceof Order) {
-        $order->startPaymentAttempt($payment->id);
+        $order->payment_id = $payment->id;
+        $order->save();
     }
 
     $this->redirector->redirect($payment->checkoutUrl);
@@ -292,13 +216,11 @@ Three rules hidden in those few lines:
   — a redirect value handed back would be discarded by the only code that
   calls `pay()`. The seam is what keeps that testable: a test binds a
   recorder and `pay()` runs to the end.
-- **`startPaymentAttempt()` rather than assigning `payment_id`.** It writes
-  the column *and* the attempt row. A
+- **`payment_id` is overwritten, never guarded.** A
   [re-placement](orders.md#re-placement) calls `pay()` again on the same
-  order; the fresh attempt's id replaces the old one on the order, and the
-  old attempt goes on answering for itself out of
-  `ecommerce_payment_attempt`. Assigning the column by hand still works and
-  still takes payments — it just throws the previous attempt away.
+  order; the old payment is dead at the provider and the fresh attempt's id
+  replaces it. A webhook for the dead attempt then finds no order — the
+  right answer for it.
 - **Amounts come from `Money::toDecimal()`.** The order's money is integer
   cents; providers want `'12.50'` strings. The conversion exists and is
   tested — do not divide by 100.
@@ -319,10 +241,6 @@ a report). The handler dispatches; your gateway never does it from the
 webhook path, and **neither half ever writes `payment_status`** — the
 listeners own the column, exactly as for `NullPayment`.
 
-**The third method is `resumeUrl()`**, and it is a read: given a payment id,
-answer where the visitor can finish that payment, or null when the provider
-has nothing left to offer.
-
 ### What the project wires
 
 The package is route-agnostic, so a project on an asynchronous gateway
@@ -337,11 +255,9 @@ registers exactly one webhook route and points it at the handler:
 },
 ```
 
-`handle()` throws `UnknownPayment` when neither an attempt nor an order
-carries the id — answer the provider with a 404 and let it retry or give up;
-swallowing it would tell a provider posting garbage that all is well. An id
-this shop *did* use, on an attempt that has since been superseded, is not that
-case: it is recorded and answered 200.
+`handle()` throws `UnknownPayment` when no order carries the id — answer the
+provider with a 404 and let it retry or give up; swallowing it would tell a
+provider posting garbage that all is well.
 
 The **return page** — where the provider sends the visitor back — reads the
 order's own state and nothing else. The webhook may or may not have arrived
@@ -359,9 +275,6 @@ through — refuse what must not land: a replayed `Paid` writes nothing, a late
 `expired` after the money arrived writes nothing, and a refund of either size
 is the only exit from `Paid`. A gateway that tries to be clever about replays
 is second-guessing a guard that already answered.
-
-The same guard runs on each `ecommerce_payment_attempt` row, so an attempt's
-own record is as replay-proof as the order's.
 
 ## Available gateways
 

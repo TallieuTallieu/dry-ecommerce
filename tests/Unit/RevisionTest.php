@@ -32,7 +32,6 @@ use Tests\Support\CapturingAddOptionsToLineTables;
 use Tests\Support\CapturingAddOrderLineIndexes;
 use Tests\Support\CapturingAddOrderStateColumn;
 use Tests\Support\CapturingAddParentToLineTables;
-use Tests\Support\CapturingCreatePaymentAttemptTable;
 use Tests\Support\CapturingCreateAddressTable;
 use Tests\Support\CapturingDropAddressNameColumns;
 use Tests\Support\CapturingCreateCustomerTable;
@@ -306,37 +305,6 @@ it('keeps the order foreign key its own index', function (): void {
     foreach ($revision->statements as $statement) {
         expect($statement)->not->toContain('fk_ecommerce_order_item');
     }
-});
-
-it('records every go at paying an order', function (): void {
-    // sc-11448: an order carried one payment id, so a re-placed order's
-    // previous payment belonged to no order and its webhook could only be
-    // answered 404, for ever, on the provider's full retry schedule.
-    $revision = new CapturingCreatePaymentAttemptTable(new QueryBuilder());
-    $revision->up();
-
-    expect($revision->statements)->toHaveCount(2);
-
-    $table = $revision->statements[0];
-
-    expect($table)->toContain('CREATE TABLE `ecommerce_payment_attempt`');
-    expect($table)->toContain('`order` INT(11)');
-    expect($table)->toContain('`payment_id` VARCHAR(255)');
-    expect($table)->toContain('`status` VARCHAR(255)');
-    expect($table)->toContain('`payment_key` VARCHAR(255)');
-    expect($table)->toContain('FOREIGN KEY (`order`)');
-
-    // The webhook lookup — without it, resolving a superseded payment id is
-    // the full scan the 404 was standing in for.
-    expect($table)->toContain('INDEX `idx_payment_id` (`payment_id`)');
-
-    // And the key a gateway hands its provider, on the order it belongs to.
-    expect($revision->statements[1])->toContain(
-        'ALTER TABLE `ecommerce_order`'
-    );
-    expect($revision->statements[1])->toContain(
-        'ADD `payment_key` VARCHAR(255)'
-    );
 });
 
 it('records the identity the order was placed with', function (
