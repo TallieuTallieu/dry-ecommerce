@@ -8,6 +8,7 @@ use Oak\Contracts\Config\RepositoryInterface;
 use Oak\Contracts\Console\KernelInterface;
 use Oak\Contracts\Container\ContainerInterface;
 use Oak\Contracts\Dispatcher\DispatcherInterface;
+use Oak\Contracts\Dispatcher\EventInterface;
 use Oak\Migration\MigrationManager;
 use Oak\Migration\Migrator;
 use Oak\ServiceProvider;
@@ -307,7 +308,13 @@ class EcommerceServiceProvider extends ServiceProvider
         /** @var DispatcherInterface $dispatcher */
         $dispatcher = $app->get(DispatcherInterface::class);
 
-        $dispatcher->addListener(Paid::class, function (Paid $paidEvent): void {
+        $dispatcher->addListener(Paid::class, function (
+            ?EventInterface $paidEvent
+        ): void {
+            if (!($paidEvent instanceof Paid)) {
+                return;
+            }
+
             $order = $paidEvent->getOrder();
 
             if (!($order instanceof Order)) {
@@ -331,9 +338,13 @@ class EcommerceServiceProvider extends ServiceProvider
         // link, so the row and its provenance survive. Resolved through the
         // container at dispatch time — the default queries ecommerce_cart,
         // and a test substitutes its own CartRelease binding.
-        $dispatcher->addListener(Paid::class, function (Paid $paidEvent) use (
-            $app
-        ): void {
+        $dispatcher->addListener(Paid::class, function (
+            ?EventInterface $paidEvent
+        ) use ($app): void {
+            if (!($paidEvent instanceof Paid)) {
+                return;
+            }
+
             $order = $paidEvent->getOrder();
 
             if (!($order instanceof Order)) {

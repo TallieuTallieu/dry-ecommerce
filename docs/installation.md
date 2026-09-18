@@ -8,11 +8,11 @@ the order below is the order things actually have to happen in.
 
 |              |                                                |
 | ------------ | ---------------------------------------------- |
-| PHP          | `>= 8.4`                                       |
+| PHP          | `^8.4`                                         |
 | dry          | `^4.0`                                         |
-| oak          | `^3.0`                                         |
+| oak          | `^3.0 \|\| ^4.0`                               |
 | dry-dbi      | `^3.0`                                         |
-| dry-accounts | `^3` — **optional**, and in `require-dev` here |
+| dry-accounts | `^3 \|\| ^4` — **optional**, in `require-dev` here |
 
 dry-accounts is a supported pairing, not a dependency. Exactly one class in
 `src/` names it (`AccountsUserResolver`), only in a constructor type hint, which

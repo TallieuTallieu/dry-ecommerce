@@ -24,6 +24,7 @@ declare(strict_types=1);
  * are four different numbers on purpose: any transposition fails.
  */
 
+use Oak\Contracts\Dispatcher\EventInterface;
 use Tests\Support\FakeBuyable;
 use Tests\Support\FakeCoupon;
 use Tests\Support\FakeDiscountCode;
@@ -313,8 +314,10 @@ it('announces the order once it is whole', function (): void {
     $announced = [];
 
     Oak\Dispatcher\Facade\Dispatcher::addListener(Created::class, function (
-        Created $event
+        ?EventInterface $event
     ) use (&$announced): void {
+        assert($event instanceof Created);
+
         // Read the order as the listener sees it, not afterwards. A listener
         // that ran too early would see an order that is not yet the one that
         // was placed, and reading it here is the only way to tell.

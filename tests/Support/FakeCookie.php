@@ -55,4 +55,15 @@ final class FakeCookie implements CookieInterface
     {
         return isset($this->values[$name]);
     }
+
+    /**
+     * Oak 4 added delete() to the contract; harmless extra method on oak 3.
+     *
+     * @param string $name
+     * @return void
+     */
+    public function delete(string $name): void
+    {
+        unset($this->values[$name], $this->expiries[$name]);
+    }
 }
