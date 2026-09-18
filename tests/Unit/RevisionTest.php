@@ -37,6 +37,7 @@ use Tests\Support\CapturingDropAddressNameColumns;
 use Tests\Support\CapturingCreateCustomerTable;
 use Tests\Support\CapturingCreateOrderItemTable;
 use Tests\Support\CapturingCreateOrderTable;
+use Tests\Support\CapturingCreatePaymentEntryTable;
 use Tests\Support\CapturingMakeCustomerUserUnique;
 use Tests\Support\CapturingMakeOrderCustomerNullable;
 use Tests\Support\CapturingMakeOrderPlacementColumnsNullable;
@@ -759,4 +760,62 @@ it('keeps the non-money columns as they were', function (): void {
     expect(orderTableSql())->toContain('`created` INT(11)');
     expect(orderItemTableSql())->toContain('`quantity` INT(11)');
     expect(orderItemTableSql())->toContain('`item_id` INT(11)');
+});
+
+/**
+ * @return string
+ */
+function paymentEntryTableSql(): string
+{
+    $revision = new CapturingCreatePaymentEntryTable(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(1);
+
+    return $revision->statements[0];
+}
+
+it('creates the payment ledger with a column per entry field', function (
+    string $column
+): void {
+    // sc-11458: hardcoded, never derived from EntryKind or PaymentStatus —
+    // a revision is a statement about the past. No `updated`: nothing
+    // updates an entry.
+    expect(paymentEntryTableSql())->toContain($column);
+})->with([
+    '`id` INT(11)',
+    '`created` INT(11)',
+    '`order` INT(11) NULL',
+    '`provider` VARCHAR(64)',
+    '`payment_id` VARCHAR(255)',
+    '`kind` VARCHAR(32)',
+    '`status` VARCHAR(32) NULL',
+    '`amount` BIGINT(20) NULL',
+    '`reference` VARCHAR(255) NULL',
+]);
+
+it('keeps the payment ledger append-only in shape', function (): void {
+    $sql = paymentEntryTableSql();
+
+    expect($sql)->toContain('CREATE TABLE `ecommerce_payment_entry`');
+    expect($sql)->not->toContain('`updated`');
+    expect($sql)->toContain('REFERENCES `ecommerce_order` (`id`)');
+
+    // D2: a replayed report writes nothing because this refuses it.
+    expect($sql)->toContain('UNIQUE (`provider`, `kind`, `reference`)');
+    expect($sql)->toContain('INDEX `idx_order_id` (`order`, `id`)');
+    expect($sql)->toContain(
+        'INDEX `idx_provider_payment_id` (`provider`, `payment_id`)'
+    );
+});
+
+it('drops the payment ledger on the way down', function (): void {
+    // The index leading with `order` stood in for the foreign key's own;
+    // dropping the table takes both, so down() needs no re-add dance.
+    $revision = new CapturingCreatePaymentEntryTable(new QueryBuilder());
+    $revision->down();
+
+    expect($revision->statements)->toBe([
+        'DROP TABLE `ecommerce_payment_entry`',
+    ]);
 });

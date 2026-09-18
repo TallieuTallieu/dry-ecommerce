@@ -290,7 +290,8 @@ One call, guest or account. Inside it, in this order:
    identity and both addresses.
 4. The order is saved, gets its reference, and the cart's lines are copied onto
    it.
-5. `Created` is dispatched, then the gateway's `pay()` is called.
+5. `Created` is dispatched, then the gateway's `pay()` is called and the
+   [payment ledger](payment.md#the-ledger) records what it answered.
 
 ### 6. What you can ask afterwards
 

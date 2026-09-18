@@ -24,18 +24,12 @@ use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\RedirectorInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
-use Tnt\Ecommerce\Events\Order\OrderEvent;
 use Tnt\Ecommerce\Events\Order\Paid;
-use Tnt\Ecommerce\Events\Order\PaymentCanceled;
-use Tnt\Ecommerce\Events\Order\PaymentExpired;
-use Tnt\Ecommerce\Events\Order\PaymentFailed;
-use Tnt\Ecommerce\Events\Order\PaymentPartiallyRefunded;
-use Tnt\Ecommerce\Events\Order\PaymentRefunded;
 use Tnt\Ecommerce\Fulfillment\CartAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Payment\HttpRedirector;
 use Tnt\Ecommerce\Payment\NullPayment;
-use Tnt\Ecommerce\Payment\PaymentStatus;
+use Tnt\Ecommerce\Payment\PaymentLedger;
 use Tnt\Ecommerce\Revisions\AddCartLifecycleColumns;
 use Tnt\Ecommerce\Revisions\AddFulfillmentAttributesToOrderTable;
 use Tnt\Ecommerce\Revisions\AddIndexesToEcommerceTables;
@@ -47,6 +41,7 @@ use Tnt\Ecommerce\Revisions\AddParentToLineTables;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
+use Tnt\Ecommerce\Revisions\CreatePaymentEntryTable;
 use Tnt\Ecommerce\Revisions\DropAddressNameColumns;
 use Tnt\Ecommerce\Revisions\MakeCustomerUserUnique;
 use Tnt\Ecommerce\Revisions\MakeOrderCustomerNullable;
@@ -102,6 +97,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddOrderLineIndexes::class,
                 AddParentToLineTables::class,
                 AddBoxToAddresses::class,
+                CreatePaymentEntryTable::class,
             ]);
 
             /** @var MigrationManager $manager */
@@ -176,9 +172,13 @@ class EcommerceServiceProvider extends ServiceProvider
             $app->singleton(PaymentGatewayInterface::class, $gateway);
         }
 
-        // Where a gateway sends the visitor. A seam rather than a direct
-        // call to dry's Response so pay() can run in a test without exiting.
+        // Where place() sends the visitor after a PaymentRedirect. A seam
+        // rather than a direct call to dry's Response so place() can run in
+        // a test without exiting.
         $app->singleton(RedirectorInterface::class, HttpRedirector::class);
+
+        // The one writer of the payment ledger and of payment_status.
+        $app->singleton(PaymentLedger::class, PaymentLedger::class);
 
         // Who is signed in. The default answers "nobody" — correct for a shop
         // with no accounts.
@@ -264,10 +264,11 @@ class EcommerceServiceProvider extends ServiceProvider
     }
 
     /**
-     * The payment-event listeners: each event writes its status onto the
-     * order, and {@see Paid} additionally redeems the coupon and soft-deletes
-     * the cart behind the order ({@see CartRelease}). Orders that are not
-     * this package's {@see Order} are left alone. See docs/payment.md.
+     * The {@see Paid} listeners: redeem the order's coupon and soft-delete
+     * the cart behind the order ({@see CartRelease}). `payment_status` is
+     * not a listener's to write — {@see PaymentLedger} derives it and
+     * dispatches. Orders that are not this package's {@see Order} are left
+     * alone. See docs/payment.md.
      *
      * @param ContainerInterface $app
      * @return void
@@ -276,27 +277,6 @@ class EcommerceServiceProvider extends ServiceProvider
     {
         /** @var DispatcherInterface $dispatcher */
         $dispatcher = $app->get(DispatcherInterface::class);
-
-        $statuses = [
-            Paid::class => PaymentStatus::Paid,
-            PaymentFailed::class => PaymentStatus::Failed,
-            PaymentCanceled::class => PaymentStatus::Canceled,
-            PaymentExpired::class => PaymentStatus::Expired,
-            PaymentRefunded::class => PaymentStatus::Refunded,
-            PaymentPartiallyRefunded::class => PaymentStatus::PartiallyRefunded,
-        ];
-
-        foreach ($statuses as $event => $status) {
-            $dispatcher->addListener($event, function (OrderEvent $event) use (
-                $status
-            ): void {
-                $order = $event->getOrder();
-
-                if ($order instanceof Order) {
-                    $order->setPaymentStatus($status);
-                }
-            });
-        }
 
         $dispatcher->addListener(Paid::class, function (Paid $paidEvent): void {
             $order = $paidEvent->getOrder();

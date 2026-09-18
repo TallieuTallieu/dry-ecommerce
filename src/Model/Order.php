@@ -16,7 +16,9 @@ use Tnt\Ecommerce\Contracts\OrderItemInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Facade\Shop;
 use Tnt\Ecommerce\Order\OrderState;
+use Tnt\Ecommerce\Payment\EntryKind;
 use Tnt\Ecommerce\Payment\PaymentStatus;
+use Tnt\Ecommerce\Repository\PaymentEntryRepository;
 use Tnt\Ecommerce\Tax\PriceConvention;
 
 /**
@@ -402,18 +404,127 @@ class Order extends Model implements OrderInterface, TotalingInterface
 
     /**
      * Whether {@see \Tnt\Ecommerce\Cart\Cart::place()} would accept this
-     * existing order again: placed, and the money never arrived — the same
-     * transition rule the webhook listeners write through
-     * ({@see PaymentStatus::canTransitionTo()}). This is the one spelling of
-     * that rule; place()'s own guard reads through it. A draft is placeable
-     * but not RE-placeable — it has no placement to repeat. See docs/orders.md.
+     * existing order again: placed, and either nothing was ever captured or
+     * every cent captured went back. A €0 capture counts — a free order is
+     * paid. The one spelling of that rule; place()'s own guard reads through
+     * it. A draft is placeable but not RE-placeable. See docs/orders.md.
      *
      * @return bool
      */
     public function isRePlaceable(): bool
     {
-        return $this->getState() === OrderState::Placed &&
-            $this->getPaymentStatus()->canTransitionTo(PaymentStatus::Pending);
+        if ($this->getState() !== OrderState::Placed) {
+            return false;
+        }
+
+        if (!$this->hasCapture()) {
+            return true;
+        }
+
+        return $this->getPaid() > 0 && $this->getNet() <= 0;
+    }
+
+    /**
+     * The payment ledger's entries for this order, oldest first, across
+     * every attempt. A test seam as well: override it to keep to memory. An
+     * order never saved has none.
+     *
+     * @return list<PaymentEntry>
+     */
+    public function getPaymentEntries(): array
+    {
+        if ($this->id === null) {
+            return [];
+        }
+
+        $entries = [];
+
+        foreach (
+            PaymentEntryRepository::create()->forOrder($this)->all()
+            as $entry
+        ) {
+            $entries[] = $entry;
+        }
+
+        return $entries;
+    }
+
+    /**
+     * Whether any attempt captured money — even €0.
+     *
+     * @return bool
+     */
+    public function hasCapture(): bool
+    {
+        foreach ($this->getPaymentEntries() as $entry) {
+            if ($entry->kind === EntryKind::Captured->value) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Cents captured, on any attempt.
+     *
+     * @return int
+     */
+    public function getPaid(): int
+    {
+        return $this->sumOf([EntryKind::Captured->value => 1]);
+    }
+
+    /**
+     * Cents that went back: refunds and chargebacks, less their reversals.
+     *
+     * @return int
+     */
+    public function getReturned(): int
+    {
+        return $this->sumOf([
+            EntryKind::Refunded->value => 1,
+            EntryKind::RefundReversed->value => -1,
+            EntryKind::Chargeback->value => 1,
+            EntryKind::ChargebackReversed->value => -1,
+        ]);
+    }
+
+    /**
+     * Cents the shop kept: paid less returned.
+     *
+     * @return int
+     */
+    public function getNet(): int
+    {
+        return $this->getPaid() - $this->getReturned();
+    }
+
+    /**
+     * Cents still owed against the frozen total; never below zero.
+     *
+     * @return int
+     */
+    public function getOutstanding(): int
+    {
+        return max(0, $this->getTotal() - $this->getNet());
+    }
+
+    /**
+     * The signed sum of the entries of the given kinds.
+     *
+     * @param array<string, int> $signs kind => +1 or -1
+     * @return int
+     */
+    private function sumOf(array $signs): int
+    {
+        $sum = 0;
+
+        foreach ($this->getPaymentEntries() as $entry) {
+            $sum += ($signs[$entry->kind] ?? 0) * $entry->getAmount();
+        }
+
+        return $sum;
     }
 
     /**
@@ -432,8 +543,9 @@ class Order extends Model implements OrderInterface, TotalingInterface
     }
 
     /**
-     * Where the money for this order stands. A column this package cannot read
-     * — legacy `''`, or an unknown word — reads as
+     * Where the money for this order stands, as {@see
+     * \Tnt\Ecommerce\Payment\PaymentLedger} last derived it from the
+     * entries. A column this package cannot read — legacy `''`, or an unknown word — reads as
      * {@see PaymentStatus::Pending}, the one status that claims nothing.
      *
      * @return PaymentStatus
@@ -442,26 +554,5 @@ class Order extends Model implements OrderInterface, TotalingInterface
     {
         return PaymentStatus::tryFrom((string) $this->payment_status) ??
             PaymentStatus::Pending;
-    }
-
-    /**
-     * Record where the money stands, and save. Takes the enum so only words
-     * {@see getPaymentStatus()} can read back reach the column.
-     *
-     * @param PaymentStatus $status
-     * @return void
-     */
-    public function setPaymentStatus(PaymentStatus $status): void
-    {
-        // Webhooks arrive at least once and out of order; the current status
-        // decides what may replace it (see PaymentStatus::canTransitionTo()).
-        // A blocked write is a no-op, not an error: a late `expired` for an
-        // order that has since been paid is ordinary traffic.
-        if (!$this->getPaymentStatus()->canTransitionTo($status)) {
-            return;
-        }
-
-        $this->payment_status = $status->value;
-        $this->save();
     }
 }

@@ -7,7 +7,8 @@ namespace Tnt\Ecommerce;
 use RuntimeException;
 
 /**
- * A webhook named a payment id no order carries. Loud rather than a no-op:
+ * A webhook named a payment id no attempt in the ledger carries — recorded
+ * as an `unknown_payment` entry first. Loud rather than a no-op:
  * answering the provider with an error is what makes it retry, and a shop
  * being posted ids it never issued should get to see that. See
  * docs/payment.md.
@@ -27,8 +28,8 @@ final class UnknownPayment extends RuntimeException
     {
         return new self(
             sprintf(
-                "No order carries payment id '%s'. Either the id never came " .
-                    'from this shop, or the order it belonged to is gone.',
+                "No payment attempt carries id '%s'. Either the id never " .
+                    'came from this shop, or the order it belonged to is gone.',
                 $paymentId
             )
         );

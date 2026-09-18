@@ -31,6 +31,8 @@ use Tnt\Ecommerce\Events\Order\Created;
 use Tnt\Ecommerce\Account\GuestUserResolver;
 use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
 use Tnt\Ecommerce\Order\OrderState;
+use Tnt\Ecommerce\Payment\EntryKind;
+use Tnt\Ecommerce\Payment\Movement;
 use Tnt\Ecommerce\Payment\PaymentStatus;
 use Tnt\Ecommerce\Shop\Shop;
 
@@ -164,14 +166,14 @@ it('re-places a failed order as the same order', function (): void {
     // The dry-mollie shape: place, the gateway reports failure, the customer
     // edits the basket and accepts again. Same row, same reference, lines
     // replaced rather than stacked.
-    [$cart, , $payment] = makeCheckoutCart();
+    [$cart, , $payment, , $ledger] = makeCheckoutCart();
     $draft = draftInProgress();
 
     $cart->add(new FakeBuyable('1', 2000), 2);
     $cart->place($draft);
 
     $reference = $draft->order_id;
-    $draft->setPaymentStatus(PaymentStatus::Failed);
+    reportOn($ledger, $draft, PaymentStatus::Failed);
 
     $cart->add(new FakeBuyable('2', 350));
     $cart->place($draft);
@@ -186,14 +188,16 @@ it('re-places a failed order as the same order', function (): void {
     expect($draft->lines)->toHaveCount(2);
     expect($draft->subtotal)->toBe(4350);
 
-    // pay() ran both times; a re-placement is a fresh attempt to pay.
+    // pay() ran both times; a re-placement is a fresh attempt to pay, and
+    // the order now points at the second one.
     expect($payment->paid)->toBe([$draft, $draft]);
+    expect($draft->payment_id)->toBe('tr_fake_2');
 });
 
 it('re-fires Created on re-placement', function (): void {
     // Created means "this order was (re)placed", so listeners must be
     // idempotent per order id — documented in docs/orders.md, held here.
-    [$cart] = makeCheckoutCart();
+    [$cart, , , , $ledger] = makeCheckoutCart();
     $draft = draftInProgress();
     $announced = 0;
 
@@ -206,7 +210,7 @@ it('re-fires Created on re-placement', function (): void {
 
     $cart->add(new FakeBuyable('1', 2000));
     $cart->place($draft);
-    $draft->setPaymentStatus(PaymentStatus::Canceled);
+    reportOn($ledger, $draft, PaymentStatus::Canceled);
     $cart->place($draft);
 
     expect($announced)->toBe(2);
@@ -217,12 +221,12 @@ it('re-places through every unpaid status', function (
 ): void {
     // The legal set in one place: everything a gateway can report short of
     // money arriving leaves the order re-placeable.
-    [$cart] = makeCheckoutCart();
+    [$cart, , , , $ledger] = makeCheckoutCart();
     $draft = draftInProgress();
 
     $cart->add(new FakeBuyable('1', 2000));
     $cart->place($draft);
-    $draft->setPaymentStatus($status);
+    reportOn($ledger, $draft, $status);
 
     $cart->place($draft);
 
@@ -235,12 +239,14 @@ it('re-places through every unpaid status', function (
 ]);
 
 it('refuses to place a paid order', function (): void {
-    [$cart] = makeCheckoutCart();
+    [$cart, , , , $ledger] = makeCheckoutCart();
     $draft = draftInProgress();
 
     $cart->add(new FakeBuyable('1', 2000));
     $cart->place($draft);
-    $draft->setPaymentStatus(PaymentStatus::Paid);
+    reportOn($ledger, $draft, PaymentStatus::Paid, [
+        new Movement(EntryKind::Captured, 'cap_1', 2000),
+    ]);
 
     $lines = $draft->lines;
 
@@ -255,29 +261,39 @@ it('re-places a fully refunded order', function (): void {
     // sc-11448: a refunded order is an order nobody has paid for. It used to
     // be refused here, which — paired with a gateway that maps any refund to
     // `refunded` — ended the order's life over a goodwill gesture.
-    [$cart] = makeCheckoutCart();
+    [$cart, , , , $ledger] = makeCheckoutCart();
     $draft = draftInProgress();
 
     $cart->add(new FakeBuyable('1', 2000));
     $cart->place($draft);
-    $draft->setPaymentStatus(PaymentStatus::Paid);
-    $draft->setPaymentStatus(PaymentStatus::Refunded);
+    reportOn($ledger, $draft, PaymentStatus::Refunded, [
+        new Movement(EntryKind::Captured, 'cap_1', 2000),
+        new Movement(EntryKind::Refunded, 're_1', 2000),
+    ]);
 
     expect($cart->place($draft))->toBe($draft);
+
+    // The old attempt's money no longer describes the order (D7a): the new
+    // attempt has captured nothing yet, so its own status — pending — does.
+    // Still re-placeable: every captured cent went back.
     expect($draft->getPaymentStatus())->toBe(PaymentStatus::Pending);
+    expect($draft->payment_id)->toBe('tr_fake_2');
+    expect($draft->isRePlaceable())->toBeTrue();
 });
 
 it('refuses a partially refunded order', function (): void {
     // The other half of sc-11448: most of the money is still here, so this is
     // an order somebody paid for, and re-freezing it would rewrite what they
     // paid for.
-    [$cart] = makeCheckoutCart();
+    [$cart, , , , $ledger] = makeCheckoutCart();
     $draft = draftInProgress();
 
     $cart->add(new FakeBuyable('1', 2000));
     $cart->place($draft);
-    $draft->setPaymentStatus(PaymentStatus::Paid);
-    $draft->setPaymentStatus(PaymentStatus::PartiallyRefunded);
+    reportOn($ledger, $draft, PaymentStatus::PartiallyRefunded, [
+        new Movement(EntryKind::Captured, 'cap_1', 2000),
+        new Movement(EntryKind::Refunded, 're_1', 100),
+    ]);
 
     expect(fn() => $cart->place($draft))->toThrow(AlreadyPaid::class);
 });
@@ -357,7 +373,11 @@ it('links a child frozen before its parent', function (): void {
         new Shop(new InMemoryAttributeStorage()),
         $storage,
         new FakePayment(),
-        new GuestUserResolver()
+        new GuestUserResolver(),
+        new Tests\Support\InMemoryPaymentLedger(
+            new Oak\Dispatcher\Dispatcher()
+        ),
+        new Tests\Support\FakeRedirector()
     );
 
     $draft = draftInProgress();

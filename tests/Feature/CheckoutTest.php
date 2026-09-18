@@ -220,9 +220,10 @@ it('builds an order id on the id the first save gave it', function (): void {
 
     $order = $cart->placed();
 
-    // Saved twice, and the second is not ceremony: order_id needs the id, and
-    // the id only exists once the row has been written.
-    expect($order->saveCount)->toBe(2);
+    // Saved twice by placement, and the second is not ceremony: order_id
+    // needs the id, and the id only exists once the row has been written.
+    // The third is the ledger pointing the order at its payment attempt.
+    expect($order->saveCount)->toBe(3);
     expect($order->order_id)->toStartWith($order->id . '-');
 
     // One fixed shape, every time. The `+` and the exact count are the point:

@@ -4,6 +4,8 @@ use Oak\Contracts\Dispatcher\DispatcherInterface;
 use Oak\Dispatcher\Dispatcher;
 use Tests\Support\FakeCartRelease;
 use Tests\Support\FakePayment;
+use Tests\Support\FakeRedirector;
+use Tests\Support\InMemoryPaymentLedger;
 use Tests\Support\InMemoryOrderCart;
 use Tests\Support\WebContainer;
 use Tnt\Ecommerce\Account\GuestUserResolver;
@@ -14,6 +16,10 @@ use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\EcommerceServiceProvider;
 use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
+use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Payment\Movement;
+use Tnt\Ecommerce\Payment\PaymentReport;
+use Tnt\Ecommerce\Payment\PaymentStatus;
 use Tnt\Ecommerce\Shop\Shop;
 use Tnt\Ecommerce\Tax\TaxPolicy;
 
@@ -116,6 +122,8 @@ function makeCart(
         $storage,
         new FakePayment(),
         $users ?? new GuestUserResolver(),
+        new InMemoryPaymentLedger(new Dispatcher()),
+        new FakeRedirector(),
         $tax
     );
 
@@ -132,17 +140,21 @@ function makeCart(
  *
  * Hands back the payment as well as the storage, because what `checkout()` does
  * last — hand the finished order to the payment — is part of what there was no
- * way to check before.
+ * way to check before. And the in-memory ledger and redirector behind it, for
+ * what place() does with pay()'s answer.
  *
  * @param array<int, FulfillmentInterface> $fulfillments
  * @param UserResolverInterface|null $users
  * @param TaxPolicy|null $tax
- * @return array{InMemoryOrderCart, InMemoryCartStorage, FakePayment, Shop}
+ * @param DispatcherInterface|null $dispatcher Where the ledger dispatches;
+ *        a fresh one with no listeners by default.
+ * @return array{InMemoryOrderCart, InMemoryCartStorage, FakePayment, Shop, InMemoryPaymentLedger, FakeRedirector}
  */
 function makeCheckoutCart(
     array $fulfillments = [],
     ?UserResolverInterface $users = null,
-    ?TaxPolicy $tax = null
+    ?TaxPolicy $tax = null,
+    ?DispatcherInterface $dispatcher = null
 ): array {
     $shop = new Shop(new InMemoryAttributeStorage());
 
@@ -152,13 +164,40 @@ function makeCheckoutCart(
 
     $storage = new InMemoryCartStorage();
     $payment = new FakePayment();
+    $ledger = new InMemoryPaymentLedger($dispatcher ?? new Dispatcher());
+    $redirector = new FakeRedirector();
     $cart = new InMemoryOrderCart(
         $shop,
         $storage,
         $payment,
         $users ?? new GuestUserResolver(),
+        $ledger,
+        $redirector,
         $tax
     );
 
-    return [$cart, $storage, $payment, $shop];
+    return [$cart, $storage, $payment, $shop, $ledger, $redirector];
+}
+
+/**
+ * Hand the ledger a report about the order's current attempt, as the webhook
+ * would after asking the gateway — filed under FakePayment's provider.
+ *
+ * @param InMemoryPaymentLedger $ledger
+ * @param Order $order
+ * @param PaymentStatus $status
+ * @param list<Movement> $movements
+ * @return void
+ */
+function reportOn(
+    InMemoryPaymentLedger $ledger,
+    Order $order,
+    PaymentStatus $status,
+    array $movements = []
+): void {
+    $ledger->apply(
+        $order,
+        'fake',
+        new PaymentReport((string) $order->payment_id, $status, $movements)
+    );
 }

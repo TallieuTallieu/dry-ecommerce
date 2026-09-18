@@ -17,6 +17,8 @@ use Tnt\Ecommerce\Model\OrderItem;
  */
 final class ForcedRePlaceabilityOrder extends Order
 {
+    use KeepsPaymentEntries;
+
     /**
      * The forced answer, or null for the real one.
      *

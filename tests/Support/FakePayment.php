@@ -6,13 +6,13 @@ namespace Tests\Support;
 
 use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
+use Tnt\Ecommerce\Payment\PaymentOutcome;
+use Tnt\Ecommerce\Payment\PaymentRedirect;
 
 /**
- * A payment method that records what it was asked to pay and does nothing.
- *
- * The cart takes a `PaymentInterface` in its constructor, so building one in a
- * test needs an implementation. `NullPayment` would do, but it wants a
- * dispatcher.
+ * A payment method that records what it was asked to pay and answers with
+ * a redirect — an asynchronous gateway whose webhook has not arrived — or
+ * with whatever outcome the test scripted.
  */
 final class FakePayment implements PaymentInterface
 {
@@ -22,11 +22,30 @@ final class FakePayment implements PaymentInterface
     public array $paid = [];
 
     /**
-     * @param OrderInterface $order
-     * @return void
+     * The next answer, or null for a fresh redirect.
      */
-    public function pay(OrderInterface $order)
+    public ?PaymentOutcome $outcome = null;
+
+    /**
+     * @return string
+     */
+    public function provider(): string
+    {
+        return 'fake';
+    }
+
+    /**
+     * @param OrderInterface $order
+     * @return PaymentOutcome
+     */
+    public function pay(OrderInterface $order): PaymentOutcome
     {
         $this->paid[] = $order;
+
+        return $this->outcome ??
+            new PaymentRedirect(
+                'tr_fake_' . count($this->paid),
+                'https://pay.example/checkout/' . count($this->paid)
+            );
     }
 }
