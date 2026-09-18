@@ -24,11 +24,14 @@ declare(strict_types=1);
  * booted Dry application and a live connection, which the suite does not have.
  */
 
+use Tests\Support\CapturingAddBoxToAddresses;
 use Tests\Support\CapturingAddCartLifecycleColumns;
 use Tests\Support\CapturingAddFulfillmentAttributesToOrderTable;
 use Tests\Support\CapturingAddIndexesToEcommerceTables;
 use Tests\Support\CapturingAddOptionsToLineTables;
+use Tests\Support\CapturingAddOrderLineIndexes;
 use Tests\Support\CapturingAddOrderStateColumn;
+use Tests\Support\CapturingAddParentToLineTables;
 use Tests\Support\CapturingCreateAddressTable;
 use Tests\Support\CapturingDropAddressNameColumns;
 use Tests\Support\CapturingCreateCustomerTable;
@@ -187,18 +190,122 @@ it('has taken the address columns off the customer', function (
     'shipping_country',
 ]);
 
+/**
+ * Every statement the box revision would run, in order.
+ *
+ * @return array<int, string>
+ */
+function boxRevisionStatements(): array
+{
+    $revision = new CapturingAddBoxToAddresses(new QueryBuilder());
+    $revision->up();
+
+    return $revision->statements;
+}
+
 it('freezes an address onto the order as columns', function (
     string $column
 ): void {
     // Read off the enum that writes them, so this fails if the two ever stop
     // agreeing rather than passing against a hand-copied list.
-    expect(orderTableSql())->toContain('`' . $column . '` VARCHAR(255)');
+    //
+    // Against the CREATE *and* the appended ALTERs, because that is what the
+    // schema is: `box` was added by revision 24 (sc-11448), and the pinned
+    // CreateOrderTable above must never grow a column to match.
+    $schema = implode(' ', [orderTableSql(), ...boxRevisionStatements()]);
+
+    expect($schema)->toContain('`' . $column . '` VARCHAR(255)');
 })->with(
     array_merge(
         AddressType::Billing->columns(),
         AddressType::Shipping->columns()
     )
 );
+
+it('leaves the pinned order table alone when a column is added', function (
+    string $column
+): void {
+    // The other half of the rule: an appended revision is how the schema
+    // grows, and revision 4 is history. If `box` ever turns up in the CREATE,
+    // an existing shop runs an ALTER for a column it already has.
+    expect(orderTableSql())->not->toContain($column);
+})->with(['billing_box', 'shipping_box']);
+
+it(
+    'gives the address book and both frozen blocks a bus number',
+    function (): void {
+        // sc-11448: one ALTER per table, address book first, and the order gets
+        // both its frozen copies in a single statement.
+        $statements = boxRevisionStatements();
+
+        expect($statements)->toHaveCount(2);
+        expect($statements[0])->toContain('ALTER TABLE `ecommerce_address`');
+        expect($statements[0])->toContain('ADD `box` VARCHAR(255)');
+        expect($statements[1])->toContain('ALTER TABLE `ecommerce_order`');
+        expect($statements[1])->toContain('ADD `billing_box` VARCHAR(255)');
+        expect($statements[1])->toContain('ADD `shipping_box` VARCHAR(255)');
+    }
+);
+
+it('hangs a line off another line on both line tables', function (): void {
+    // sc-11448: the cart side had nowhere to put a deposit's parent, so a
+    // host rebuilt the relationship from line options on every basket render.
+    // Both tables, because the fact has to survive the freeze at checkout.
+    $revision = new CapturingAddParentToLineTables(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(2);
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_cart_item`'
+    );
+    expect($revision->statements[1])->toContain(
+        'ALTER TABLE `ecommerce_order_item`'
+    );
+
+    foreach ($revision->statements as $statement) {
+        expect($statement)->toContain('ADD `parent` INT(11) NULL');
+
+        // The self reference, and SET NULL rather than CASCADE: InnoDB does
+        // not run cascades on a self-referencing foreign key, so taking the
+        // children out is the storage's job and the constraint only stops a
+        // line pointing at a row that is gone.
+        expect($statement)->toContain('FOREIGN KEY (`parent`)');
+        expect($statement)->toContain('ON DELETE SET NULL');
+    }
+});
+
+it(
+    'indexes the buyable on order lines, and the fulfillment method',
+    function (): void {
+        // sc-11448: "which orders contain this product" was a full scan, which a
+        // 21-day availability calendar asks hundreds of times for one page.
+        $revision = new CapturingAddOrderLineIndexes(new QueryBuilder());
+        $revision->up();
+
+        expect($revision->statements)->toHaveCount(2);
+        expect($revision->statements[0])->toContain(
+            'ADD INDEX `idx_item_class_item_id_order` ' .
+                '(`item_class`, `item_id`, `order`)'
+        );
+        expect($revision->statements[1])->toContain(
+            'ADD INDEX `idx_fulfillment_method` (`fulfillment_method`)'
+        );
+    }
+);
+
+it('keeps the order foreign key its own index', function (): void {
+    // Why the composite leads on `item_class` and not on `order`: InnoDB
+    // silently drops the implicit index behind a foreign key once another
+    // index leads with the same column, and AddIndexesToEcommerceTables had
+    // to hand it back by name on the way down. Leading elsewhere means this
+    // revision never takes it in the first place.
+    $revision = new CapturingAddOrderLineIndexes(new QueryBuilder());
+    $revision->down();
+
+    foreach ($revision->statements as $statement) {
+        expect($statement)->not->toContain('fk_ecommerce_order_item');
+    }
+});
 
 it('records the identity the order was placed with', function (
     string $column

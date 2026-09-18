@@ -11,6 +11,7 @@ use Oak\Dispatcher\Facade\Dispatcher;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Events\Order\Created;
 use Tnt\Ecommerce\Contracts\CartInterface;
+use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\CouponInterface;
@@ -94,9 +95,21 @@ class Cart implements CartInterface, TotalingInterface
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
-        array $options = []
+        array $options = [],
+        ?CartItemInterface $parent = null
     ) {
-        $this->storage->add($buyable, $quantity, $options);
+        $this->storage->add($buyable, $quantity, $options, $parent);
+    }
+
+    /**
+     * The lines hanging off one line, oldest first, or [].
+     *
+     * @param CartItemInterface $parent
+     * @return array<int, CartItemInterface>
+     */
+    public function childrenOf(CartItemInterface $parent): array
+    {
+        return $this->storage->childrenOf($parent);
     }
 
     /**
@@ -466,9 +479,36 @@ class Cart implements CartInterface, TotalingInterface
             $order->save();
         }
 
-        // Copy every cart line onto the order
-        foreach ($this->items() as $item) {
-            $order->add($item);
+        // Copy every cart line onto the order. Read the lines once: the
+        // second pass below walks the same list, and a storage answers items()
+        // with a query.
+        $cartItems = $this->items();
+
+        /** @var array<string, \Tnt\Ecommerce\Model\OrderItem> $frozen */
+        $frozen = [];
+
+        foreach ($cartItems as $item) {
+            $frozen[$item->getId()] = $order->add($item);
+        }
+
+        // Then the parent/child links, once every line has a row — a deposit
+        // may well be copied before the crate it hangs off. A link whose
+        // parent is not on this order is dropped rather than half-written.
+        foreach ($cartItems as $item) {
+            $parent = $item->getParent();
+
+            if ($parent === null) {
+                continue;
+            }
+
+            $line = $frozen[$item->getId()] ?? null;
+            $parentLine = $frozen[$parent->getId()] ?? null;
+
+            if ($line === null || $parentLine === null) {
+                continue;
+            }
+
+            $line->setParent($parentLine);
         }
 
         // The cart→order link — what the Paid listener follows back to

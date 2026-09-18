@@ -31,6 +31,7 @@ use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Events\Order\PaymentCanceled;
 use Tnt\Ecommerce\Events\Order\PaymentExpired;
 use Tnt\Ecommerce\Events\Order\PaymentFailed;
+use Tnt\Ecommerce\Events\Order\PaymentPartiallyRefunded;
 use Tnt\Ecommerce\Events\Order\PaymentRefunded;
 use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
 use Tnt\Ecommerce\Payment\NullPayment;
@@ -78,6 +79,10 @@ it('writes the status each payment event reports', function (
     'canceled' => [PaymentCanceled::class, PaymentStatus::Canceled],
     'expired' => [PaymentExpired::class, PaymentStatus::Expired],
     'refunded' => [PaymentRefunded::class, PaymentStatus::Refunded],
+    'partially refunded' => [
+        PaymentPartiallyRefunded::class,
+        PaymentStatus::PartiallyRefunded,
+    ],
 ]);
 
 it('ends a NullPayment checkout paid', function (): void {
@@ -155,7 +160,7 @@ it('still refunds a paid order', function (): void {
     expect($order->getPaymentStatus())->toBe(PaymentStatus::Refunded);
 });
 
-it('treats refunded as terminal', function (PaymentStatus $late): void {
+it('lets no webhook talk a refund back', function (PaymentStatus $late): void {
     // The money went back; no straggling webhook may claim otherwise.
     $order = new InMemoryOrder();
     $order->setPaymentStatus(PaymentStatus::Paid);
@@ -167,8 +172,51 @@ it('treats refunded as terminal', function (PaymentStatus $late): void {
 })->with([
     'paid again' => [PaymentStatus::Paid],
     'failed' => [PaymentStatus::Failed],
-    'pending' => [PaymentStatus::Pending],
+    'canceled' => [PaymentStatus::Canceled],
+    'expired' => [PaymentStatus::Expired],
 ]);
+
+it('lets a refunded order be placed again', function (): void {
+    // sc-11448: the one door out of refunded. A EUR 100 order that was
+    // refunded in full is an order nobody has paid for — asking for the money
+    // again is the whole point of re-placement, and Cart::place() writes
+    // exactly this status.
+    $order = new InMemoryOrder();
+    $order->setPaymentStatus(PaymentStatus::Paid);
+    $order->setPaymentStatus(PaymentStatus::Refunded);
+
+    $order->setPaymentStatus(PaymentStatus::Pending);
+
+    expect($order->getPaymentStatus())->toBe(PaymentStatus::Pending);
+});
+
+it('takes a partial refund without ending the order', function (): void {
+    // sc-11448: a EUR 1 goodwill refund on a EUR 100 order used to read as
+    // "the money went back" and end that order's life. Its own status now,
+    // and one the order is NOT re-placeable from — most of the money is still
+    // here.
+    $order = new InMemoryOrder();
+    $order->setPaymentStatus(PaymentStatus::Paid);
+
+    $order->setPaymentStatus(PaymentStatus::PartiallyRefunded);
+
+    expect($order->getPaymentStatus())->toBe(PaymentStatus::PartiallyRefunded);
+    expect(
+        PaymentStatus::PartiallyRefunded->canTransitionTo(
+            PaymentStatus::Pending
+        )
+    )->toBeFalse();
+});
+
+it('lets a partial refund deepen into a full one', function (): void {
+    $order = new InMemoryOrder();
+    $order->setPaymentStatus(PaymentStatus::Paid);
+    $order->setPaymentStatus(PaymentStatus::PartiallyRefunded);
+
+    $order->setPaymentStatus(PaymentStatus::Refunded);
+
+    expect($order->getPaymentStatus())->toBe(PaymentStatus::Refunded);
+});
 
 it('lets a failed payment be retried into paid', function (): void {
     // Failure states stay open on purpose: a customer whose first attempt

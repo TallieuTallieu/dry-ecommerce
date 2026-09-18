@@ -18,6 +18,7 @@ final class FrozenAddress implements AddressInterface
      * @param AddressType $type
      * @param string $street
      * @param string $number
+     * @param string $box
      * @param string $postalCode
      * @param string $city
      * @param string $country
@@ -26,6 +27,7 @@ final class FrozenAddress implements AddressInterface
         private readonly AddressType $type,
         private readonly string $street,
         private readonly string $number,
+        private readonly string $box,
         private readonly string $postalCode,
         private readonly string $city,
         private readonly string $country
@@ -67,6 +69,17 @@ final class FrozenAddress implements AddressInterface
     }
 
     /**
+     * The bus number within the building, or '' — see
+     * {@see \Tnt\Ecommerce\Contracts\AddressInterface::getBox()}.
+     *
+     * @return string
+     */
+    public function getBox(): string
+    {
+        return $this->box;
+    }
+
+    /**
      * @return string
      */
     public function getPostalCode(): string
@@ -100,6 +113,7 @@ final class FrozenAddress implements AddressInterface
     {
         return $this->street === '' &&
             $this->number === '' &&
+            $this->box === '' &&
             $this->postalCode === '' &&
             $this->city === '' &&
             $this->country === '';

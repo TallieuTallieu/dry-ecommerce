@@ -40,16 +40,33 @@ class InMemoryCartStorage implements CartStorageInterface
     private array $fulfillmentAttributes = [];
 
     /**
-     * The merge key: which buyable, and with what selection.
+     * What separates the parent from the options in a merge key.
+     *
+     * A raw NUL byte, because the options half is canonical JSON and
+     * `json_encode()` writes a NUL as `\u0000` — so no options string can
+     * contain this, and no line can be mistaken for a line under a parent.
+     */
+    private const PARENT_SEPARATOR = "\0parent:";
+
+    /**
+     * The merge key: which buyable, with what selection, under which line.
      *
      * @param BuyableInterface $buyable
      * @param array<array-key, mixed> $options
+     * @param CartItemInterface|null $parent
      * @return string
      */
-    private function key(BuyableInterface $buyable, array $options): string
-    {
+    private function key(
+        BuyableInterface $buyable,
+        array $options,
+        ?CartItemInterface $parent = null
+    ): string {
+        // The parent goes last: {@see variantsOf()} matches on the buyable
+        // prefix, and anything in front of it would hide the line from stock
+        // counting and whole-buyable removal.
         return $this->variantPrefix($buyable) .
-            (LineOptions::canonical($options) ?? '');
+            (LineOptions::canonical($options) ?? '') .
+            ($parent === null ? '' : self::PARENT_SEPARATOR . $parent->getId());
     }
 
     /**
@@ -76,14 +93,16 @@ class InMemoryCartStorage implements CartStorageInterface
      * @param BuyableInterface $buyable
      * @param int $quantity
      * @param array<array-key, mixed> $options
+     * @param CartItemInterface|null $parent
      * @return void
      */
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
-        array $options = []
+        array $options = [],
+        ?CartItemInterface $parent = null
     ): void {
-        $key = $this->key($buyable, $options);
+        $key = $this->key($buyable, $options, $parent);
 
         if (isset($this->items[$key])) {
             $item = $this->items[$key];
@@ -92,12 +111,33 @@ class InMemoryCartStorage implements CartStorageInterface
             return;
         }
 
-        $this->items[$key] = new InMemoryCartItem(
+        $item = new InMemoryCartItem(
             (string) $this->nextId++,
             $buyable,
             $quantity,
             $options
         );
+
+        $item->setParent($parent);
+
+        $this->items[$key] = $item;
+    }
+
+    /**
+     * @param CartItemInterface $parent
+     * @return array<int, CartItemInterface>
+     */
+    public function childrenOf(CartItemInterface $parent): array
+    {
+        $children = [];
+
+        foreach ($this->items as $item) {
+            if ($item->getParent()?->getId() === $parent->getId()) {
+                $children[] = $item;
+            }
+        }
+
+        return $children;
     }
 
     /**
@@ -127,7 +167,7 @@ class InMemoryCartStorage implements CartStorageInterface
     public function remove(BuyableInterface $buyable): void
     {
         foreach (array_keys($this->variantsOf($buyable)) as $key) {
-            unset($this->items[$key]);
+            $this->forgetLine($key);
         }
     }
 
@@ -145,7 +185,7 @@ class InMemoryCartStorage implements CartStorageInterface
         }
 
         if ($quantity <= 0) {
-            unset($this->items[$key]);
+            $this->forgetLine($key);
 
             return;
         }
@@ -162,7 +202,33 @@ class InMemoryCartStorage implements CartStorageInterface
         $key = $this->keyOfLine($itemId);
 
         if ($key !== null) {
-            unset($this->items[$key]);
+            $this->forgetLine($key);
+        }
+    }
+
+    /**
+     * Drop a line and everything hanging off it — the same rule the
+     * row-backed storage spells out in `deleteLine()`.
+     *
+     * @param string $key
+     * @return void
+     */
+    private function forgetLine(string $key): void
+    {
+        $item = $this->items[$key] ?? null;
+
+        if ($item === null) {
+            return;
+        }
+
+        unset($this->items[$key]);
+
+        foreach ($this->childrenOf($item) as $child) {
+            $childKey = $this->keyOfLine($child->getId());
+
+            if ($childKey !== null) {
+                $this->forgetLine($childKey);
+            }
         }
     }
 

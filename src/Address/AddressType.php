@@ -41,6 +41,7 @@ enum AddressType: string
         return [
             $prefix . 'street' => $address?->getStreet() ?? '',
             $prefix . 'number' => $address?->getNumber() ?? '',
+            $prefix . 'box' => $address?->getBox() ?? '',
             $prefix . 'postal_code' => $address?->getPostalCode() ?? '',
             $prefix . 'city' => $address?->getCity() ?? '',
             $prefix . 'country' => $address?->getCountry() ?? '',

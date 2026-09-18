@@ -10,6 +10,7 @@ use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Events\Order\PaymentCanceled;
 use Tnt\Ecommerce\Events\Order\PaymentExpired;
 use Tnt\Ecommerce\Events\Order\PaymentFailed;
+use Tnt\Ecommerce\Events\Order\PaymentPartiallyRefunded;
 use Tnt\Ecommerce\Events\Order\PaymentRefunded;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Repository\OrderRepository;
@@ -75,6 +76,8 @@ class PaymentWebhook
             PaymentStatus::Canceled => PaymentCanceled::class,
             PaymentStatus::Expired => PaymentExpired::class,
             PaymentStatus::Refunded => PaymentRefunded::class,
+            PaymentStatus::PartiallyRefunded
+                => PaymentPartiallyRefunded::class,
         };
 
         if ($event === null) {

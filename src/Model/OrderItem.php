@@ -24,6 +24,7 @@ use Tnt\Ecommerce\Contracts\OrderItemInterface;
  * @property int $price
  * @property int $quantity
  * @property string|null $options
+ * @property OrderItem|null $parent
  */
 class OrderItem extends Model implements OrderItemInterface
 {
@@ -34,6 +35,7 @@ class OrderItem extends Model implements OrderItemInterface
      */
     public static $special_fields = [
         'order' => Order::class,
+        'parent' => self::class,
     ];
 
     /**
@@ -71,6 +73,31 @@ class OrderItem extends Model implements OrderItemInterface
     public function getOptions(): array
     {
         return LineOptions::decode($this->options);
+    }
+
+    /**
+     * The line this one hangs off, as the cart had it at checkout, or null.
+     *
+     * @return OrderItemInterface|null
+     */
+    public function getParent(): ?OrderItemInterface
+    {
+        return $this->parent;
+    }
+
+    /**
+     * Point this line at its parent. Deliberately not on
+     * {@see OrderItemInterface}, which is a read-only view of a frozen line:
+     * the only caller is {@see Order}, copying the cart's link at placement
+     * once every line has a row.
+     *
+     * @param OrderItem|null $parent
+     * @return void
+     */
+    public function setParent(?OrderItem $parent): void
+    {
+        $this->parent = $parent;
+        $this->save();
     }
 
     /**

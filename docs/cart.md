@@ -74,6 +74,49 @@ unknown id**: a stale basket form is ordinary, not an error.
 `canAdd()` checks stock against the buyable's total across all of its
 option-variants — stock counts tapas, not selections of tapas.
 
+## Lines that hang off other lines
+
+Some lines only exist because another line does: a deposit on a crate, a
+returnable container on what it contains, a mandatory accessory. A line can
+name the line it belongs to:
+
+```php
+$cart->add($crate);
+[$crateLine] = $cart->items();
+
+$cart->add($deposit, 1, [], $crateLine);
+
+$cart->childrenOf($crateLine); // [the deposit line]
+$depositLine->getParent();     // $crateLine
+```
+
+Three rules follow from making this a field of the line rather than something
+a basket re-derives on every render:
+
+- **The parent is part of the merge key.** A line is
+  `(buyable, options, parent)`. The same deposit under two different crates is
+  two lines — merging them would leave one deposit paying for two crates — and
+  a loose deposit never merges into a parented one.
+- **Removing a line removes what hangs off it.** A deposit whose crate has
+  left the basket is not a thing the shop sells. This holds for
+  `removeItem()`, for `updateQuantity($id, 0)` and for `remove($buyable)`.
+  The self foreign key in the schema is `ON DELETE SET NULL` and does *not*
+  do this — InnoDB does not run cascades on a self-referencing key, so the
+  storage does it, and the constraint only stops a line pointing at a row that
+  is gone.
+- **Stock still counts the buyable.** `canAdd()` and `quantityOf()` sum every
+  line holding a buyable, parented or not. The parent is part of the *line's*
+  identity, not the buyable's.
+
+The link survives the freeze at checkout: order lines carry it too, and
+`OrderItemInterface::getParent()` reads it back. A host that had to rebuild
+this from line options after placement — from a `Created` listener, comparing
+canonical JSON in nested loops — does not need to.
+
+Quantities are **not** linked. Two crates do not silently become two deposits;
+what a child's quantity should be when its parent changes is the shop's rule,
+not the package's.
+
 ## Where the cart lives
 
 The cart's contents are behind `CartStorageInterface`, and the provider binds
@@ -167,10 +210,14 @@ public function getOrderId(): ?int;                       // the cart→order li
 public function setOrderId(?int $id): void;
 public function getFulfillmentAttributes(): array;        // the whole bag
 public function setFulfillmentAttributes(array $attributes): void;
+public function childrenOf(CartItemInterface $parent): array; // the lines under one line
 ```
 
-Writing either with no cart row yet **creates** one — the same rule as
-`add()`. A shop with its own storage implementation adds these four on
+`add()` takes the parent as its fourth argument, and it is part of the merge
+key a storage looks a line up by.
+
+Writing either of the first two with no cart row yet **creates** one — the
+same rule as `add()`. A shop with its own storage implementation adds these on
 upgrade; see [What changed from 1.x](from-1x.md).
 
 `InMemoryCartStorage` implements the whole contract in an array, which is

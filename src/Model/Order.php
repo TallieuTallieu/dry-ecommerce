@@ -52,11 +52,13 @@ use Tnt\Ecommerce\Tax\PriceConvention;
  * @property string|null $vat
  * @property string|null $billing_street
  * @property string|null $billing_number
+ * @property string|null $billing_box
  * @property string|null $billing_postal_code
  * @property string|null $billing_city
  * @property string|null $billing_country
  * @property string|null $shipping_street
  * @property string|null $shipping_number
+ * @property string|null $shipping_box
  * @property string|null $shipping_postal_code
  * @property string|null $shipping_city
  * @property string|null $shipping_country
@@ -79,10 +81,14 @@ class Order extends Model implements OrderInterface, TotalingInterface
      * line total plus the canonical options ({@see LineOptions}; NULL when the
      * line had none).
      *
+     * The parent/child link is NOT copied here: a child may be frozen
+     * before its parent has a row, so {@see \Tnt\Ecommerce\Cart\Cart::place()}
+     * writes it in a second pass over the lines this returns.
+     *
      * @param CartItemInterface $cartItem
-     * @return mixed|void
+     * @return OrderItem
      */
-    public function add(CartItemInterface $cartItem)
+    public function add(CartItemInterface $cartItem): OrderItem
     {
         $item = $this->newOrderItem();
         $item->created = time();
@@ -94,6 +100,8 @@ class Order extends Model implements OrderInterface, TotalingInterface
         $item->item_class = get_class($cartItem->getBuyable());
         $item->options = LineOptions::canonical($cartItem->getOptions());
         $item->save();
+
+        return $item;
     }
 
     /**
@@ -203,6 +211,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
             AddressType::Billing,
             (string) $this->billing_street,
             (string) $this->billing_number,
+            (string) $this->billing_box,
             (string) $this->billing_postal_code,
             (string) $this->billing_city,
             (string) $this->billing_country
@@ -222,6 +231,7 @@ class Order extends Model implements OrderInterface, TotalingInterface
             AddressType::Shipping,
             (string) $this->shipping_street,
             (string) $this->shipping_number,
+            (string) $this->shipping_box,
             (string) $this->shipping_postal_code,
             (string) $this->shipping_city,
             (string) $this->shipping_country

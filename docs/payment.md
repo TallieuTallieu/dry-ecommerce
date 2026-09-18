@@ -104,13 +104,14 @@ after checkout keeps working — the hard delete just gets there first.
    listener per payment event, each translating the event into a word on the
    column and saving the order:
 
-    | Event             | Status written |
-    | ----------------- | -------------- |
-    | `Paid`            | `paid`         |
-    | `PaymentFailed`   | `failed`       |
-    | `PaymentCanceled` | `canceled`     |
-    | `PaymentExpired`  | `expired`      |
-    | `PaymentRefunded` | `refunded`     |
+    | Event                      | Status written       |
+    | -------------------------- | -------------------- |
+    | `Paid`                     | `paid`               |
+    | `PaymentFailed`            | `failed`             |
+    | `PaymentCanceled`          | `canceled`           |
+    | `PaymentExpired`           | `expired`            |
+    | `PaymentRefunded`          | `refunded`           |
+    | `PaymentPartiallyRefunded` | `partially_refunded` |
 
 So a gateway never touches the column: it dispatches honestly and the column
 follows. That is deliberate — a gateway that wrote one word and dispatched
@@ -139,6 +140,31 @@ it separately.
 `payment_id` is the gateway's to fill in — it is where a Mollie or Stripe
 transaction id belongs, and it is what a webhook looks an order up by.
 `NullPayment` has no transaction to reference and leaves it blank.
+
+### The two kinds of refund
+
+A refund is not one thing. A shop that gives €1 back on a €100 order as a
+goodwill gesture has not undone that order, and one that gives the whole €100
+back has.
+
+So there are two words for it, and they behave differently:
+
+- **`partially_refunded`** — some of the money went back. The order is still
+  an order somebody paid for. It is not re-placeable, exactly as `paid` is
+  not: re-freezing it would rewrite what the customer paid for.
+- **`refunded`** — all of it went back. Nobody has paid for that order any
+  more, so it **is** re-placeable, and asking for the money again is the whole
+  point.
+
+A gateway has to tell the two apart. If it maps every refund to `refunded` —
+`dry-mollie` did — then a €1 gesture reads as "the money went back" and ends
+that order's life. Compare the refunded amount against the order total and
+dispatch accordingly.
+
+Neither word can be talked back down. Once a refund is recorded, a straggling
+`paid`, `failed`, `canceled` or `expired` webhook writes nothing. `refunded`
+has exactly one door out, and it is `pending`, which only
+[re-placement](orders.md#re-placement) walks through.
 
 ## Writing a gateway
 
@@ -209,7 +235,7 @@ Three rules hidden in those few lines:
 the package's `PaymentWebhook` finds the order by the posted payment id and
 asks the gateway where the money stands. Interrogate the provider's API —
 never trust the webhook body — and map its vocabulary onto
-`PaymentStatus`: the five reporting statuses each dispatch their event, and
+`PaymentStatus`: the six reporting statuses each dispatch their event, and
 `Pending` is the answer that dispatches nothing (a payment still open is not
 a report). The handler dispatches; your gateway never does it from the
 webhook path, and **neither half ever writes `payment_status`** — the
@@ -246,9 +272,9 @@ parameters: the visitor's return proves only that they came back.
 Webhooks arrive at least once and out of order. Dispatch honestly every time
 and let `PaymentStatus::canTransitionTo()` — which every listener writes
 through — refuse what must not land: a replayed `Paid` writes nothing, a late
-`expired` after the money arrived writes nothing, and `Refunded` is the one
-exit from `Paid`. A gateway that tries to be clever about replays is
-second-guessing a guard that already answered.
+`expired` after the money arrived writes nothing, and a refund of either size
+is the only exit from `Paid`. A gateway that tries to be clever about replays
+is second-guessing a guard that already answered.
 
 ## Available gateways
 

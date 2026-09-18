@@ -9,10 +9,14 @@ namespace Tnt\Ecommerce\Contracts;
 interface OrderInterface
 {
     /**
+     * Freeze one cart line onto this order, and answer the line that was
+     * written — {@see \Tnt\Ecommerce\Cart\Cart::place()} needs it to copy
+     * the parent/child links once every line exists.
+     *
      * @param CartItemInterface $cartItem
-     * @return mixed
+     * @return OrderItemInterface
      */
-    public function add(CartItemInterface $cartItem);
+    public function add(CartItemInterface $cartItem): OrderItemInterface;
 
     /**
      * @return iterable<int, OrderItemInterface>

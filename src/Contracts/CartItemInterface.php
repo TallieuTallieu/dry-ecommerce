@@ -60,4 +60,19 @@ interface CartItemInterface
      * @return array<array-key, mixed>
      */
     public function getOptions(): array;
+
+    /**
+     * The line this one hangs off — a deposit under its crate — or null for a
+     * line that stands on its own. Part of the merge key: the same buyable
+     * under two different parents is two lines. See docs/cart.md.
+     *
+     * @return CartItemInterface|null
+     */
+    public function getParent(): ?CartItemInterface;
+
+    /**
+     * @param CartItemInterface|null $parent
+     * @return void
+     */
+    public function setParent(?CartItemInterface $parent): void;
 }

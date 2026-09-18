@@ -34,4 +34,13 @@ interface OrderItemInterface
      * @return array<array-key, mixed>
      */
     public function getOptions(): array;
+
+    /**
+     * The line this one hangs off, as the cart had it at checkout, or null.
+     * Copied by {@see \Tnt\Ecommerce\Cart\Cart::place()} once every line
+     * exists — a child may be frozen before its parent.
+     *
+     * @return OrderItemInterface|null
+     */
+    public function getParent(): ?OrderItemInterface;
 }

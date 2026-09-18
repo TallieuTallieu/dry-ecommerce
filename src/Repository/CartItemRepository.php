@@ -4,6 +4,7 @@ namespace Tnt\Ecommerce\Repository;
 
 use Tnt\Ecommerce\Cart\LineOptions;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
+use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Dbi\Criteria\Equals;
 use Tnt\Dbi\Criteria\IsNull;
 use Tnt\Dbi\Criteria\OrderBy;
@@ -49,12 +50,14 @@ class CartItemRepository extends Repository
      * @param Cart $cart
      * @param BuyableInterface $buyable
      * @param array<array-key, mixed> $options
+     * @param CartItemInterface|null $parent
      * @return static
      */
     public function forBuyable(
         Cart $cart,
         BuyableInterface $buyable,
-        array $options = []
+        array $options = [],
+        ?CartItemInterface $parent = null
     ): static {
         $this->forAnyVariantOf($cart, $buyable);
 
@@ -65,6 +68,29 @@ class CartItemRepository extends Repository
                 ? new IsNull('options')
                 : new Equals('options', $canonical)
         );
+
+        // The rest of the merge key. A standalone line and a line under a
+        // parent are never the same line, and neither are two lines under two
+        // different parents — a deposit merged across crates would be one
+        // deposit for two crates.
+        $this->addCriteria(
+            $parent === null
+                ? new IsNull('parent')
+                : new Equals('parent', (int) $parent->getId())
+        );
+
+        return $this;
+    }
+
+    /**
+     * Filter to the lines hanging off one line.
+     *
+     * @param CartItemInterface $parent
+     * @return static
+     */
+    public function childrenOf(CartItemInterface $parent): static
+    {
+        $this->addCriteria(new Equals('parent', (int) $parent->getId()));
 
         return $this;
     }

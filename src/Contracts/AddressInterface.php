@@ -41,6 +41,15 @@ interface AddressInterface
     public function getNumber(): string;
 
     /**
+     * The bus or box number within the building, or '' — kept apart from the
+     * house number, which is the building itself. A Belgian address without
+     * one is frequently undeliverable.
+     *
+     * @return string
+     */
+    public function getBox(): string;
+
+    /**
      * @return string
      */
     public function getPostalCode(): string;

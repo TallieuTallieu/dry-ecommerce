@@ -57,6 +57,7 @@ it('names the order columns it freezes into', function (
     expect($type->columns())->toBe([
         $prefix . 'street',
         $prefix . 'number',
+        $prefix . 'box',
         $prefix . 'postal_code',
         $prefix . 'city',
         $prefix . 'country',
@@ -71,6 +72,7 @@ it('copies every field of an address into its columns', function (): void {
     $address->setType(AddressType::Shipping);
     $address->street = 'Kortrijksesteenweg';
     $address->number = '1144';
+    $address->box = '2B';
     $address->postal_code = '9051';
     $address->city = 'Gent';
     $address->country = 'BE';
@@ -78,6 +80,7 @@ it('copies every field of an address into its columns', function (): void {
     expect(AddressType::Shipping->snapshotOf($address))->toBe([
         'shipping_street' => 'Kortrijksesteenweg',
         'shipping_number' => '1144',
+        'shipping_box' => '2B',
         'shipping_postal_code' => '9051',
         'shipping_city' => 'Gent',
         'shipping_country' => 'BE',
@@ -85,12 +88,13 @@ it('copies every field of an address into its columns', function (): void {
 });
 
 it('reads a missing address as blank and not as null', function (): void {
-    // Five empty strings rather than five nulls. The columns are NOT NULL
-    // varchars, and a caller printing an address should not have to tell an
-    // absent field from an empty one on every line.
+    // Empty strings rather than nulls. The columns are NOT NULL varchars,
+    // and a caller printing an address should not have to tell an absent
+    // field from an empty one on every line.
     expect(AddressType::Billing->snapshotOf(null))->toBe([
         'billing_street' => '',
         'billing_number' => '',
+        'billing_box' => '',
         'billing_postal_code' => '',
         'billing_city' => '',
         'billing_country' => '',
@@ -230,6 +234,7 @@ it('describes a frozen address without reaching for a row', function (): void {
         AddressType::Billing,
         'Gasmeterlaan',
         '103',
+        '2B',
         '9000',
         'Gent',
         'BE'
@@ -238,6 +243,7 @@ it('describes a frozen address without reaching for a row', function (): void {
     expect($frozen->getType())->toBe(AddressType::Billing);
     expect($frozen->getStreet())->toBe('Gasmeterlaan');
     expect($frozen->getNumber())->toBe('103');
+    expect($frozen->getBox())->toBe('2B');
     expect($frozen->getPostalCode())->toBe('9000');
     expect($frozen->getCity())->toBe('Gent');
     expect($frozen->getCountry())->toBe('BE');
@@ -245,15 +251,29 @@ it('describes a frozen address without reaching for a row', function (): void {
 });
 
 it('knows when an order recorded no address of a kind', function (): void {
-    $frozen = new FrozenAddress(AddressType::Shipping, '', '', '', '', '');
+    $frozen = new FrozenAddress(AddressType::Shipping, '', '', '', '', '', '');
 
     expect($frozen->isEmpty())->toBeTrue();
 
     // One field is enough to make it a real address: an order that recorded
     // only a country still recorded something.
-    $partial = new FrozenAddress(AddressType::Shipping, '', '', '', '', 'BE');
+    $partial = new FrozenAddress(
+        AddressType::Shipping,
+        '',
+        '',
+        '',
+        '',
+        '',
+        'BE'
+    );
 
     expect($partial->isEmpty())->toBeFalse();
+
+    // And a bus number on its own is a field like any other — an order that
+    // recorded only that did record something.
+    $box = new FrozenAddress(AddressType::Shipping, '', '', '3', '', '', '');
+
+    expect($box->isEmpty())->toBeFalse();
 });
 
 it('reads an address back as one line', function (): void {

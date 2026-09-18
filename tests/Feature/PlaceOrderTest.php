@@ -20,13 +20,19 @@ declare(strict_types=1);
  * (InMemoryOrder), so all of it runs with no database.
  */
 
+use Tests\Support\ChildFirstCartStorage;
 use Tests\Support\FakeBuyable;
+use Tests\Support\FakePayment;
 use Tests\Support\InMemoryOrder;
+use Tests\Support\InMemoryOrderCart;
 use Tests\Support\UnsavedCustomer;
 use Tnt\Ecommerce\AlreadyPaid;
 use Tnt\Ecommerce\Events\Order\Created;
+use Tnt\Ecommerce\Account\GuestUserResolver;
+use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
 use Tnt\Ecommerce\Order\OrderState;
 use Tnt\Ecommerce\Payment\PaymentStatus;
+use Tnt\Ecommerce\Shop\Shop;
 
 beforeEach(function (): void {
     // Same three lines as CheckoutTest: the Dispatcher facade wants a
@@ -245,10 +251,10 @@ it('refuses to place a paid order', function (): void {
     expect($draft->getPaymentStatus())->toBe(PaymentStatus::Paid);
 });
 
-it('refuses a refunded order too', function (): void {
-    // Not in the pending/failed/canceled/expired set on purpose: the money
-    // history exists either way, and the same guard the webhook listeners
-    // write through (canTransitionTo) refuses to leave refunded.
+it('re-places a fully refunded order', function (): void {
+    // sc-11448: a refunded order is an order nobody has paid for. It used to
+    // be refused here, which — paired with a gateway that maps any refund to
+    // `refunded` — ended the order's life over a goodwill gesture.
     [$cart] = makeCheckoutCart();
     $draft = draftInProgress();
 
@@ -256,6 +262,22 @@ it('refuses a refunded order too', function (): void {
     $cart->place($draft);
     $draft->setPaymentStatus(PaymentStatus::Paid);
     $draft->setPaymentStatus(PaymentStatus::Refunded);
+
+    expect($cart->place($draft))->toBe($draft);
+    expect($draft->getPaymentStatus())->toBe(PaymentStatus::Pending);
+});
+
+it('refuses a partially refunded order', function (): void {
+    // The other half of sc-11448: most of the money is still here, so this is
+    // an order somebody paid for, and re-freezing it would rewrite what they
+    // paid for.
+    [$cart] = makeCheckoutCart();
+    $draft = draftInProgress();
+
+    $cart->add(new FakeBuyable('1', 2000));
+    $cart->place($draft);
+    $draft->setPaymentStatus(PaymentStatus::Paid);
+    $draft->setPaymentStatus(PaymentStatus::PartiallyRefunded);
 
     expect(fn() => $cart->place($draft))->toThrow(AlreadyPaid::class);
 });
@@ -300,4 +322,62 @@ it('places a draft isRePlaceable says no to', function (): void {
     expect($cart->place($draft))->toBe($draft);
     expect($draft->getState())->toBe(OrderState::Placed);
     expect($draft->isRePlaceable())->toBeTrue();
+});
+
+it('freezes the parent link onto the order lines', function (): void {
+    // sc-11448: a host that models mandatory accessories had to rebuild this
+    // AFTER placement, from a Created listener, because the cart had nowhere
+    // to hold it. Now placement copies it, and the listener disappears.
+    [$cart] = makeCheckoutCart();
+    $draft = draftInProgress();
+
+    $crate = new FakeBuyable('crate', 1500);
+    $deposit = new FakeBuyable('deposit', 300);
+
+    $cart->add($crate);
+    [$crateLine] = $cart->items();
+    $cart->add($deposit, 1, [], $crateLine);
+
+    $cart->place($draft);
+
+    $frozenCrate = $draft->frozen[$crateLine->getId()];
+    [, $depositCartLine] = $cart->items();
+    $frozenDeposit = $draft->frozen[$depositCartLine->getId()];
+
+    expect($frozenCrate->getParent())->toBeNull();
+    expect($frozenDeposit->getParent())->toBe($frozenCrate);
+});
+
+it('links a child frozen before its parent', function (): void {
+    // The reason the link is a second pass: this cart hands the deposit over
+    // BEFORE the crate it hangs off, so a one-pass copy would have no parent
+    // row to point at and the link would silently go missing.
+    $storage = new ChildFirstCartStorage();
+    $cart = new InMemoryOrderCart(
+        new Shop(new InMemoryAttributeStorage()),
+        $storage,
+        new FakePayment(),
+        new GuestUserResolver()
+    );
+
+    $draft = draftInProgress();
+
+    $crate = new FakeBuyable('crate', 1500);
+    $deposit = new FakeBuyable('deposit', 300);
+
+    $cart->add($crate);
+    [$crateLine] = $storage->items();
+    $cart->add($deposit, 1, [], $crateLine);
+
+    // Youngest first: the deposit is handed over before its crate.
+    [$first] = $cart->items();
+
+    expect($first->getParent())->not->toBeNull();
+
+    $cart->place($draft);
+
+    $depositLine = $draft->frozen[$first->getId()];
+    $crateFrozen = $draft->frozen[$crateLine->getId()];
+
+    expect($depositLine->getParent())->toBe($crateFrozen);
 });

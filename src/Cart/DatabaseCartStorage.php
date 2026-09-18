@@ -144,17 +144,19 @@ abstract class DatabaseCartStorage implements CartStorageInterface
      * @param BuyableInterface $buyable
      * @param int $quantity
      * @param array<array-key, mixed> $options
+     * @param CartItemInterface|null $parent
      * @return void
      */
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
-        array $options = []
+        array $options = [],
+        ?CartItemInterface $parent = null
     ): void {
         $cart = $this->cart();
 
         $item = CartItemRepository::create()
-            ->forBuyable($cart, $buyable, $options)
+            ->forBuyable($cart, $buyable, $options, $parent)
             ->firstOrNull();
 
         if ($item !== null) {
@@ -175,9 +177,39 @@ abstract class DatabaseCartStorage implements CartStorageInterface
         // The canonical form, or NULL for no options — the same value the
         // lookup above compares on.
         $item->options = LineOptions::canonical($options);
+
+        // Set before the one save, so the row is never briefly visible
+        // without the parent it was added under.
+        $item->setParent($parent);
         $item->save();
 
         $this->touch($cart);
+    }
+
+    /**
+     * @param CartItemInterface $parent
+     * @return array<int, CartItemInterface>
+     */
+    public function childrenOf(CartItemInterface $parent): array
+    {
+        $cart = $this->existingCart();
+
+        if ($cart === null) {
+            return [];
+        }
+
+        $children = [];
+
+        $lines = CartItemRepository::create()
+            ->forCart($cart)
+            ->childrenOf($parent)
+            ->all();
+
+        foreach ($lines as $line) {
+            $children[] = $line;
+        }
+
+        return $children;
     }
 
     /**
@@ -230,7 +262,7 @@ abstract class DatabaseCartStorage implements CartStorageInterface
             ->all();
 
         foreach ($items as $item) {
-            $item->delete();
+            $this->deleteLine($item);
             $removed = true;
         }
 
@@ -259,7 +291,7 @@ abstract class DatabaseCartStorage implements CartStorageInterface
         }
 
         if ($quantity <= 0) {
-            $item->delete();
+            $this->deleteLine($item);
         } else {
             $item->setQuantity($quantity);
         }
@@ -285,8 +317,28 @@ abstract class DatabaseCartStorage implements CartStorageInterface
             return;
         }
 
-        $item->delete();
+        $this->deleteLine($item);
         $this->touch($cart);
+    }
+
+    /**
+     * Take a line out, and everything hanging off it. A deposit whose crate
+     * has left the basket is not a thing the shop sells; the foreign key only
+     * stops the row pointing at nothing (see AddParentToLineTables), it does
+     * not do this.
+     *
+     * @param CartItem $item
+     * @return void
+     */
+    private function deleteLine(CartItem $item): void
+    {
+        foreach ($this->childrenOf($item) as $child) {
+            if ($child instanceof CartItem) {
+                $this->deleteLine($child);
+            }
+        }
+
+        $item->delete();
     }
 
     /**

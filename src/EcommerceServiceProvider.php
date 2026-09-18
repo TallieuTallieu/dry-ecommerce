@@ -29,6 +29,7 @@ use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Events\Order\PaymentCanceled;
 use Tnt\Ecommerce\Events\Order\PaymentExpired;
 use Tnt\Ecommerce\Events\Order\PaymentFailed;
+use Tnt\Ecommerce\Events\Order\PaymentPartiallyRefunded;
 use Tnt\Ecommerce\Events\Order\PaymentRefunded;
 use Tnt\Ecommerce\Fulfillment\CartAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
@@ -39,7 +40,10 @@ use Tnt\Ecommerce\Revisions\AddCartLifecycleColumns;
 use Tnt\Ecommerce\Revisions\AddFulfillmentAttributesToOrderTable;
 use Tnt\Ecommerce\Revisions\AddIndexesToEcommerceTables;
 use Tnt\Ecommerce\Revisions\AddOptionsToLineTables;
+use Tnt\Ecommerce\Revisions\AddBoxToAddresses;
+use Tnt\Ecommerce\Revisions\AddOrderLineIndexes;
 use Tnt\Ecommerce\Revisions\AddOrderStateColumn;
+use Tnt\Ecommerce\Revisions\AddParentToLineTables;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
@@ -95,6 +99,9 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddIndexesToEcommerceTables::class,
                 MakeOrderPlacementColumnsNullable::class,
                 MakeCustomerUserUnique::class,
+                AddOrderLineIndexes::class,
+                AddParentToLineTables::class,
+                AddBoxToAddresses::class,
             ]);
 
             /** @var MigrationManager $manager */
@@ -276,6 +283,7 @@ class EcommerceServiceProvider extends ServiceProvider
             PaymentCanceled::class => PaymentStatus::Canceled,
             PaymentExpired::class => PaymentStatus::Expired,
             PaymentRefunded::class => PaymentStatus::Refunded,
+            PaymentPartiallyRefunded::class => PaymentStatus::PartiallyRefunded,
         ];
 
         foreach ($statuses as $event => $status) {
