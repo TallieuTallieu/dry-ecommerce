@@ -64,7 +64,7 @@ project.
 | `tallieutallieu/oak` | `^3.0 \|\| ^4.0` |
 | `tallieutallieu/dry` | v4 |
 | `tallieutallieu/dry-dbi` | `^3` |
-| `tallieutallieu/dry-accounts` | `^3` — supported pairing, not a hard dependency |
+| `tallieutallieu/dry-accounts` | `^3 \|\| ^4` — supported pairing, not a hard dependency |
 
 ## Tooling (target — arrives with sc-11168)
 

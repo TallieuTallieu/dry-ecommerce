@@ -13,7 +13,7 @@
   "require-dev": {
     "pestphp/pest": "^3.8",
     "phpstan/phpstan": "^2.1",
-    "tallieutallieu/dry-accounts": "^3"
+    "tallieutallieu/dry-accounts": "^3 || ^4"
   },
   "autoload": {
     "psr-4": {
