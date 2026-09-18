@@ -6,70 +6,81 @@ declare(strict_types=1);
  * Order::isRePlaceable() — the one spelling of "place() would accept this
  * existing order again".
  *
- * Project code used to re-derive the rule (state placed, money never
- * arrived) at every "try again" button; now the order answers it itself, and
- * Cart::place()'s own guard reads through the same method — that delegation
- * is pinned in PlaceOrderTest. A plain Order answers from its columns with no
- * connection anywhere near it, like the rest of tests/Unit.
+ * Project code used to re-derive the rule at every "try again" button; now
+ * the order answers it itself from the payment ledger, and Cart::place()'s
+ * own guard reads through the same method — that delegation is pinned in
+ * PlaceOrderTest. The entries are handed to an InMemoryOrder directly, so no
+ * connection is anywhere near.
  */
 
+use Tests\Support\InMemoryOrder;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Model\PaymentEntry;
 use Tnt\Ecommerce\Order\OrderState;
-use Tnt\Ecommerce\Payment\PaymentStatus;
+use Tnt\Ecommerce\Payment\EntryKind;
 
 /**
- * An order as its two lifecycle columns leave it.
+ * A placed order whose ledger holds these money movements.
  *
- * @param string $state
- * @param string $paymentStatus
- * @return Order
+ * @param array<int, array{EntryKind, int}> $movements
+ * @return InMemoryOrder
  */
-function orderIn(string $state, string $paymentStatus): Order
+function orderWithMoney(array $movements): InMemoryOrder
 {
-    $order = new Order();
-    $order->state = $state;
-    $order->payment_status = $paymentStatus;
+    $order = new InMemoryOrder();
+    $order->state = OrderState::Placed->value;
+
+    foreach ($movements as [$kind, $amount]) {
+        $entry = new PaymentEntry();
+        $entry->kind = $kind->value;
+        $entry->amount = $amount;
+        $order->keepPaymentEntry($entry);
+    }
 
     return $order;
 }
 
-it('re-places exactly the placed-but-unpaid orders', function (
-    string $status,
+it('re-places exactly the orders nobody paid for', function (
+    array $movements,
     bool $expected
 ): void {
-    // The same transition rule the webhook listeners write through:
-    // canTransitionTo(Pending). Paid refuses — re-freezing would rewrite what
-    // the money arrived for — and so does a partial refund, which is still an
-    // order somebody paid for. A FULL refund accepts (sc-11448): nobody has
-    // paid for that order any more. Everything short of money arriving is a
-    // retry.
-    expect(orderIn(OrderState::Placed->value, $status)->isRePlaceable())->toBe(
-        $expected
-    );
+    // No capture: every attempt so far came to nothing. Every cent captured
+    // went back: nobody has paid for it any more. Anything else is an order
+    // somebody paid for, and re-freezing it would rewrite what they paid for.
+    expect(orderWithMoney($movements)->isRePlaceable())->toBe($expected);
 })->with([
-    'pending' => [PaymentStatus::Pending->value, true],
-    'failed' => [PaymentStatus::Failed->value, true],
-    'canceled' => [PaymentStatus::Canceled->value, true],
-    'expired' => [PaymentStatus::Expired->value, true],
-    'paid' => [PaymentStatus::Paid->value, false],
-    'refunded' => [PaymentStatus::Refunded->value, true],
-    'partially refunded' => [PaymentStatus::PartiallyRefunded->value, false],
+    'no money yet' => [[], true],
+    'paid' => [[[EntryKind::Captured, 10000]], false],
+    'partially refunded' => [
+        [[EntryKind::Captured, 10000], [EntryKind::Refunded, 100]],
+        false,
+    ],
+    'refunded' => [
+        [[EntryKind::Captured, 10000], [EntryKind::Refunded, 10000]],
+        true,
+    ],
+    'charged back' => [
+        [[EntryKind::Captured, 10000], [EntryKind::Chargeback, 10000]],
+        true,
+    ],
+    'free and paid' => [[[EntryKind::Captured, 0]], false],
 ]);
 
 it('never calls a draft re-placeable', function (): void {
     // A draft is placeable — Cart::place() takes it — but not RE-placeable:
     // it has no placement to repeat.
-    expect(
-        orderIn(
-            OrderState::Draft->value,
-            PaymentStatus::Pending->value
-        )->isRePlaceable()
-    )->toBeFalse();
+    $order = orderWithMoney([]);
+    $order->state = OrderState::Draft->value;
+
+    expect($order->isRePlaceable())->toBeFalse();
 });
 
 it('reads a legacy row as re-placeable', function (): void {
-    // Pre-lifecycle rows hold '' in both columns: state reads placed (every
-    // such order was real) and payment reads pending (the status that claims
-    // nothing) — so a legacy unpaid order can be re-placed like any other.
-    expect(orderIn('', '')->isRePlaceable())->toBeTrue();
+    // Pre-lifecycle rows hold '' in state and have no ledger entries: state
+    // reads placed and nothing was captured. An order never saved has no
+    // entries, so a plain Order answers without a query.
+    $order = new Order();
+    $order->state = '';
+
+    expect($order->isRePlaceable())->toBeTrue();
 });

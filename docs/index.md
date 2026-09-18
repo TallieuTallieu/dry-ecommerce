@@ -26,7 +26,7 @@ rather than guessed at.
 | [Discounts and coupons](discounts.md) | Codes, the rules behind them, and when they are spent.                              |
 | [Stock](stock.md)                     | Counting what there is, and what happens when it runs out.                          |
 | [Tax](tax.md)                         | Rates, and the one fact the package cannot infer: whether your prices include them. |
-| [Payment](payment.md)                 | The one-method gateway interface, and why the default charges nobody.               |
+| [Payment](payment.md)                 | The payment ledger, the gateway contract, and why the default charges nobody.        |
 
 ## Migrating from 1.x
 

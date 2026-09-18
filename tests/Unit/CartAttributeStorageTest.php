@@ -88,7 +88,11 @@ it('freezes cart-held attributes onto the order intact', function (): void {
         $shop,
         $carts,
         new FakePayment(),
-        new GuestUserResolver()
+        new GuestUserResolver(),
+        new Tests\Support\InMemoryPaymentLedger(
+            new Oak\Dispatcher\Dispatcher()
+        ),
+        new Tests\Support\FakeRedirector()
     );
 
     $cart->add(new FakeBuyable('1', 2000));

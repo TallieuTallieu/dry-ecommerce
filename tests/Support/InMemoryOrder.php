@@ -25,6 +25,8 @@ use Tnt\Ecommerce\Model\OrderItem;
  */
 final class InMemoryOrder extends Order
 {
+    use KeepsPaymentEntries;
+
     /**
      * How many times `save()` was called.
      *

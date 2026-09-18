@@ -19,6 +19,7 @@ use Tnt\Ecommerce\Model\Customer;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Model\OrderItem;
+use Tnt\Ecommerce\Model\PaymentEntry;
 use Tnt\Ecommerce\Model\Stock;
 use Tnt\Ecommerce\Model\StockItem;
 use Tnt\Ecommerce\Repository\AddressRepository;
@@ -28,6 +29,7 @@ use Tnt\Ecommerce\Repository\CustomerRepository;
 use Tnt\Ecommerce\Repository\DiscountCodeRepository;
 use Tnt\Ecommerce\Repository\OrderItemRepository;
 use Tnt\Ecommerce\Repository\OrderRepository;
+use Tnt\Ecommerce\Repository\PaymentEntryRepository;
 use Tnt\Ecommerce\Repository\Repository;
 use Tnt\Ecommerce\Repository\StockItemRepository;
 use Tnt\Ecommerce\Repository\StockRepository;
@@ -47,6 +49,7 @@ it('builds every repository without a criteria collection', function (
     DiscountCodeRepository::class,
     OrderRepository::class,
     OrderItemRepository::class,
+    PaymentEntryRepository::class,
     StockRepository::class,
     StockItemRepository::class,
 ]);
@@ -70,6 +73,7 @@ it('covers every model the cart and order paths read', function (
     [DiscountCodeRepository::class, DiscountCode::class],
     [OrderRepository::class, Order::class],
     [OrderItemRepository::class, OrderItem::class],
+    [PaymentEntryRepository::class, PaymentEntry::class],
     [StockRepository::class, Stock::class],
     [StockItemRepository::class, StockItem::class],
 ]);
@@ -169,4 +173,31 @@ it('composes the cart line lookups fluently', function (): void {
 
     $repository = CartItemRepository::create();
     expect($repository->forAnyVariantOf($cart, $buyable))->toBe($repository);
+});
+
+it('finds the order behind a payment id through the ledger', function (): void {
+    // sc-11458: the webhook lookup — any attempt the shop started, under
+    // its provider, skipping `unknown_payment` entries, oldest first.
+    $repository = PaymentEntryRepository::create()
+        ->forPayment('mollie', 'tr_1')
+        ->onOrders();
+
+    $method = new ReflectionMethod(
+        Tnt\Dbi\Repository::class,
+        'createQueryBuilder'
+    );
+    $builder = $method->invoke($repository);
+    assert($builder instanceof Tnt\Dbi\QueryBuilder);
+
+    $builder->selectAll();
+    $builder->build();
+
+    expect($builder->getQuery())->toBe(
+        'SELECT `ecommerce_payment_entry`.* FROM `ecommerce_payment_entry`' .
+            ' WHERE `ecommerce_payment_entry`.`provider` = ?' .
+            ' AND `ecommerce_payment_entry`.`payment_id` = ?' .
+            ' AND `ecommerce_payment_entry`.`order` IS NOT NULL' .
+            ' ORDER BY `ecommerce_payment_entry`.`id` ASC'
+    );
+    expect($builder->getParameters())->toBe(['mollie', 'tr_1']);
 });

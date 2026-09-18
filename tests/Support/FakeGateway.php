@@ -6,21 +6,21 @@ namespace Tests\Support;
 
 use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\PaymentGatewayInterface;
-use Tnt\Ecommerce\Contracts\RedirectorInterface;
-use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Payment\PaymentOutcome;
+use Tnt\Ecommerce\Payment\PaymentRedirect;
+use Tnt\Ecommerce\Payment\PaymentReport;
 use Tnt\Ecommerce\Payment\PaymentStatus;
 
 /**
- * An in-memory provider on the full gateway contract: pay() writes a fresh
- * payment id onto the order and answers with a redirect to a made-up
- * checkout page; statusOf() reports whatever the test scripted, standing in
- * for the provider's API.
+ * An in-memory provider on the full gateway contract: pay() creates a fresh
+ * payment and answers with a redirect to a made-up checkout page;
+ * reportOf() answers whatever the test scripted, standing in for the
+ * provider's API.
  */
 final class FakeGateway implements PaymentGatewayInterface
 {
     /**
-     * How many payments were created — the counter behind the ids, so a
-     * re-placed order visibly gets a fresh one.
+     * How many payments were created — the counter behind the ids.
      *
      * @var int
      */
@@ -29,50 +29,39 @@ final class FakeGateway implements PaymentGatewayInterface
     /**
      * What the "provider" currently says about each payment id.
      *
-     * @var array<string, PaymentStatus>
+     * @var array<string, PaymentReport>
      */
     public array $reports = [];
 
     /**
-     * @var RedirectorInterface
+     * @return string
      */
-    private RedirectorInterface $redirector;
-
-    /**
-     * @param RedirectorInterface $redirector
-     */
-    public function __construct(RedirectorInterface $redirector)
+    public function provider(): string
     {
-        $this->redirector = $redirector;
+        return 'fake';
     }
 
     /**
-     * A fresh payment every call — a re-placed order's old id is dead at the
-     * provider, so it is overwritten, never kept.
-     *
      * @param OrderInterface $order
-     * @return void
+     * @return PaymentOutcome
      */
-    public function pay(OrderInterface $order)
+    public function pay(OrderInterface $order): PaymentOutcome
     {
         $paymentId = 'tr_fake_' . ++$this->created;
 
-        if ($order instanceof Order) {
-            $order->payment_id = $paymentId;
-            $order->save();
-        }
-
-        $this->redirector->redirect(
+        return new PaymentRedirect(
+            $paymentId,
             'https://pay.example/checkout/' . $paymentId
         );
     }
 
     /**
      * @param string $paymentId
-     * @return PaymentStatus
+     * @return PaymentReport
      */
-    public function statusOf(string $paymentId): PaymentStatus
+    public function reportOf(string $paymentId): PaymentReport
     {
-        return $this->reports[$paymentId] ?? PaymentStatus::Pending;
+        return $this->reports[$paymentId] ??
+            new PaymentReport($paymentId, PaymentStatus::Pending);
     }
 }

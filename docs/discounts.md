@@ -108,7 +108,8 @@ written — an abandoned or failed payment leaves the code usable, which is what
 a customer retrying a payment needs.
 
 The consequence is worth stating plainly: **a shop on `NullPayment` redeems
-immediately**, because `NullPayment` dispatches `Paid` from `pay()`.
+immediately**, because `NullPayment` settles with a capture on the spot and
+the ledger dispatches `Paid` before `place()` returns.
 
 ## How the reduction reaches the lines
 

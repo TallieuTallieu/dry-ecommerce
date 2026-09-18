@@ -76,9 +76,9 @@ into it with a fresh order:
    the order's **own copy** of the method's required attributes, as JSON, or
    null. See below.
 6. `state` — `placed`.
-7. `payment_status` — `pending`, through the same guard the webhook listeners
-   write through. A gateway's events move it from there; see
-   [Payment](payment.md#the-status-lifecycle).
+7. `payment_id` cleared — no attempt is current until `pay()` starts one —
+   and `payment_status` derived from the [ledger](payment.md#the-ledger):
+   `pending`, or whatever money earlier attempts left on it.
 8. `discount` — the code that was in force, or null.
 9. **If a customer was given:** `customer` — the foreign key — and
    `freezeCustomer($customer)`, the order's **own copy** of who placed it.
@@ -92,7 +92,12 @@ into it with a fresh order:
 12. The cart→order link: the cart row's `order` column, through
     `CartStorageInterface::setOrderId()`. See
     [Cart](cart.md#the-cart-order-link).
-13. `Created` is dispatched; then `PaymentInterface::pay()`.
+13. `Created` is dispatched; then `PaymentInterface::pay()`, whose answer
+    `PaymentLedger::start()` records — the attempt, `payment_id`, the status.
+    Only a `PaymentRedirect` sends the visitor away, through
+    `RedirectorInterface`; after a settled or refused payment `place()`
+    returns the order and the project's controller sends the visitor on. See
+    [Payment](payment.md#what-pay-answers).
 
 ## The place-step
 
@@ -120,9 +125,9 @@ moment: `Created` means placement, not draft birth.
 
 ### Re-placement
 
-Placing an order that is already placed but **not paid** — pending, failed,
-canceled, expired, or refunded in full — is legal and re-freezes the same
-order: its old lines
+Placing an order that is already placed but **not paid** — nothing captured
+on any attempt, or every captured cent returned — is legal and re-freezes the
+same order: its old lines
 are deleted, the cart's current lines copied fresh, the money re-frozen, the
 reference kept, and `Created` re-fired. This is the asynchronous-gateway
 shape: place → payment fails → the basket is still there → the customer edits
@@ -131,12 +136,14 @@ it and accepts again, and no sibling order is ever born.
 The order can say itself whether this is legal:
 
 ```php
-$order->isRePlaceable(); // placed, and the money never arrived
+$order->isRePlaceable(); // placed, and nobody has paid for it
 ```
 
 That is the rule a "try again" button re-derived in every project — state
-placed **and** `getPaymentStatus()->canTransitionTo(Pending)`, the same
-transition the webhook listeners write through — spelled once, on the order.
+placed **and** (no capture in the ledger, **or** money captured and all of it
+returned) — spelled once, on the order and read from the
+[ledger](payment.md#the-ledger), not from `payment_status`. A €0 capture
+counts: a free order is paid.
 `place()`'s own guard reads through it, so the button and the guard cannot
 drift. A draft answers `false`: it is _placeable_ but not _RE-placeable_ —
 it has no placement to repeat.
@@ -154,7 +161,10 @@ Two consequences:
   rewrite.
 - **A fully refunded order does not refuse.** All of the money went back, so
   nobody has paid for it any more and asking again is exactly what
-  re-placement is for. This matters most where it is least visible: a gateway
+  re-placement is for. Its earlier attempts keep their entries — money on
+  any attempt counts toward the figures — but the status follows the new
+  attempt: `pending` until it pays, then `paid` once net covers the total.
+  See [deriving the status](payment.md#deriving-the-status). This matters most where it is least visible: a gateway
   that maps *any* refund to `refunded` would otherwise end an order's life
   over a goodwill gesture. See
   [the two kinds of refund](payment.md#the-two-kinds-of-refund).
@@ -242,11 +252,27 @@ $order->getPaymentStatus(); // PaymentStatus::Pending | Paid | Failed | ...
 ```
 
 The seven words are `pending`, `paid`, `failed`, `canceled`, `expired`,
-`partially_refunded` and `refunded`. Written by the package: `pending` at
-checkout, and every later value by the event listeners. An order from before the lifecycle existed — or one carrying a
-word this package does not know — reads as `Pending`, the one status that
-claims nothing. This is the payment's state, not a fulfillment status. See
-[Payment](payment.md#the-status-lifecycle).
+`partially_refunded` and `refunded`. Derived from the payment ledger and
+written only by `PaymentLedger` — there is no setter. An order from before the
+lifecycle existed — or one carrying a word this package does not know — reads
+as `Pending`, the one status that claims nothing. This is the payment's state,
+not a fulfillment status. See [Payment](payment.md#deriving-the-status).
+
+## Money received
+
+The order's money figures answer from its [ledger](payment.md#the-ledger)
+entries, across every payment attempt, in cents:
+
+```php
+$order->getPaid();        // Σ captured
+$order->getReturned();    // Σ refunded − Σ refund_reversed + Σ chargeback − Σ chargeback_reversed
+$order->getNet();         // paid − returned
+$order->getOutstanding(); // max(0, total − net)
+$order->getPaymentEntries(); // the history itself, oldest first
+```
+
+`getTotal()` is what the order costs, frozen at placement; these are what
+actually happened to the money.
 
 ## The order reference
 
@@ -360,7 +386,7 @@ this invoice as it was charged.
 ```php
 OrderRepository::create()->placed()->all(); // never drafts
 OrderRepository::create()->byOrderId('12-K4M7QX9RTB')->firstOrNull();
-OrderRepository::create()->byPaymentId($mollieId)->firstOrNull();
+OrderRepository::create()->byPaymentId($mollieId)->firstOrNull(); // current attempt only
 OrderRepository::create()->forCustomer($customer)->all();
 OrderRepository::create()->forUser($userId)->placed()->all(); // order history
 OrderRepository::create()->withPaymentStatus(PaymentStatus::Paid)->all();
@@ -389,8 +415,8 @@ interprets.
 | Event                                                                   | When                                                                                                                                                           |
 | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Created`                                                               | The order was **placed** — frozen from the cart, lines written, before `pay()`. Never fired for a draft, and fired **again** on [re-placement](#re-placement). |
-| `Paid`                                                                  | A gateway reports the money arrived. Writes `paid`, redeems the coupon, [soft-deletes the cart](payment.md#paid-releases-the-cart).                            |
-| `PaymentFailed`, `PaymentCanceled`, `PaymentExpired`, `PaymentRefunded` | A gateway says so. Each writes its status onto the order.                                                                                                      |
+| `Paid`                                                                  | The derived status became `paid`. Redeems the coupon, [soft-deletes the cart](payment.md#paid-releases-the-cart).                                              |
+| `PaymentFailed`, `PaymentCanceled`, `PaymentExpired`, `PaymentRefunded`, `PaymentPartiallyRefunded` | The derived status became that word. Dispatched by `PaymentLedger`, once per change.                                            |
 
 `Created` fires before payment, so a listener on it must not assume the order
 was paid for — send the confirmation mail from `Paid`. And because a
@@ -400,7 +426,9 @@ idempotent per order id.
 ## Testing checkout without a database
 
 Two protected seams exist for exactly this: `Cart::newOrder()` and
-`Order::newOrderItem()`. Override each with a subclass whose `save()` keeps to
+`Order::newOrderItem()` — plus, for the payment half,
+`Order::getPaymentEntries()` and `PaymentLedger::write()`, which the
+package's `tests/Support/InMemoryPaymentLedger` keeps in memory. Override each with a subclass whose `save()` keeps to
 memory and the whole of `checkout()` — the money freezing, the customer copy,
 the lines, the events, the payment — runs for real with no connection anywhere
 near it. The package's own `tests/Support/InMemoryLineOrder` is the worked
@@ -410,5 +438,5 @@ example.
 
 - [Addresses](addresses.md) — the book, and what freezing copies
 - [Customer](customer.md) — the account link, and a full worked checkout
-- [Payment](payment.md) — the gateway interface and the events
+- [Payment](payment.md) — the ledger, the gateway contract and the events
 - [Tax](tax.md) — the convention an order records

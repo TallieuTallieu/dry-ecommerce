@@ -25,7 +25,9 @@ use Tnt\Ecommerce\Contracts\CartStorageInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\Money;
-use Tnt\Ecommerce\Payment\PaymentStatus;
+use Tnt\Ecommerce\Contracts\RedirectorInterface;
+use Tnt\Ecommerce\Payment\PaymentLedger;
+use Tnt\Ecommerce\Payment\PaymentRedirect;
 use Tnt\Ecommerce\Tax\TaxPolicy;
 
 /**
@@ -57,6 +59,10 @@ class Cart implements CartInterface, TotalingInterface
 
     private UserResolverInterface $users;
 
+    private PaymentLedger $ledger;
+
+    private RedirectorInterface $redirector;
+
     private TaxPolicy $tax;
 
     /**
@@ -64,6 +70,9 @@ class Cart implements CartInterface, TotalingInterface
      * @param CartStorageInterface $storage
      * @param PaymentInterface $payment
      * @param UserResolverInterface $users
+     * @param PaymentLedger $ledger Records what pay() did.
+     * @param RedirectorInterface $redirector Sends the visitor to a
+     *                                        provider's checkout.
      * @param TaxPolicy|null $tax How the shop taxes. Defaults to prices that
      *                            contain their tax and untaxed delivery, which
      *                            leaves an existing shop's totals unmoved.
@@ -73,12 +82,16 @@ class Cart implements CartInterface, TotalingInterface
         CartStorageInterface $storage,
         PaymentInterface $payment,
         UserResolverInterface $users,
+        PaymentLedger $ledger,
+        RedirectorInterface $redirector,
         ?TaxPolicy $tax = null
     ) {
         $this->shop = $shop;
         $this->storage = $storage;
         $this->payment = $payment;
         $this->users = $users;
+        $this->ledger = $ledger;
+        $this->redirector = $redirector;
         $this->tax = $tax ?? new TaxPolicy();
     }
 
@@ -396,7 +409,9 @@ class Cart implements CartInterface, TotalingInterface
      * identity IF a customer is given (a draft's own identity columns are
      * left standing otherwise), makes the reference if there is none yet,
      * sets the state placed, links the cart to the order, dispatches
-     * {@see Created} and calls pay(). See docs/orders.md.
+     * {@see Created}, calls pay() and records its outcome in the payment
+     * ledger — redirecting only for a {@see PaymentRedirect}. See
+     * docs/orders.md and docs/payment.md.
      *
      * @param Order $order
      * @param CustomerInterface|null $customer
@@ -455,9 +470,11 @@ class Cart implements CartInterface, TotalingInterface
 
         $order->state = OrderState::Placed->value;
 
-        // Before pay() runs — a gateway only ever moves the status forward.
-        // The guard above is what makes this bare write legal.
-        $order->payment_status = PaymentStatus::Pending->value;
+        // No current attempt until pay() starts one — earlier attempts keep
+        // their entries, and their money still counts. With none current the
+        // status is pending, or whatever money already on the ledger says.
+        $order->payment_id = null;
+        $order->payment_status = $this->ledger->derive($order)->value;
 
         $order->discount = $this->getDiscount();
 
@@ -523,8 +540,16 @@ class Cart implements CartInterface, TotalingInterface
             call_user_func($callback, $order);
         }
 
-        // Pay
-        $this->payment->pay($order);
+        $outcome = $this->payment->pay($order);
+
+        // Recorded before the redirect — the shipped redirector exits.
+        $this->ledger->start($order, $this->payment->provider(), $outcome);
+
+        // Settled or refused: no redirect, the project's controller sends
+        // the visitor on.
+        if ($outcome instanceof PaymentRedirect) {
+            $this->redirector->redirect($outcome->checkoutUrl);
+        }
 
         return $order;
     }
