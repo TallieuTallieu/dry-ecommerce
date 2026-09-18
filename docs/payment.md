@@ -129,6 +129,9 @@ $order->getNet();         // paid − returned
 $order->getOutstanding(); // max(0, total − net)
 ```
 
+To read the ledger in the admin, see [Admin](admin.md). It is off until the
+project turns it on.
+
 ## Deriving the status
 
 `payment_status` is derived from the entries by `PaymentLedger` after every
@@ -353,3 +356,4 @@ on this version has only `NullPayment` and cannot take a payment at all.
 - [Orders](orders.md): what an order looks like when `pay()` receives it,
   and its money figures
 - [Discounts](discounts.md): why redemption hangs off `Paid`
+- [Admin](admin.md): the read-only Ledger screen
