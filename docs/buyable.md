@@ -10,21 +10,36 @@ use Tnt\Ecommerce\Contracts\BuyableInterface;
 
 class Product extends \dry\orm\Model implements BuyableInterface
 {
-    public function getId(): string { return (string) $this->id; }
-    public function getTitle(): string { return $this->title; }
-    public function getDescription(): string { return $this->description; }
-    public function getPrice(): int { return $this->price; } // cents
-    public function getThumbnailSource(): string { return $this->image->src; }
+    public function getId(): string
+    {
+        return (string) $this->id;
+    }
+    public function getTitle(): string
+    {
+        return $this->title;
+    }
+    public function getDescription(): string
+    {
+        return $this->description;
+    }
+    public function getPrice(): int
+    {
+        return $this->price;
+    } // cents
+    public function getThumbnailSource(): string
+    {
+        return $this->image->src;
+    }
 }
 ```
 
 That is a complete buyable. It has no stock and no tax, and it does not need
 any: both are **capabilities you opt into**, one interface each.
 
-| Implement | To get |
-|---|---|
+| Implement           | To get                                                                            |
+| ------------------- | --------------------------------------------------------------------------------- |
 | `HasStockInterface` | `getStockWorker()`. `Cart::canAdd()` reports whether the stock covers a quantity. |
-| `TaxableInterface` | `getTaxRate()`. The buyable's lines count towards `Cart::getTax()`. |
+| `TaxableInterface`  | `getTaxRate()`. The buyable's lines count towards `Cart::getTax()`.               |
 
 Neither, either or both. The cart checks with `instanceof` and asks a buyable
 nothing it has not offered to answer.
@@ -43,4 +58,3 @@ nothing it has not offered to answer.
 Cart lines and order lines reference their buyable by class name plus `item_id`,
 and both `item_id` columns are `int(11)`; a buyable answering `'sku-a'` would be
 stored, and read back, as item 0. A model returns `(string) $this->id`.
-

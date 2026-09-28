@@ -87,7 +87,7 @@ $cart->add($crate);
 $cart->add($deposit, 1, [], $crateLine);
 
 $cart->childrenOf($crateLine); // [the deposit line]
-$depositLine->getParent();     // $crateLine
+$depositLine->getParent(); // $crateLine
 ```
 
 Three rules follow from making this a field of the line rather than something
@@ -100,12 +100,12 @@ a basket re-derives on every render:
 - **Removing a line removes what hangs off it.** A deposit whose crate has
   left the basket is not a thing the shop sells. This holds for
   `removeItem()`, for `updateQuantity($id, 0)` and for `remove($buyable)`.
-  The self foreign key in the schema is `ON DELETE SET NULL` and does *not*
+  The self foreign key in the schema is `ON DELETE SET NULL` and does _not_
   do this — InnoDB does not run cascades on a self-referencing key, so the
   storage does it, and the constraint only stops a line pointing at a row that
   is gone.
 - **Stock still counts the buyable.** `canAdd()` and `quantityOf()` sum every
-  line holding a buyable, parented or not. The parent is part of the *line's*
+  line holding a buyable, parented or not. The parent is part of the _line's_
   identity, not the buyable's.
 
 The link survives the freeze at checkout: order lines carry it too, and
@@ -124,9 +124,9 @@ one of two row-backed storages — both keep the cart in `ecommerce_cart` and
 its lines in `ecommerce_cart_item`; they differ only in how the visitor's row
 is found again:
 
-|                                | Row found by                            | Survives                       |
-| ------------------------------ | --------------------------------------- | ------------------------------ |
-| `SessionCartStorage` (default) | its id, kept in the session             | the session                    |
+|                                | Row found by                            | Survives                                           |
+| ------------------------------ | --------------------------------------- | -------------------------------------------------- |
+| `SessionCartStorage` (default) | its id, kept in the session             | the session                                        |
 | `CookieCartStorage`            | its `token`, kept in a dedicated cookie | `ecommerce.cart_lifetime` days past the last visit |
 
 ### The cookie cart

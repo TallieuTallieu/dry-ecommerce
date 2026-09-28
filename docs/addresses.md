@@ -36,7 +36,7 @@ questions a shop asks of an address: where the invoice goes and where the parcel
 goes. A "home" or "work" label is a shop's own vocabulary for its customers'
 addresses and means nothing to a checkout, so it is not modelled here.
 
-An address carries **no name**. It is purely a *where*; the *who* is frozen once
+An address carries **no name**. It is purely a _where_; the _who_ is frozen once
 on the order itself (`order.first_name` / `order.last_name`). The address book
 used to carry a recipient name per address, on the theory that a parcel can go
 to somebody else — but no shop shipping today uses that, so it was removed
@@ -47,8 +47,8 @@ gets modelled deliberately — likely one name line, not a first/last pair.
 ## Reading the book
 
 ```php
-$customer->getAddresses();                        // iterable<Address>
-$customer->getAddress(AddressType::Shipping);     // ?AddressInterface
+$customer->getAddresses(); // iterable<Address>
+$customer->getAddress(AddressType::Shipping); // ?AddressInterface
 ```
 
 `getAddress()` answers with the **most recently added** address of that kind.
@@ -56,7 +56,7 @@ That is a default for the shop that never asks, not a rule. A shop that lets a
 customer pick at checkout says which one it picked:
 
 ```php
-$customer->useAddress($chosen);   // for this request; nothing is written
+$customer->useAddress($chosen); // for this request; nothing is written
 $cart->checkout($customer);
 ```
 
@@ -76,7 +76,7 @@ billing_city  billing_country
 shipping_… (the same six)
 ```
 
-The reason is that an address book is *edited*. A customer moves house and
+The reason is that an address book is _edited_. A customer moves house and
 corrects the address on file; a customer deletes an address they used once. Both
 are things a book must let them do, and an order that read through to those rows
 would answer, next year, that last year's parcel went somewhere it never went —
@@ -88,9 +88,9 @@ this order on". Only the frozen copy answers "who placed it and where did it
 go", and only the frozen copy is safe to print.
 
 ```php
-$order->getFirstName();        // as it was at checkout
+$order->getFirstName(); // as it was at checkout
 $order->getEmail();
-$order->getShippingAddress();  // Tnt\Ecommerce\Address\FrozenAddress
+$order->getShippingAddress(); // Tnt\Ecommerce\Address\FrozenAddress
 $order->getBillingAddress();
 $order->getShippingAddress()->getBox(); // the bus, frozen like the rest
 ```
@@ -111,7 +111,7 @@ A customer with a shipping address and no billing address freezes six blank
 billing columns, and vice versa. An order carrying an address the customer never
 gave for that purpose is a worse record than one that admits the purpose had no
 address — and it is a record nobody can correct afterwards, because it looks
-exactly like an address that *was* given.
+exactly like an address that _was_ given.
 
 A shop that means "bill me where you ship" says so by keeping an address of each
 kind, which is precisely the thing the book can now express and the twelve
@@ -128,7 +128,7 @@ and checks out exactly as before.
 ## Company and VAT number
 
 An account can be opened in the name of a business. When it is, the company name
-and the VAT number are what the account *is* — one identity, not two facts that
+and the VAT number are what the account _is_ — one identity, not two facts that
 happen to travel together — so both sit on the customer:
 
 ```php
@@ -178,8 +178,6 @@ To settle it for one checkout without touching the book — a customer choosing 
 delivery address at the till — name the address:
 
 ```php
-$customer->useAddress($address);   // this request only, nothing written
+$customer->useAddress($address); // this request only, nothing written
 $order = $cart->checkout($customer);
 ```
-
-

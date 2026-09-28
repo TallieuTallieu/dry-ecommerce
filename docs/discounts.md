@@ -27,14 +27,14 @@ longer exists or the row is gone.
 interface CouponInterface
 {
     public function isRedeemable(TotalingInterface $totalingItem): bool;
-    public function getReduction(TotalingInterface $totalingItem): int;  // CENTS
+    public function getReduction(TotalingInterface $totalingItem): int; // CENTS
     public function redeem(Order $order);
 }
 ```
 
 `TotalingInterface` and not `CartInterface`, because both a cart and an order
 are totaling things — so a coupon can be asked what it takes off a cart being
-built *and* what it took off an order already placed, with one implementation.
+built _and_ what it took off an order already placed, with one implementation.
 
 ```php
 class PercentageOff implements CouponInterface
@@ -62,8 +62,8 @@ class PercentageOff implements CouponInterface
 
 ```php
 $cart->addDiscount($discountCode);
-$cart->getDiscount();     // the code in force, or null
-$cart->getReduction();    // what it takes off, in cents
+$cart->getDiscount(); // the code in force, or null
+$cart->getReduction(); // what it takes off, in cents
 ```
 
 `addDiscount()` checks `isRedeemable()` before storing, so a code that does not

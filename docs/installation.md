@@ -6,12 +6,12 @@ the order below is the order things actually have to happen in.
 
 ## Requirements
 
-|              |                                                |
-| ------------ | ---------------------------------------------- |
-| PHP          | `^8.4`                                         |
-| dry          | `^4.0`                                         |
-| oak          | `^3.0 \|\| ^4.0`                               |
-| dry-dbi      | `^3.0`                                         |
+|              |                                                    |
+| ------------ | -------------------------------------------------- |
+| PHP          | `^8.4`                                             |
+| dry          | `^4.0`                                             |
+| oak          | `^3.0 \|\| ^4.0`                                   |
+| dry-dbi      | `^3.0`                                             |
 | dry-accounts | `^3 \|\| ^4` — **optional**, in `require-dev` here |
 
 dry-accounts is a supported pairing, not a dependency. Exactly one class in

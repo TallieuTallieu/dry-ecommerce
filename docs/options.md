@@ -26,12 +26,12 @@ options match. So:
 $cart->add($tapas, 1, ['cheese' => 'no goat']);
 $cart->add($tapas, 1, ['cheese' => 'no blue']);
 
-count($cart->items());   // 2 — two selections, two lines
+count($cart->items()); // 2 — two selections, two lines
 
 $cart->add($tapas, 1, ['cheese' => 'no goat']);
 
-count($cart->items());               // still 2
-$cart->items()[0]->getQuantity();    // 2 — same selection, same line
+count($cart->items()); // still 2
+$cart->items()[0]->getQuantity(); // 2 — same selection, same line
 ```
 
 And a caller that passes no options behaves exactly as it always did: no
@@ -46,7 +46,7 @@ is the same line:
 
 ```php
 $cart->add($thing, 1, ['size' => 'L', 'gift' => true]);
-$cart->add($thing, 1, ['gift' => true, 'size' => 'L']);   // merges
+$cart->add($thing, 1, ['gift' => true, 'size' => 'L']); // merges
 ```
 
 Three consequences worth knowing:
@@ -55,7 +55,7 @@ Three consequences worth knowing:
   in the `options` column — which is also what every line from before the
   column existed holds, so old lines and new no-options lines merge as the
   same absence of choices.
-- **Keys are sorted; list values are not.** For a list the order *is* the
+- **Keys are sorted; list values are not.** For a list the order _is_ the
   value — a ranking, a sequence of steps — and the package cannot tell a set
   from a sequence. A shop that means "a set of ticked boxes" keys the array
   (`['no_goat' => true]`) or sorts the list itself before handing it over.
@@ -73,13 +73,13 @@ buyable stops naming a line, and the line's own id becomes the handle:
 
 ```php
 foreach ($cart->items() as $item) {
-    $item->getId();        // the line's id — put this in the basket form
-    $item->getOptions();   // ['cheese' => 'no goat'], or []
+    $item->getId(); // the line's id — put this in the basket form
+    $item->getOptions(); // ['cheese' => 'no goat'], or []
 }
 
-$cart->updateQuantity($itemId, 3);   // set the line to 3
-$cart->updateQuantity($itemId, 0);   // zero or less removes the line
-$cart->removeItem($itemId);          // remove exactly this line
+$cart->updateQuantity($itemId, 3); // set the line to 3
+$cart->updateQuantity($itemId, 0); // zero or less removes the line
+$cart->removeItem($itemId); // remove exactly this line
 ```
 
 The id is an opaque token the storage issued (the row id, for the shipped
@@ -96,7 +96,7 @@ Two rules, both deliberate:
 
 ## Stock counts the buyable, not the selection
 
-`canAdd()` checks stock against the *total* the cart holds of a buyable,
+`canAdd()` checks stock against the _total_ the cart holds of a buyable,
 summed across all of its option-variants: three tapas without goat's cheese
 and two without blue cheese are five tapas out of the same stock. That is
 `CartStorageInterface::quantityOf()`'s contract, and the reason it is not
@@ -112,8 +112,8 @@ and two without blue cheese are five tapas out of the same stock. That is
 $order = $cart->checkout($customer);
 
 foreach ($order->getItems() as $line) {
-    $line->getPrice();     // the frozen line total, in cents
-    $line->getOptions();   // the frozen selection, or []
+    $line->getPrice(); // the frozen line total, in cents
+    $line->getOptions(); // the frozen selection, or []
 }
 ```
 
@@ -128,13 +128,13 @@ Options do not price themselves. The line's price is still
 `quantity × BuyableInterface::getPrice()`, and nothing in the package reads
 the options to adjust it. A shop whose options change the price prices them
 itself — a configuration model with its own frozen price, or a buyable per
-variant — exactly as before. Options carry *what was chosen*; what that
+variant — exactly as before. Options carry _what was chosen_; what that
 choice costs is the shop's arithmetic.
 
 ### The configuration-model workaround is obsolete — mostly
 
 Before options existed, the only way to keep two selections on two lines was
-to make the configuration *be* the buyable: a `ProductConfiguration` table
+to make the configuration _be_ the buyable: a `ProductConfiguration` table
 with a fingerprint column, find-or-create, append-only forever. That whole
 apparatus is now unnecessary for a shop whose options are **choices only** —
 pass them as options and delete the table.

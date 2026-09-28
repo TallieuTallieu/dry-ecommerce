@@ -26,16 +26,16 @@ asks for the portal never builds it.
 
 A flat list, newest first, 25 to a page. The columns:
 
-| Column     | Shows                                                                   |
-| ---------- | ----------------------------------------------------------------------- |
-| Created    | Date and time the entry was written.                                    |
+| Column     | Shows                                                                  |
+| ---------- | ---------------------------------------------------------------------- |
+| Created    | Date and time the entry was written.                                   |
 | Order      | The order's row id, and its public reference (`order_id`) once placed. |
-| Provider   | `PaymentInterface::provider()`.                                         |
-| Payment id | The provider's id for the attempt, with a copy button.                  |
-| Kind       | The `EntryKind`.                                                        |
-| Status     | The reported status, on a `status_reported` entry.                      |
-| Amount     | `Money::toDecimal()` of the cents. Empty on an entry that moves none.   |
-| Reference  | The provider's own id for a money movement.                             |
+| Provider   | `PaymentInterface::provider()`.                                        |
+| Payment id | The provider's id for the attempt, with a copy button.                 |
+| Kind       | The `EntryKind`.                                                       |
+| Status     | The reported status, on a `status_reported` entry.                     |
+| Amount     | `Money::toDecimal()` of the cents. Empty on an entry that moves none.  |
+| Reference  | The provider's own id for a money movement.                            |
 
 The search box matches the payment id, the reference, the order's row id and
 its public reference.
