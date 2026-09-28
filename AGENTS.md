@@ -14,27 +14,26 @@ oak's container, dry's ORM and dry-dbi's query/table builders.
 
 > [!important] Never set a story's state by hand
 > Shortcut state is driven **automatically by the branch**. Check out the
-> branch matching the ticket *before* committing, and the story follows along.
+> branch matching the ticket _before_ committing, and the story follows along.
 > Pushing and merging the pull request is the user's job, not an agent's —
 > commit on the right branch and stop there.
 
 > [!important] `master`, not `main`
-> The house CI template this package adopts (copied from dry-dbi) keys its
-> workflows off `master` — `ci.yml` on `pull_request: branches: [master]` and
-> `release.yml` on `push: branches: [master]`. Renaming would break both.
+> CI comes from [dry-ci](https://github.com/TallieuTallieu/dry-ci): `.github/workflows/ci.yml`
+> releases on `push: branches: [master]`. Renaming the branch would stop the releases.
 
 ## Issue tracker
 
 Work is tracked in **Shortcut** (workspace `tallieu--tallieu`), not in Obsidian
 TaskNotes.
 
-| | |
-|---|---|
-| Epic | **11166** — `dry-ecommerce` |
-| Story title prefix | `dry-ecommerce:` |
-| Workflow | DRY — `500000052` |
-| Default state for new stories | Planned — `500001509` |
-| Team / group | webdev — `5f05c15d-7e01-4911-80dc-2f6094ee7f1f` |
+|                               |                                                 |
+| ----------------------------- | ----------------------------------------------- |
+| Epic                          | **11166** — `dry-ecommerce`                     |
+| Story title prefix            | `dry-ecommerce:`                                |
+| Workflow                      | DRY — `500000052`                               |
+| Default state for new stories | Planned — `500001509`                           |
+| Team / group                  | webdev — `5f05c15d-7e01-4911-80dc-2f6094ee7f1f` |
 
 Use the `short` CLI (see the `dry-skills:shortcut` skill). It reads
 `SHORTCUT_API_TOKEN`, `SHORTCUT_URL_SLUG` and `SHORTCUT_MENTION_NAME` from the
@@ -58,12 +57,12 @@ project.
 
 ## Target stack
 
-| Dependency | Constraint |
-|---|---|
-| PHP | `^8.4` |
-| `tallieutallieu/oak` | `^3.0 \|\| ^4.0` |
-| `tallieutallieu/dry` | v4 |
-| `tallieutallieu/dry-dbi` | `^3` |
+| Dependency                    | Constraint                                              |
+| ----------------------------- | ------------------------------------------------------- |
+| PHP                           | `^8.4`                                                  |
+| `tallieutallieu/oak`          | `^3.0 \|\| ^4.0`                                        |
+| `tallieutallieu/dry`          | v4                                                      |
+| `tallieutallieu/dry-dbi`      | `^3`                                                    |
 | `tallieutallieu/dry-accounts` | `^3 \|\| ^4` — supported pairing, not a hard dependency |
 
 ## Tooling (target — arrives with sc-11168)
@@ -75,16 +74,17 @@ Copied from **dry-dbi**, which is the house template for GitHub-hosted packages:
 - `make phpstan` — PHPStan level 9
 - `make yarn-format` — Prettier with `@prettier/plugin-php`
 - `make sync-docs` — rsync `docs/` to an Obsidian vault
-- `.github/workflows/ci.yml` — tests, PHPStan, Prettier, `composer audit`
-- `.github/workflows/release.yml` — auto-tag, changelog, GitHub Release
+- `.github/workflows/ci.yml` — calls [dry-ci](https://github.com/TallieuTallieu/dry-ci): PR-title check,
+  tests, PHPStan, Prettier and `composer audit`; on merge to `master` an automatic release (tag,
+  `CHANGELOG.md` section, GitHub Release). The PR title, a Conventional Commit, decides the version.
 
 Run commands through Docker once it exists, as in the sibling packages.
 
 ## Related packages
 
-| Package | Relationship |
-|---|---|
-| `dry-accounts` | First-class pairing. `Customer.user` is a nullable FK to its user model. |
-| `dry-mollie` | **Stranded.** Pinned to `dry-ecommerce: ^1.2.1`, `oak: ^1.1.15`, `php: ^7.4\|^8.0`. Only real `PaymentInterface` implementation — until ported, no 3.0 shop can take payment. |
-| `dry-sendcloud` | Already on the modern line. No dependency on this package; relevant prior art for fulfillment. |
-| `dry-dbi` | Source of the tooling template, and of `BaseRepository` / `QueryBuilder` / `TableBuilder`. |
+| Package         | Relationship                                                                                                                                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dry-accounts`  | First-class pairing. `Customer.user` is a nullable FK to its user model.                                                                                                      |
+| `dry-mollie`    | **Stranded.** Pinned to `dry-ecommerce: ^1.2.1`, `oak: ^1.1.15`, `php: ^7.4\|^8.0`. Only real `PaymentInterface` implementation — until ported, no 3.0 shop can take payment. |
+| `dry-sendcloud` | Already on the modern line. No dependency on this package; relevant prior art for fulfillment.                                                                                |
+| `dry-dbi`       | Source of the tooling template, and of `BaseRepository` / `QueryBuilder` / `TableBuilder`.                                                                                    |
