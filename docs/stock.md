@@ -31,10 +31,10 @@ A shop can keep several stocks — a warehouse, a shop floor — as rows in
 the row up on first use, so building one costs nothing.
 
 ```php
-$worker->getQuantity($buyable);              // how many there are
-$worker->isAvailable($buyable, 3);           // are there three?
-$worker->increment($buyable, 10);            // stock arrived
-$worker->decrement($buyable, 1);             // one went out
+$worker->getQuantity($buyable); // how many there are
+$worker->isAvailable($buyable, 3); // are there three?
+$worker->increment($buyable, 10); // stock arrived
+$worker->decrement($buyable, 1); // one went out
 ```
 
 Quantities are whole. They were `float` in these signatures and `int` in the
@@ -49,8 +49,8 @@ never stocked is not the same as unlimited.
 Your call, made once when you build the worker:
 
 ```php
-new StockWorker('warehouse');                       // refuses
-new StockWorker('warehouse', allowNegative: true);  // backorders
+new StockWorker('warehouse'); // refuses
+new StockWorker('warehouse', allowNegative: true); // backorders
 ```
 
 By default `decrement()` refuses to take a stock below zero and throws
@@ -67,7 +67,7 @@ disagrees with what was taken out of it is the one outcome that helps nobody, so
 the choice is between hearing about the oversell and recording it.
 
 > Nothing in this package calls `decrement()`, so this fires wherever you do —
-> usually a listener on `Events\Order\Paid`, which is *after* the money is taken.
+> usually a listener on `Events\Order\Paid`, which is _after_ the money is taken.
 > `Cart::canAdd()` is the earlier and cheaper place to find out.
 
 The cart is the only part of the package that consults stock on its own, in
@@ -78,4 +78,3 @@ is the shop's call, and `Events\Order\Paid` is the usual place to make it.
 `StockWorkerInterface` is deliberately not bound in the container: a worker
 cannot be built without being told which stock it counts, so there is nothing
 sensible to resolve. Buyables hand one over themselves.
-

@@ -42,16 +42,16 @@ class Product extends \dry\orm\Model implements TaxableInterface
 inferred and everything else follows from it. Set `ecommerce.prices` to
 `inclusive` or `exclusive`.
 
-A price of `1250` at 21% is either €12.50 *of which* €2.17 is VAT, or €12.50
-*plus* €2.63 of VAT. The two differ by the whole tax amount — here for a cart of
+A price of `1250` at 21% is either €12.50 _of which_ €2.17 is VAT, or €12.50
+_plus_ €2.63 of VAT. The two differ by the whole tax amount — here for a cart of
 **two lines of `1250`**, delivered for `475`:
 
-| | `inclusive` | `exclusive` |
-|---|---|---|
-| subtotal | 2500 | 2500 |
-| VAT | *434, contained* | **526, added** |
-| delivery | 475 | 475 |
-| **total** | **2975** | **3501** |
+|           | `inclusive`      | `exclusive`    |
+| --------- | ---------------- | -------------- |
+| subtotal  | 2500             | 2500           |
+| VAT       | _434, contained_ | **526, added** |
+| delivery  | 475              | 475            |
+| **total** | **2975**         | **3501**       |
 
 Two lines rather than one because the VAT differs: 21% of `2500` in a single sum
 is `525`, but each line rounds on its own, and `263` twice is `526`. That is [the
@@ -85,7 +85,7 @@ of it.
   line B: 250 x  500/2500 =  50  ->  ( 500- 50) at  6% =  27
 ```
 
-It is spread over *every* line, including untaxed ones. A discount applies to
+It is spread over _every_ line, including untaxed ones. A discount applies to
 the whole cart, so charging the taxable lines with all of it would tax them on
 less than the customer paid.
 

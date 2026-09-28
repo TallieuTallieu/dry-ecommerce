@@ -54,5 +54,10 @@ services:
       - ./docker/xdebug/log:/tmp/xdebug
       - ~/.ssh:/root/.ssh:ro
     ports:
-      - "80"
-    command: ["sh", "-c", "eval `ssh-agent -s` && ssh-add && composer install && apache2ctl -D FOREGROUND"]
+      - '80'
+    command:
+      [
+        'sh',
+        '-c',
+        'eval `ssh-agent -s` && ssh-add && composer install && apache2ctl -D FOREGROUND',
+      ]

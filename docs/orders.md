@@ -165,7 +165,7 @@ Two consequences:
   any attempt counts toward the figures — but the status follows the new
   attempt: `pending` until it pays, then `paid` once net covers the total.
   See [deriving the status](payment.md#deriving-the-status). This matters most where it is least visible: a gateway
-  that maps *any* refund to `refunded` would otherwise end an order's life
+  that maps _any_ refund to `refunded` would otherwise end an order's life
   over a goodwill gesture. See
   [the two kinds of refund](payment.md#the-two-kinds-of-refund).
 
@@ -264,9 +264,9 @@ The order's money figures answer from its [ledger](payment.md#the-ledger)
 entries, across every payment attempt, in cents:
 
 ```php
-$order->getPaid();        // Σ captured
-$order->getReturned();    // Σ refunded − Σ refund_reversed + Σ chargeback − Σ chargeback_reversed
-$order->getNet();         // paid − returned
+$order->getPaid(); // Σ captured
+$order->getReturned(); // Σ refunded − Σ refund_reversed + Σ chargeback − Σ chargeback_reversed
+$order->getNet(); // paid − returned
 $order->getOutstanding(); // max(0, total − net)
 $order->getPaymentEntries(); // the history itself, oldest first
 ```
@@ -412,11 +412,11 @@ interprets.
 
 ## Events
 
-| Event                                                                   | When                                                                                                                                                           |
-| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Created`                                                               | The order was **placed** — frozen from the cart, lines written, before `pay()`. Never fired for a draft, and fired **again** on [re-placement](#re-placement). |
-| `Paid`                                                                  | The derived status became `paid`. Redeems the coupon, [soft-deletes the cart](payment.md#paid-releases-the-cart).                                              |
-| `PaymentFailed`, `PaymentCanceled`, `PaymentExpired`, `PaymentRefunded`, `PaymentPartiallyRefunded` | The derived status became that word. Dispatched by `PaymentLedger`, once per change.                                            |
+| Event                                                                                               | When                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Created`                                                                                           | The order was **placed** — frozen from the cart, lines written, before `pay()`. Never fired for a draft, and fired **again** on [re-placement](#re-placement). |
+| `Paid`                                                                                              | The derived status became `paid`. Redeems the coupon, [soft-deletes the cart](payment.md#paid-releases-the-cart).                                              |
+| `PaymentFailed`, `PaymentCanceled`, `PaymentExpired`, `PaymentRefunded`, `PaymentPartiallyRefunded` | The derived status became that word. Dispatched by `PaymentLedger`, once per change.                                                                           |
 
 `Created` fires before payment, so a listener on it must not assume the order
 was paid for — send the confirmation mail from `Paid`. And because a

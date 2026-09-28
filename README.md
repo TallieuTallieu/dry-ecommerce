@@ -20,9 +20,7 @@ composer require tallieutallieu/dry-ecommerce
 Register the service provider — after dry-accounts', if the shop uses it:
 
 ```php
-$app->register([
-    \Tnt\Ecommerce\EcommerceServiceProvider::class,
-]);
+$app->register([\Tnt\Ecommerce\EcommerceServiceProvider::class]);
 
 $app->bootstrap();
 ```
@@ -46,12 +44,12 @@ return [
 ];
 ```
 
-| Key | Default | Decides |
-| --- | --- | --- |
-| `payment` | `NullPayment::class` | The gateway. |
-| `user_resolver` | `GuestUserResolver::class` | Whether a checkout can link to an account. |
-| `prices` | `inclusive` | Whether quoted prices already contain their tax. |
-| `delivery_tax_rate` | `0` | The rate charged on fulfillment cost. |
+| Key                 | Default                    | Decides                                          |
+| ------------------- | -------------------------- | ------------------------------------------------ |
+| `payment`           | `NullPayment::class`       | The gateway.                                     |
+| `user_resolver`     | `GuestUserResolver::class` | Whether a checkout can link to an account.       |
+| `prices`            | `inclusive`                | Whether quoted prices already contain their tax. |
+| `delivery_tax_rate` | `0`                        | The rate charged on fulfillment cost.            |
 
 > **`NullPayment` gives everything away for free.** It marks an order paid
 > without taking any money, and it is the default. Replace it before going live.
@@ -68,13 +66,28 @@ use Tnt\Ecommerce\Contracts\BuyableInterface;
 
 class Product extends Model implements BuyableInterface
 {
-    public function getId(): string { return (string) $this->id; }
-    public function getTitle(): string { return $this->name; }
-    public function getDescription(): string { return $this->description; }
-    public function getThumbnailSource(): string { return $this->photo_url; }
+    public function getId(): string
+    {
+        return (string) $this->id;
+    }
+    public function getTitle(): string
+    {
+        return $this->name;
+    }
+    public function getDescription(): string
+    {
+        return $this->description;
+    }
+    public function getThumbnailSource(): string
+    {
+        return $this->photo_url;
+    }
 
     /** In CENTS. €12.50 is 1250. */
-    public function getPrice(): int { return $this->price_in_cents; }
+    public function getPrice(): int
+    {
+        return $this->price_in_cents;
+    }
 }
 ```
 
@@ -87,13 +100,13 @@ complete buyable: always addable, and it contributes no tax.
 ```php
 $cart = $app->get(\Tnt\Ecommerce\Contracts\CartInterface::class);
 
-$cart->canAdd($product, 3);   // does the stock cover it? reported, not enforced
+$cart->canAdd($product, 3); // does the stock cover it? reported, not enforced
 $cart->add($product, 3);
-$cart->add($product, 1, ['cheese' => 'no goat']);   // per-line options: its own line
+$cart->add($product, 1, ['cheese' => 'no goat']); // per-line options: its own line
 
-$cart->getSubTotal();         // cents
-$cart->getTotal();            // cents
-$cart->getTax();              // cents
+$cart->getSubTotal(); // cents
+$cart->getTotal(); // cents
+$cart->getTax(); // cents
 ```
 
 ### Check out
@@ -108,8 +121,8 @@ $customer->useAddress($shippingAddress);
 
 $order = $cart->checkout($customer);
 
-$order->order_id;              // '12-K4M7QX9RTB'
-$order->getBillingAddress();   // a frozen copy, not the live row
+$order->order_id; // '12-K4M7QX9RTB'
+$order->getBillingAddress(); // a frozen copy, not the live row
 ```
 
 Guest and account checkout are the same call. See
@@ -149,19 +162,19 @@ make sync-docs       # rsync docs/ to OBSIDIAN_DOCS_PATH
 
 ## Documentation
 
-| | |
-| --- | --- |
-| [Installation](docs/installation.md) | Setup, start to finish |
-| [Money](docs/money.md) | Cents, and the rounding rule |
-| [Buyable](docs/buyable.md) | The contract and its two capabilities |
-| [Cart](docs/cart.md) | Lines, totals, checkout |
-| [Options and variants](docs/options.md) | Per-line choices, in the merge key and frozen onto orders |
-| [Customer](docs/customer.md) | Guests, accounts, dry-accounts |
-| [Addresses](docs/addresses.md) | The book, and what an order freezes |
-| [Orders](docs/orders.md) | What an order records |
-| [Fulfillment](docs/fulfillment.md) | Delivery methods and their attributes |
-| [Discounts and coupons](docs/discounts.md) | Codes and the rules behind them |
-| [Stock](docs/stock.md) | Counting, and running out |
-| [Tax](docs/tax.md) | Rates and price conventions |
-| [Payment](docs/payment.md) | The gateway interface |
-| [What changed from 1.x](docs/from-1x.md) | For reading older projects |
+|                                            |                                                           |
+| ------------------------------------------ | --------------------------------------------------------- |
+| [Installation](docs/installation.md)       | Setup, start to finish                                    |
+| [Money](docs/money.md)                     | Cents, and the rounding rule                              |
+| [Buyable](docs/buyable.md)                 | The contract and its two capabilities                     |
+| [Cart](docs/cart.md)                       | Lines, totals, checkout                                   |
+| [Options and variants](docs/options.md)    | Per-line choices, in the merge key and frozen onto orders |
+| [Customer](docs/customer.md)               | Guests, accounts, dry-accounts                            |
+| [Addresses](docs/addresses.md)             | The book, and what an order freezes                       |
+| [Orders](docs/orders.md)                   | What an order records                                     |
+| [Fulfillment](docs/fulfillment.md)         | Delivery methods and their attributes                     |
+| [Discounts and coupons](docs/discounts.md) | Codes and the rules behind them                           |
+| [Stock](docs/stock.md)                     | Counting, and running out                                 |
+| [Tax](docs/tax.md)                         | Rates and price conventions                               |
+| [Payment](docs/payment.md)                 | The gateway interface                                     |
+| [What changed from 1.x](docs/from-1x.md)   | For reading older projects                                |

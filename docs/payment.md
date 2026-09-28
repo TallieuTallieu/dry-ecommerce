@@ -57,11 +57,11 @@ whatever it needs.
 `Tnt\Ecommerce\Payment`. `Cart::place()` hands the outcome to
 `PaymentLedger::start()` and then acts on it:
 
-| Outcome                                  | Meaning                                                   | What the package does                                                                                                                                                    |
-| ---------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `PaymentRedirect($paymentId, $checkoutUrl)` | The provider created a payment; the visitor must pay it.  | Writes `attempt_started`, points `payment_id` at it, and redirects through `RedirectorInterface`: a `302` that exits.                                                        |
-| `PaymentSettled(PaymentReport)`          | Decided on the spot (`NullPayment`, a saved card).        | Writes `attempt_started`, points `payment_id` at it, applies the report. **No redirect**: `place()` returns the order and the project's controller sends the visitor on. |
-| `PaymentRefused(?$paymentId)`            | The provider would not create the payment.                | With an id: `attempt_started` plus `status_reported: failed`. Without one: no entry (there is no attempt to file it under), and the column reads `failed` on its own. No redirect either way. |
+| Outcome                                     | Meaning                                                  | What the package does                                                                                                                                                                         |
+| ------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PaymentRedirect($paymentId, $checkoutUrl)` | The provider created a payment; the visitor must pay it. | Writes `attempt_started`, points `payment_id` at it, and redirects through `RedirectorInterface`: a `302` that exits.                                                                         |
+| `PaymentSettled(PaymentReport)`             | Decided on the spot (`NullPayment`, a saved card).       | Writes `attempt_started`, points `payment_id` at it, applies the report. **No redirect**: `place()` returns the order and the project's controller sends the visitor on.                      |
+| `PaymentRefused(?$paymentId)`               | The provider would not create the payment.               | With an id: `attempt_started` plus `status_reported: failed`. Without one: no entry (there is no attempt to file it under), and the column reads `failed` on its own. No redirect either way. |
 
 A refused order ends up `failed`, dispatches `PaymentFailed` and stays
 [re-placeable](orders.md#re-placement), with the basket still standing. One
@@ -76,26 +76,26 @@ nothing after it runs.
 
 One table, append-only. Nothing updates or deletes an entry.
 
-| Column       | Holds                                                                        |
-| ------------ | ---------------------------------------------------------------------------- |
-| `order`      | The order. Empty only on an `unknown_payment` entry.                         |
-| `provider`   | `PaymentInterface::provider()`.                                              |
-| `payment_id` | The provider's id for the attempt.                                           |
-| `kind`       | One of the eight kinds below (`EntryKind`).                                  |
-| `status`     | The reported status, on a `status_reported` entry.                           |
-| `amount`     | Cents, zero or more, on a money entry. The kind says which way it went.      |
-| `reference`  | The provider's own id for a money movement.                                  |
+| Column       | Holds                                                                   |
+| ------------ | ----------------------------------------------------------------------- |
+| `order`      | The order. Empty only on an `unknown_payment` entry.                    |
+| `provider`   | `PaymentInterface::provider()`.                                         |
+| `payment_id` | The provider's id for the attempt.                                      |
+| `kind`       | One of the eight kinds below (`EntryKind`).                             |
+| `status`     | The reported status, on a `status_reported` entry.                      |
+| `amount`     | Cents, zero or more, on a money entry. The kind says which way it went. |
+| `reference`  | The provider's own id for a money movement.                             |
 
-| Kind                  | Written when                                                                |
-| --------------------- | --------------------------------------------------------------------------- |
-| `attempt_started`     | `pay()` answered with a payment id. The first entry of every attempt.       |
-| `status_reported`     | A report's status differs from that attempt's last reported status.         |
-| `captured`            | Money arrived.                                                              |
-| `refunded`            | Money went back.                                                            |
-| `refund_reversed`     | A refund was undone.                                                        |
-| `chargeback`          | The customer's bank took the money back.                                    |
-| `chargeback_reversed` | A chargeback was undone.                                                    |
-| `unknown_payment`     | A webhook named a payment id no attempt carries.                            |
+| Kind                  | Written when                                                          |
+| --------------------- | --------------------------------------------------------------------- |
+| `attempt_started`     | `pay()` answered with a payment id. The first entry of every attempt. |
+| `status_reported`     | A report's status differs from that attempt's last reported status.   |
+| `captured`            | Money arrived.                                                        |
+| `refunded`            | Money went back.                                                      |
+| `refund_reversed`     | A refund was undone.                                                  |
+| `chargeback`          | The customer's bank took the money back.                              |
+| `chargeback_reversed` | A chargeback was undone.                                              |
+| `unknown_payment`     | A webhook named a payment id no attempt carries.                      |
 
 **An attempt** is the set of entries sharing a `payment_id`. There is no
 attempts table. `ecommerce_order.payment_id` stays as the pointer to the
@@ -123,9 +123,9 @@ The order answers its money from the entries. See
 [Orders](orders.md#money-received):
 
 ```php
-$order->getPaid();        // Σ captured
-$order->getReturned();    // Σ refunded − Σ refund_reversed + Σ chargeback − Σ chargeback_reversed
-$order->getNet();         // paid − returned
+$order->getPaid(); // Σ captured
+$order->getReturned(); // Σ refunded − Σ refund_reversed + Σ chargeback − Σ chargeback_reversed
+$order->getNet(); // paid − returned
 $order->getOutstanding(); // max(0, total − net)
 ```
 
@@ -138,13 +138,13 @@ project turns it on.
 write. There is no setter. The rule is checked top to bottom, and the first
 row that matches decides:
 
-| Entries say                                                                  | Status                                                     |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| A capture, and net ≥ the order's total                                       | `paid`                                                     |
+| Entries say                                                                        | Status                                               |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| A capture, and net ≥ the order's total                                             | `paid`                                               |
 | The current attempt captured, or there is no current attempt: paid > 0 and net ≤ 0 | `refunded`                                           |
-| ...the same, returned > 0                                                    | `partially_refunded`                                       |
-| ...the same, anything else (including no capture at all)                    | `paid` (or `pending` when nothing was ever captured)       |
-| The current attempt captured nothing of its own                              | That attempt's last reported status, else `pending`        |
+| ...the same, returned > 0                                                          | `partially_refunded`                                 |
+| ...the same, anything else (including no capture at all)                           | `paid` (or `pending` when nothing was ever captured) |
+| The current attempt captured nothing of its own                                    | That attempt's last reported status, else `pending`  |
 
 The first row covers a free order: a €0 capture keeps net 0 ≥ total 0, so the
 order is paid. The last row covers a re-placed order waiting on its new

@@ -13,14 +13,14 @@ accumulation drifts. `0.1 + 0.2 + 0.3` is not `0.6`; `10 + 20 + 30` is always
 
 `bigint` rather than `int` is deliberate. PHP's `int` is a signed 64-bit
 integer, and `bigint` is the only integer column that holds all of it; an
-`int(11)` would stop at 2,147,483,647 cents (€21,474,836.47), which is *less*
+`int(11)` would stop at 2,147,483,647 cents (€21,474,836.47), which is _less_
 range than the `decimal(10,2)` it replaces, and MySQL would truncate a large
 order rather than refuse it.
 
 ## The rounding rule
 
 Integers do not remove rounding, they concentrate it. Multiplying an amount by a
-*rate* — VAT at 6%, 12% or 21%, a percentage discount — produces fractional
+_rate_ — VAT at 6%, 12% or 21%, a percentage discount — produces fractional
 cents. The rule, which `Tnt\Ecommerce\Money` implements and which your
 `TaxRateInterface` and `CouponInterface` implementations are expected to follow:
 
@@ -93,7 +93,7 @@ very last step, the representation the rest of this package works to keep out.
 
 `Money::fromDecimal()` is the same boundary the other way, and the more
 important of the two. Money leaves this package as a figure on a page, but it
-*enters* it as text — an admin field, a config value, a price import — and that
+_enters_ it as text — an admin field, a config value, a price import — and that
 is where a wrong amount gets in.
 
 ```php
@@ -105,11 +105,11 @@ Money::fromDecimal('  -0.05  '); // -5, space ignored
 
 Anything else raises `Tnt\Ecommerce\NotAnAmount`, for one of three reasons:
 
-| Text | Why it is refused |
-|---|---|
-| `''`, `'abc'`, `'12.2.5'`, `'1e3'` | Not an amount. A plain `(int)` cast reads every one of these as `0`, and `0` is a believable price. |
-| `'12.255'` | Finer than a cent. `Money` could round it and will not: that changes a price nobody asked to change. Round it where the extra precision came from. |
-| `'92233720368547758.08'` | In cents, past what a PHP `int` holds. |
+| Text                               | Why it is refused                                                                                                                                  |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `''`, `'abc'`, `'12.2.5'`, `'1e3'` | Not an amount. A plain `(int)` cast reads every one of these as `0`, and `0` is a believable price.                                                |
+| `'12.255'`                         | Finer than a cent. `Money` could round it and will not: that changes a price nobody asked to change. Round it where the extra precision came from. |
+| `'92233720368547758.08'`           | In cents, past what a PHP `int` holds.                                                                                                             |
 
 `'12,25'`, `'1,234.56'` and `'€ 12,25'` are refused too, symmetrically with
 `toDecimal()` emitting none of those. Whatever formats an amount for a person
@@ -126,10 +126,10 @@ Money::fromDecimal(Money::toDecimal($cents)) === $cents; // always
 Integer cents are exact over a range, not everywhere, and `Money` refuses the
 two ways out of that range rather than answering approximately:
 
-| Raises | When |
-|---|---|
-| `Tnt\Ecommerce\AmountTooLarge` | The amount is past the ceiling for its rate. The amount is multiplied twice on the way to an answer — once by the rate, once by 2 to round the half — so at 21% the largest exact amount is 219,604,096,115,589,897 cents. `getMaximumAmount()` reports the ceiling for the rate that was used. |
-| `Tnt\Ecommerce\UnsupportedRate` | The rate is finer than `0.0001%`, or is too large to scale, or is `INF` or `NAN`. A rate of exactly `0` is fine and takes nothing off. |
+| Raises                          | When                                                                                                                                                                                                                                                                                            |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Tnt\Ecommerce\AmountTooLarge`  | The amount is past the ceiling for its rate. The amount is multiplied twice on the way to an answer — once by the rate, once by 2 to round the half — so at 21% the largest exact amount is 219,604,096,115,589,897 cents. `getMaximumAmount()` reports the ceiling for the rate that was used. |
+| `Tnt\Ecommerce\UnsupportedRate` | The rate is finer than `0.0001%`, or is too large to scale, or is `INF` or `NAN`. A rate of exactly `0` is fine and takes nothing off.                                                                                                                                                          |
 
 Both extend `InvalidArgumentException`, so one `catch` covers the pair.
 
@@ -139,4 +139,3 @@ cents, or not a percentage, which is when an exception is worth more than an
 amount. Before these existed, an amount over the ceiling raised a `TypeError`
 from inside `intdiv()`, and a rate of `0.000004`, `INF` or `NAN` quietly
 returned `0` cents behind a PHP warning.
-

@@ -16,7 +16,7 @@ $shop = $app->get(\Tnt\Ecommerce\Contracts\ShopInterface::class);
 $shop->addFulfillment(new Pickup());
 $shop->addFulfillment(new HomeDelivery());
 
-$shop->getFulfillments();    // everything registered
+$shop->getFulfillments(); // everything registered
 $shop->hasFulfillment('pickup');
 $shop->getFulfillment('pickup');
 ```
@@ -41,9 +41,9 @@ public function setFulfillment(FulfillmentInterface $fulfillment)
 ```php
 interface FulfillmentInterface
 {
-    public function getId();                            // string|int
+    public function getId(); // string|int
     public function getTitle(): string;
-    public function getCost(CartInterface $cart): int;  // CENTS
+    public function getCost(CartInterface $cart): int; // CENTS
 
     public function getAttribute(string $name);
     public function attributeOr(string $name, mixed $default): mixed;
@@ -79,8 +79,8 @@ attributes on the method rather than columns on the order:
 
 ```php
 $method->setAttribute('pickup_point', 'GENT-CENTRUM');
-$method->requireAttributes();       // ['pickup_point']
-$method->validateAttributes();      // false until every required one is set
+$method->requireAttributes(); // ['pickup_point']
+$method->validateAttributes(); // false until every required one is set
 ```
 
 `HasFulfillmentAttributes` implements the whole of that against an
