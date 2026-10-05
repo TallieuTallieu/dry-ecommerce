@@ -36,6 +36,14 @@ interface OrderItemInterface
     public function getOptions(): array;
 
     /**
+     * The variant this line was sold as — the order's own frozen copy, with
+     * the unit price charged — or null. See docs/variants.md.
+     *
+     * @return VariantInterface|null
+     */
+    public function getVariant(): ?VariantInterface;
+
+    /**
      * The line this one hangs off, as the cart had it at checkout, or null.
      * Copied by {@see \Tnt\Ecommerce\Cart\Cart::place()} once every line
      * exists — a child may be frozen before its parent.

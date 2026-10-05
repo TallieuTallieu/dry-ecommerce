@@ -26,13 +26,22 @@ interface CartInterface
      *                                       part of the line's identity, and
      *                                       copied onto the order at
      *                                       checkout. See docs/cart.md.
+     * @param VariantInterface|null $variant For a {@see HasVariantsInterface}
+     *                                       buyable: the variant picked, or
+     *                                       null for its first. Part of the
+     *                                       line's identity. See
+     *                                       docs/variants.md.
      * @return mixed
+     *
+     * @throws \Tnt\Ecommerce\UnknownVariant When the buyable does not offer
+     *                                       the variant.
      */
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
         array $options = [],
-        ?CartItemInterface $parent = null
+        ?CartItemInterface $parent = null,
+        ?VariantInterface $variant = null
     );
 
     /**

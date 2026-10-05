@@ -19,7 +19,7 @@ use Tnt\Ecommerce\Contracts\BuyableInterface;
  * The fakes that add a capability extend this one, so that the difference
  * between them is exactly the method each of them adds:
  * {@see FakeTaxableBuyable}, {@see FakeStockedBuyable},
- * {@see FakeStockedTaxableBuyable} and {@see FakeSizedBuyable}.
+ * {@see FakeStockedTaxableBuyable} and {@see FakeVariantBuyable}.
  *
  * Prices are integer cents, so `1225` is €12.25.
  */

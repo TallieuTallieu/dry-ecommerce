@@ -18,7 +18,9 @@ use Tnt\Ecommerce\Cart\Cart;
 use Tnt\Ecommerce\Cart\CartLifetime;
 use Tnt\Ecommerce\Cart\CartRelease;
 use Tnt\Ecommerce\Cart\CookieCartStorage;
+use Tnt\Ecommerce\Cart\OptionsVariantStorage;
 use Tnt\Ecommerce\Cart\SessionCartStorage;
+use Tnt\Ecommerce\Cart\Variants;
 use Tnt\Ecommerce\Console\ReapDraftsCommand;
 use Tnt\Ecommerce\Contracts\AttributeStorageInterface;
 use Tnt\Ecommerce\Contracts\CartInterface;
@@ -29,24 +31,32 @@ use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\RedirectorInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
+use Tnt\Ecommerce\Contracts\VariantStorageInterface;
 use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Fulfillment\CartAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Payment\HttpRedirector;
 use Tnt\Ecommerce\Payment\NullPayment;
 use Tnt\Ecommerce\Payment\PaymentLedger;
+use Tnt\Ecommerce\Revisions\AddBoxToAddresses;
 use Tnt\Ecommerce\Revisions\AddCartLifecycleColumns;
 use Tnt\Ecommerce\Revisions\AddFulfillmentAttributesToOrderTable;
 use Tnt\Ecommerce\Revisions\AddIndexesToEcommerceTables;
 use Tnt\Ecommerce\Revisions\AddOptionsToLineTables;
-use Tnt\Ecommerce\Revisions\AddBoxToAddresses;
 use Tnt\Ecommerce\Revisions\AddOrderLineIndexes;
 use Tnt\Ecommerce\Revisions\AddOrderStateColumn;
 use Tnt\Ecommerce\Revisions\AddParentToLineTables;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
+use Tnt\Ecommerce\Revisions\CreateCartItemTable;
+use Tnt\Ecommerce\Revisions\CreateCartTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
+use Tnt\Ecommerce\Revisions\CreateFulfillmentMethodTable;
+use Tnt\Ecommerce\Revisions\CreateOrderItemTable;
+use Tnt\Ecommerce\Revisions\CreateOrderTable;
 use Tnt\Ecommerce\Revisions\CreatePaymentEntryTable;
+use Tnt\Ecommerce\Revisions\CreateStockItemTable;
+use Tnt\Ecommerce\Revisions\CreateStockTable;
 use Tnt\Ecommerce\Revisions\DropAddressNameColumns;
 use Tnt\Ecommerce\Revisions\MakeCustomerUserUnique;
 use Tnt\Ecommerce\Revisions\MakeOrderCustomerNullable;
@@ -54,19 +64,22 @@ use Tnt\Ecommerce\Revisions\MakeOrderPlacementColumnsNullable;
 use Tnt\Ecommerce\Shop\Shop;
 use Tnt\Ecommerce\Tax\PriceConvention;
 use Tnt\Ecommerce\Tax\TaxPolicy;
-use Tnt\Ecommerce\Revisions\CreateCartTable;
-use Tnt\Ecommerce\Revisions\CreateOrderItemTable;
-use Tnt\Ecommerce\Revisions\CreateOrderTable;
-use Tnt\Ecommerce\Revisions\CreateFulfillmentMethodTable;
-use Tnt\Ecommerce\Revisions\CreateCartItemTable;
-use Tnt\Ecommerce\Revisions\CreateStockItemTable;
-use Tnt\Ecommerce\Revisions\CreateStockTable;
 
 class EcommerceServiceProvider extends ServiceProvider
 {
     public function boot(ContainerInterface $app)
     {
         $this->bootEventListeners($app);
+
+        // Handed to the static the line models read: the container never
+        // builds an ORM row, so it cannot inject one. Booted without
+        // register() — as the feature tests do — the static keeps its
+        // options default.
+        if ($app->has(VariantStorageInterface::class)) {
+            /** @var VariantStorageInterface $variants */
+            $variants = $app->get(VariantStorageInterface::class);
+            Variants::useStorage($variants);
+        }
 
         if ($app->isRunningInConsole()) {
             // getWith() answers plain `object`; narrow before calling on it.
@@ -193,6 +206,16 @@ class EcommerceServiceProvider extends ServiceProvider
                 $config,
                 'ecommerce.user_resolver',
                 GuestUserResolver::class
+            )
+        );
+
+        // Where a line keeps its variant. See docs/variants.md.
+        $app->singleton(
+            VariantStorageInterface::class,
+            self::configuredClass(
+                $config,
+                'ecommerce.variant_storage',
+                OptionsVariantStorage::class
             )
         );
 
