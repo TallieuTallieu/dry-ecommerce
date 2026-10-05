@@ -3,29 +3,30 @@
 namespace Tnt\Ecommerce\Cart;
 
 use Closure;
-use Tnt\Ecommerce\AlreadyPaid;
-use Tnt\Ecommerce\Model\Order;
-use Tnt\Ecommerce\Model\Customer;
-use Tnt\Ecommerce\Order\OrderState;
 use Oak\Dispatcher\Facade\Dispatcher;
-use Tnt\Ecommerce\Model\DiscountCode;
-use Tnt\Ecommerce\Events\Order\Created;
+use Tnt\Ecommerce\AlreadyPaid;
+use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\CartInterface;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
-use Tnt\Ecommerce\Contracts\ShopInterface;
-use Tnt\Ecommerce\Contracts\OrderInterface;
-use Tnt\Ecommerce\Contracts\CouponInterface;
-use Tnt\Ecommerce\Contracts\BuyableInterface;
-use Tnt\Ecommerce\Contracts\PaymentInterface;
-use Tnt\Ecommerce\Contracts\TaxableInterface;
-use Tnt\Ecommerce\Contracts\CustomerInterface;
-use Tnt\Ecommerce\Contracts\TotalingInterface;
-use Tnt\Ecommerce\Contracts\HasStockInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
+use Tnt\Ecommerce\Contracts\CouponInterface;
+use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
-use Tnt\Ecommerce\Contracts\UserResolverInterface;
-use Tnt\Ecommerce\Money;
+use Tnt\Ecommerce\Contracts\HasStockInterface;
+use Tnt\Ecommerce\Contracts\OrderInterface;
+use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\RedirectorInterface;
+use Tnt\Ecommerce\Contracts\ShopInterface;
+use Tnt\Ecommerce\Contracts\TaxableInterface;
+use Tnt\Ecommerce\Contracts\TotalingInterface;
+use Tnt\Ecommerce\Contracts\UserResolverInterface;
+use Tnt\Ecommerce\Contracts\VariantInterface;
+use Tnt\Ecommerce\Events\Order\Created;
+use Tnt\Ecommerce\Model\Customer;
+use Tnt\Ecommerce\Model\DiscountCode;
+use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Money;
+use Tnt\Ecommerce\Order\OrderState;
 use Tnt\Ecommerce\Payment\PaymentLedger;
 use Tnt\Ecommerce\Payment\PaymentRedirect;
 use Tnt\Ecommerce\Tax\TaxPolicy;
@@ -103,14 +104,22 @@ class Cart implements CartInterface, TotalingInterface
      * @param BuyableInterface $buyable
      * @param int $quantity
      * @param array<array-key, mixed> $options
+     * @param CartItemInterface|null $parent
+     * @param VariantInterface|null $variant
      * @return mixed|void
      */
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
         array $options = [],
-        ?CartItemInterface $parent = null
+        ?CartItemInterface $parent = null,
+        ?VariantInterface $variant = null
     ) {
+        $options = Variants::forCart(
+            $options,
+            Variants::resolve($buyable, $variant)
+        );
+
         $this->storage->add($buyable, $quantity, $options, $parent);
     }
 

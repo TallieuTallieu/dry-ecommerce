@@ -4,8 +4,9 @@ namespace Tnt\Ecommerce\Model;
 
 use dry\orm\Model;
 use Tnt\Ecommerce\Address\AddressType;
-use Tnt\Ecommerce\Cart\LineOptions;
 use Tnt\Ecommerce\Address\FrozenAddress;
+use Tnt\Ecommerce\Cart\LineOptions;
+use Tnt\Ecommerce\Cart\Variants;
 use Tnt\Ecommerce\Contracts\AddressInterface;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Contracts\CustomerInterface;
@@ -81,7 +82,8 @@ class Order extends Model implements OrderInterface, TotalingInterface
     /**
      * Write one cart line onto this order, as the order's own copy: the frozen
      * line total plus the canonical options ({@see LineOptions}; NULL when the
-     * line had none).
+     * line had none), and the variant it was sold as through the configured
+     * {@see \Tnt\Ecommerce\Contracts\VariantStorageInterface}.
      *
      * The parent/child link is NOT copied here: a child may be frozen
      * before its parent has a row, so {@see \Tnt\Ecommerce\Cart\Cart::place()}
@@ -102,6 +104,19 @@ class Order extends Model implements OrderInterface, TotalingInterface
         $item->item_class = get_class($cartItem->getBuyable());
         $item->options = LineOptions::canonical($cartItem->getOptions());
         $item->save();
+
+        // After the save: a storage of the shop's own keys its copy on the
+        // line's id. A variant withdrawn since the line was added is frozen
+        // by its id alone, at the buyable's price the line was charged — the
+        // order still says which one was picked. See docs/variants.md.
+        $buyable = $cartItem->getBuyable();
+        $variant = $cartItem->getVariant();
+        $unitPrice = Variants::unitPriceOf($buyable, $variant);
+        $variant ??= Variants::referenced($cartItem->getOptions());
+
+        if ($variant !== null) {
+            Variants::storage()->freeze($item, $variant, $unitPrice);
+        }
 
         return $item;
     }

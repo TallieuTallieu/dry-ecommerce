@@ -4,8 +4,10 @@ namespace Tnt\Ecommerce\Model;
 
 use dry\orm\Model;
 use Tnt\Ecommerce\Cart\LineOptions;
+use Tnt\Ecommerce\Cart\Variants;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\OrderItemInterface;
+use Tnt\Ecommerce\Contracts\VariantInterface;
 
 /**
  * One line of a placed order, as stored in `ecommerce_order_item`.
@@ -73,6 +75,14 @@ class OrderItem extends Model implements OrderItemInterface
     public function getOptions(): array
     {
         return LineOptions::decode($this->options);
+    }
+
+    /**
+     * @return VariantInterface|null
+     */
+    public function getVariant(): ?VariantInterface
+    {
+        return Variants::storage()->frozenOf($this);
     }
 
     /**

@@ -62,6 +62,15 @@ interface CartItemInterface
     public function getOptions(): array;
 
     /**
+     * The variant this line holds, as its buyable offers it now, or null —
+     * a buyable without variants, or a variant since withdrawn. See
+     * docs/variants.md.
+     *
+     * @return VariantInterface|null
+     */
+    public function getVariant(): ?VariantInterface;
+
+    /**
      * The line this one hangs off — a deposit under its crate — or null for a
      * line that stands on its own. Part of the merge key: the same buyable
      * under two different parents is two lines. See docs/cart.md.

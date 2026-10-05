@@ -4,6 +4,7 @@ namespace Tnt\Ecommerce\Cart;
 
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
+use Tnt\Ecommerce\Contracts\VariantInterface;
 use Tnt\Ecommerce\Money;
 
 /**
@@ -105,7 +106,7 @@ class InMemoryCartItem implements CartItemInterface
     public function getPrice(): int
     {
         return Money::lineTotal(
-            LineOptions::unitPrice($this->buyable, $this->options),
+            Variants::unitPrice($this->buyable, $this->options),
             $this->quantity
         );
     }
@@ -135,6 +136,14 @@ class InMemoryCartItem implements CartItemInterface
     public function getOptions(): array
     {
         return $this->options;
+    }
+
+    /**
+     * @return VariantInterface|null
+     */
+    public function getVariant(): ?VariantInterface
+    {
+        return Variants::onLine($this->getBuyable(), $this->getOptions());
     }
 
     /**
