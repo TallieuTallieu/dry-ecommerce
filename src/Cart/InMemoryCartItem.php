@@ -38,12 +38,14 @@ class InMemoryCartItem implements CartItemInterface
      * @param int $quantity
      * @param array<array-key, mixed> $options The choices the line was added
      *                                         with; [] when there were none.
+     * @param string|null $variant The id of the variant the line holds.
      */
     public function __construct(
         private readonly string $id,
         BuyableInterface $buyable,
         int $quantity = 1,
-        array $options = []
+        array $options = [],
+        private readonly ?string $variant = null
     ) {
         $this->buyable = $buyable;
         $this->quantity = $quantity;
@@ -106,7 +108,7 @@ class InMemoryCartItem implements CartItemInterface
     public function getPrice(): int
     {
         return Money::lineTotal(
-            Variants::unitPrice($this->buyable, $this->options),
+            Variants::unitPrice($this->buyable, $this->getVariant()),
             $this->quantity
         );
     }
@@ -143,7 +145,15 @@ class InMemoryCartItem implements CartItemInterface
      */
     public function getVariant(): ?VariantInterface
     {
-        return Variants::onLine($this->getBuyable(), $this->getOptions());
+        return Variants::of($this->buyable, $this->variant);
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getVariantId(): ?string
+    {
+        return $this->variant;
     }
 
     /**

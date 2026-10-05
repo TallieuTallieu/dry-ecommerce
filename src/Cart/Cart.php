@@ -97,8 +97,8 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
-     * Put a buyable in the cart, merging into the line with the same buyable
-     * *and* options (canonical form — see docs/options.md). Stock does not
+     * Put a buyable in the cart, merging into the line with the same buyable,
+     * variant *and* options (canonical form — see docs/options.md). Stock does not
      * veto an add; {@see canAdd()} is how a shop asks first.
      *
      * @param BuyableInterface $buyable
@@ -115,12 +115,13 @@ class Cart implements CartInterface, TotalingInterface
         ?CartItemInterface $parent = null,
         ?VariantInterface $variant = null
     ) {
-        $options = Variants::forCart(
+        $this->storage->add(
+            $buyable,
+            $quantity,
             $options,
-            Variants::resolve($buyable, $variant)
+            $parent,
+            Variants::resolve($buyable, $variant)?->getId()
         );
-
-        $this->storage->add($buyable, $quantity, $options, $parent);
     }
 
     /**

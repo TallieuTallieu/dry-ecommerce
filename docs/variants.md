@@ -80,87 +80,52 @@ $cart->add($product, 2, variant: $variant);
 
 ## What a line says
 
-|                | Cart line (`CartItemInterface`)                     | Order line (`OrderItemInterface`)         |
-| -------------- | --------------------------------------------------- | ----------------------------------------- |
-| `getVariant()` | The buyable's variant **now**, via `getVariant()`   | The frozen copy: id, title, price as sold |
-| `getPrice()`   | `quantity × (variant price ?? buyable price)`, live | The line total frozen at checkout         |
-| `getOptions()` | The shop's own options                              | The shop's own options                    |
+|                  | Cart line (`CartItemInterface`)                     | Order line (`OrderItemInterface`)         |
+| ---------------- | --------------------------------------------------- | ----------------------------------------- |
+| `getVariant()`   | The buyable's variant **now**, via `getVariant()`   | The frozen copy: id, title, price as sold |
+| `getVariantId()` | The id the line was added as, withdrawn or not      | —                                         |
+| `getPrice()`     | `quantity × (variant price ?? buyable price)`, live | The line total frozen at checkout         |
+| `getOptions()`   | The shop's own options                              | The shop's own options                    |
 
 A cart line holds a reference, so a renamed or repriced variant shows its new
 title and price until checkout — exactly as `getPrice()` already does for the
 buyable. A line whose variant `getVariant()` no longer answers for reads null
 and prices at the buyable until the shop removes it. Checked out like that,
-the order line is charged the buyable's price and freezes the variant by its
-id alone — empty title, that price — so the order still says which one was
-picked.
+the order line is charged the buyable's price and keeps the variant's id with
+an empty title, so the order still says which one was picked.
 
 ## Where the variant is stored
 
-Two halves, and only the second is configurable.
+In columns of its own, beside the [options](options.md) rather than inside
+their JSON. The migration is `AddVariantToLineTables`.
 
-**The reference is always in the options.** A cart line carries the variant's
-id under the reserved `_variant` option — `{"id": "40"}` — whatever the
-storage. The cart merges on options, so this is what makes two variants two
-lines, with nothing for the cart storages to learn. Whatever a shop puts under
-that key itself is replaced, so a posted form cannot pick its variant through
-the options. The order line copies the options, reference included.
+| Table                  | Column          | Holds                                                  |
+| ---------------------- | --------------- | ------------------------------------------------------ |
+| `ecommerce_cart_item`  | `variant`       | The variant's id, or NULL. Part of the merge key.      |
+| `ecommerce_order_item` | `variant`       | The same id, copied at checkout.                       |
+| `ecommerce_order_item` | `variant_title` | The title it was sold under, or NULL when it was gone. |
 
-**The frozen copy is the storage's.** `ecommerce.variant_storage` names a
-`VariantStorageInterface` with two methods:
+The unit price needs no column: the order line's `price` is the frozen line
+total, `unit price × quantity`, so `getVariant()->getPrice()` is
+`price / quantity`, exactly.
 
-| Method                                   | Called                                                       |
-| ---------------------------------------- | ------------------------------------------------------------ |
-| `freeze(OrderItem, Variant, $unitPrice)` | Once per line at checkout, **after** the order line is saved |
-| `frozenOf(OrderItemInterface)`           | By the order line's `getVariant()` — the copy, or null       |
+`variant` is `utf8mb4_bin`, like `options`: the cart compares it with `=`, and
+under the default case- and accent-insensitive collation variant `m` would
+merge into variant `M`.
 
-The default, `OptionsVariantStorage`, needs no schema: it writes the copy
-over the reference in the order line's options — `{"id", "title", "price"}` —
-and saves the line again.
+Options stay the shop's alone: nothing is added to them, and nothing in them —
+a tampered form included — picks the variant. Reporting on what sold is a plain
+query:
 
-A shop that wants the sold variants in columns or a table — to report on them,
-to join them, to keep more than a title and a price — writes its own storage
-and names it in config. `freeze()` runs after the save, so the line has an id
-to key a row on:
-
-```php
-final class OrderVariationStorage implements VariantStorageInterface
-{
-    public function freeze(
-        OrderItem $line,
-        VariantInterface $variant,
-        int $unitPrice
-    ): void {
-        $row = new OrderVariation();
-        $row->order_item = $line->id;
-        $row->variation = $variant->getId();
-        $row->title = $variant->getTitle();
-        $row->price_cents = $unitPrice;
-        $row->save();
-    }
-
-    public function frozenOf(OrderItemInterface $line): ?VariantInterface
-    {
-        $row = OrderVariation::forLine($line);
-
-        return $row
-            ? new Variant($row->variation, $row->title, $row->price_cents)
-            : null;
-    }
-}
+```sql
+SELECT variant, variant_title, SUM(quantity)
+FROM ecommerce_order_item
+WHERE item_class = 'Product' AND item_id = 12
+GROUP BY variant, variant_title;
 ```
-
-```php
-// config/ecommerce.php
-'variant_storage' => OrderVariationStorage::class,
-```
-
-Nothing else changes: the cart, `add()`, the price and both lines'
-`getVariant()` read the same either way. A storage swapped on a live shop reads
-only what it froze itself — lines placed before the switch answer null unless
-it falls back to the old storage.
 
 ## See also
 
-- [Options](options.md) — the per-line payload the default storage rides on.
+- [Options](options.md) — the per-line choices a variant sits beside.
 - [Buyable](buyable.md) — the other capabilities a buyable opts into.
 - [Orders](orders.md) — what else an order line freezes.

@@ -30,13 +30,18 @@ interface CartStorageInterface
      *                                       the rest of the merge key: the
      *                                       same buyable under two parents is
      *                                       two lines.
+     * @param string|null $variant The id of the variant the line holds, or
+     *                             null. Part of the merge key: two variants
+     *                             are two lines. Already checked against the
+     *                             buyable by the cart. See docs/variants.md.
      * @return void
      */
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
         array $options = [],
-        ?CartItemInterface $parent = null
+        ?CartItemInterface $parent = null,
+        ?string $variant = null
     ): void;
 
     /**

@@ -4,7 +4,7 @@ namespace Tnt\Ecommerce\Model;
 
 use dry\orm\Model;
 use Tnt\Ecommerce\Cart\LineOptions;
-use Tnt\Ecommerce\Cart\Variants;
+use Tnt\Ecommerce\Cart\Variant;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\OrderItemInterface;
 use Tnt\Ecommerce\Contracts\VariantInterface;
@@ -26,6 +26,8 @@ use Tnt\Ecommerce\Contracts\VariantInterface;
  * @property int $price
  * @property int $quantity
  * @property string|null $options
+ * @property string|null $variant
+ * @property string|null $variant_title
  * @property OrderItem|null $parent
  */
 class OrderItem extends Model implements OrderItemInterface
@@ -78,11 +80,24 @@ class OrderItem extends Model implements OrderItemInterface
     }
 
     /**
+     * The order's own copy, built from its columns: the unit price is the
+     * frozen line total over the quantity — exact, as the line total is
+     * their product. The title is '' for a variant withdrawn before
+     * checkout.
+     *
      * @return VariantInterface|null
      */
     public function getVariant(): ?VariantInterface
     {
-        return Variants::storage()->frozenOf($this);
+        if ($this->variant === null) {
+            return null;
+        }
+
+        return new Variant(
+            $this->variant,
+            $this->variant_title ?? '',
+            $this->quantity > 0 ? intdiv($this->price, $this->quantity) : null
+        );
     }
 
     /**

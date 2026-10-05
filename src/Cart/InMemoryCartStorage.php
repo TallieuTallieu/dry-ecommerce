@@ -15,8 +15,8 @@ use Tnt\Ecommerce\Model\DiscountCode;
 class InMemoryCartStorage implements CartStorageInterface
 {
     /**
-     * Lines, keyed by buyable plus canonical options — the same merge key the
-     * session-backed storage queries on.
+     * Lines, keyed by buyable plus canonical options plus variant — the same
+     * merge key the session-backed storage queries on.
      *
      * @var array<string, InMemoryCartItem>
      */
@@ -49,23 +49,33 @@ class InMemoryCartStorage implements CartStorageInterface
     private const PARENT_SEPARATOR = "\0parent:";
 
     /**
-     * The merge key: which buyable, with what selection, under which line.
+     * What separates the variant from the options in a merge key — a NUL
+     * byte for the reason {@see PARENT_SEPARATOR} gives.
+     */
+    private const VARIANT_SEPARATOR = "\0variant:";
+
+    /**
+     * The merge key: which buyable, with what selection, as which variant,
+     * under which line.
      *
      * @param BuyableInterface $buyable
      * @param array<array-key, mixed> $options
      * @param CartItemInterface|null $parent
+     * @param string|null $variant
      * @return string
      */
     private function key(
         BuyableInterface $buyable,
         array $options,
-        ?CartItemInterface $parent = null
+        ?CartItemInterface $parent = null,
+        ?string $variant = null
     ): string {
         // The parent goes last: {@see variantsOf()} matches on the buyable
         // prefix, and anything in front of it would hide the line from stock
         // counting and whole-buyable removal.
         return $this->variantPrefix($buyable) .
             (LineOptions::canonical($options) ?? '') .
+            ($variant === null ? '' : self::VARIANT_SEPARATOR . $variant) .
             ($parent === null ? '' : self::PARENT_SEPARATOR . $parent->getId());
     }
 
@@ -94,15 +104,17 @@ class InMemoryCartStorage implements CartStorageInterface
      * @param int $quantity
      * @param array<array-key, mixed> $options
      * @param CartItemInterface|null $parent
+     * @param string|null $variant
      * @return void
      */
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
         array $options = [],
-        ?CartItemInterface $parent = null
+        ?CartItemInterface $parent = null,
+        ?string $variant = null
     ): void {
-        $key = $this->key($buyable, $options, $parent);
+        $key = $this->key($buyable, $options, $parent, $variant);
 
         if (isset($this->items[$key])) {
             $item = $this->items[$key];
@@ -115,7 +127,8 @@ class InMemoryCartStorage implements CartStorageInterface
             (string) $this->nextId++,
             $buyable,
             $quantity,
-            $options
+            $options,
+            $variant
         );
 
         $item->setParent($parent);

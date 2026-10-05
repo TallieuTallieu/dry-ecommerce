@@ -7,25 +7,17 @@ declare(strict_types=1);
  * own, priced at its own price when it has one, and frozen onto the order as
  * it was sold.
  *
- * Every line here goes through the configured storage — the options one by
- * default — so these are tests of what a shop sees through the contracts, not
- * of where the variant happens to be written.
+ * A line keeps the variant's id in a `variant` column of its own, beside the
+ * options rather than in them; the order line adds the title it was sold
+ * under. These tests read both back through the contracts.
  */
 
 use Tests\Support\FakeBuyable;
-use Tests\Support\FakeTableVariantStorage;
 use Tests\Support\FakeVariant;
 use Tests\Support\FakeVariantBuyable;
 use Tests\Support\InMemoryLineOrder;
 use Tnt\Ecommerce\Cart\InMemoryCartItem;
-use Tnt\Ecommerce\Cart\OptionsVariantStorage;
-use Tnt\Ecommerce\Cart\Variants;
 use Tnt\Ecommerce\UnknownVariant;
-
-// The storage is static, set once per process by the service provider; a test
-// that swaps it must not leak the swap into the next one.
-beforeEach(fn() => Variants::useStorage(new OptionsVariantStorage()));
-afterEach(fn() => Variants::useStorage(new OptionsVariantStorage()));
 
 function giftBasket(): FakeVariantBuyable
 {
@@ -68,7 +60,7 @@ it('adds a line without a pick as the first variant', function (): void {
 
     $cart->add(giftBasket(), 1);
 
-    expect($cart->items()[0]->getVariant()?->getId())->toBe('40');
+    expect($cart->items()[0]->getVariantId())->toBe('40');
     expect($cart->items()[0]->getPrice())->toBe(4000);
 });
 
@@ -94,68 +86,66 @@ it('leaves a buyable without variants as it was', function (): void {
     $cart->add(new FakeBuyable('1', 500), 2, ['size' => 'L']);
 
     expect($cart->items()[0]->getVariant())->toBeNull();
-    expect($cart->items()[0]->getOptions())->toBe(['size' => 'L']);
+    expect($cart->items()[0]->getVariantId())->toBeNull();
     expect($cart->items()[0]->getPrice())->toBe(1000);
 });
 
-it('does not let posted options pick a variant', function (): void {
+it('keeps the variant out of the options', function (): void {
     [$cart] = makeCart();
+    $basket = giftBasket();
 
-    // A tampered form naming the reserved key gets the first variant, not the
-    // one it wrote in.
-    $cart->add(giftBasket(), 1, [Variants::KEY => ['id' => '55']]);
+    // Options are the shop's alone: nothing is added to them, and nothing in
+    // them — a tampered form included — picks the variant.
+    $cart->add(
+        $basket,
+        1,
+        ['variant' => '55'],
+        variant: $basket->getVariant('40')
+    );
 
-    expect($cart->items()[0]->getVariant()?->getId())->toBe('40');
+    expect($cart->items()[0]->getOptions())->toBe(['variant' => '55']);
+    expect($cart->items()[0]->getVariantId())->toBe('40');
 });
 
 it('prices a withdrawn variant at the buyable', function (): void {
     $basket = giftBasket();
-    $options = Variants::forCart([], $basket->getVariant('40'));
-    $line = new InMemoryCartItem('a', $basket, 1, $options);
+    $line = new InMemoryCartItem('a', $basket, 1, [], '40');
 
     $basket->withdraw('40');
 
     expect($line->getVariant())->toBeNull();
+    expect($line->getVariantId())->toBe('40');
     expect($line->getPrice())->toBe(7500);
 });
 
 it('freezes the variant onto the order line as it was sold', function (): void {
-    $basket = giftBasket();
     $order = new InMemoryLineOrder();
 
     $order->add(
-        new InMemoryCartItem(
-            '1',
-            $basket,
-            3,
-            Variants::forCart(['gift' => true], $basket->getVariant('55'))
-        )
+        new InMemoryCartItem('1', giftBasket(), 3, ['gift' => true], '55')
     );
 
     $line = $order->writtenLines[0];
 
     expect($line->price)->toBe(16500);
+    expect($line->variant)->toBe('55');
+    expect($line->variant_title)->toBe('€ 55');
     expect($line->getVariant()?->getId())->toBe('55');
     expect($line->getVariant()?->getTitle())->toBe('€ 55');
+    // The unit price, read back off the frozen line total.
     expect($line->getVariant()?->getPrice())->toBe(5500);
-    // The shop's own options ride along untouched.
-    expect($line->getOptions()['gift'])->toBeTrue();
+    // The shop's own options ride along untouched, and alone.
+    expect($line->getOptions())->toBe(['gift' => true]);
+    expect($line->saveCount)->toBe(1);
 });
 
 it(
-    'keeps the frozen variant when the shop renames it later',
+    'keeps the frozen variant when the shop withdraws it later',
     function (): void {
         $basket = giftBasket();
         $order = new InMemoryLineOrder();
 
-        $order->add(
-            new InMemoryCartItem(
-                '1',
-                $basket,
-                1,
-                Variants::forCart([], $basket->getVariant('40'))
-            )
-        );
+        $order->add(new InMemoryCartItem('1', $basket, 1, [], '40'));
         $basket->withdraw('40');
 
         expect($order->writtenLines[0]->getVariant()?->getTitle())->toBe(
@@ -167,12 +157,7 @@ it(
 it('freezes a variant withdrawn before checkout by its id', function (): void {
     $basket = giftBasket();
     $order = new InMemoryLineOrder();
-    $cartLine = new InMemoryCartItem(
-        '1',
-        $basket,
-        2,
-        Variants::forCart([], $basket->getVariant('40'))
-    );
+    $cartLine = new InMemoryCartItem('1', $basket, 2, [], '40');
 
     $basket->withdraw('40');
     $order->add($cartLine);
@@ -186,37 +171,12 @@ it('freezes a variant withdrawn before checkout by its id', function (): void {
     expect($line->getVariant()?->getPrice())->toBe(7500);
 });
 
-it('freezes through whichever storage is configured', function (): void {
-    $storage = new FakeTableVariantStorage();
-    Variants::useStorage($storage);
-
-    $basket = giftBasket();
-    $order = new InMemoryLineOrder();
-
-    $order->add(
-        new InMemoryCartItem(
-            '1',
-            $basket,
-            2,
-            Variants::forCart([], $basket->getVariant('40'))
-        )
-    );
-
-    $line = $order->writtenLines[0];
-
-    // Kept beside the line, not in it: the options still hold only the
-    // reference the cart merged on.
-    expect($storage->rows)->toHaveCount(1);
-    expect($line->getVariant()?->getTitle())->toBe('€ 40');
-    expect($line->getVariant()?->getPrice())->toBe(4000);
-    expect($line->getOptions())->toBe([Variants::KEY => ['id' => '40']]);
-});
-
-it('saves an order line without a variant once', function (): void {
+it('writes no variant for a buyable without them', function (): void {
     $order = new InMemoryLineOrder();
 
     $order->add(new InMemoryCartItem('1', new FakeBuyable('1', 500), 1));
 
-    expect($order->writtenLines[0]->saveCount)->toBe(1);
+    expect($order->writtenLines[0]->variant)->toBeNull();
+    expect($order->writtenLines[0]->variant_title)->toBeNull();
     expect($order->writtenLines[0]->getVariant())->toBeNull();
 });
