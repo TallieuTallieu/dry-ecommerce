@@ -16,9 +16,10 @@ rather than guessed at.
 
 |                                       |                                                                                     |
 | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| [Buyable](buyable.md)                 | The contract a sellable model implements, and the two capabilities it can opt into. |
+| [Buyable](buyable.md)                 | The contract a sellable model implements, and the capabilities it can opt into.     |
 | [Cart](cart.md)                       | What is in it, what it costs, and turning it into an order.                         |
-| [Options and variants](options.md)    | Per-line choices: part of the merge key, frozen onto the order line.                |
+| [Options](options.md)                 | Per-line choices: part of the merge key, frozen onto the order line.                |
+| [Variants](variants.md)               | A buyable sold as versions: one per line, priced at it, frozen onto the order.      |
 | [Customer](customer.md)               | Guests, accounts, and the dry-accounts pairing.                                     |
 | [Addresses](addresses.md)             | The address book, and the copy an order freezes at checkout.                        |
 | [Orders](orders.md)                   | Drafts and placement, what an order records, and the reference a customer quotes.   |

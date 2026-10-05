@@ -35,18 +35,26 @@ use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Payment\HttpRedirector;
 use Tnt\Ecommerce\Payment\NullPayment;
 use Tnt\Ecommerce\Payment\PaymentLedger;
+use Tnt\Ecommerce\Revisions\AddBoxToAddresses;
 use Tnt\Ecommerce\Revisions\AddCartLifecycleColumns;
 use Tnt\Ecommerce\Revisions\AddFulfillmentAttributesToOrderTable;
 use Tnt\Ecommerce\Revisions\AddIndexesToEcommerceTables;
 use Tnt\Ecommerce\Revisions\AddOptionsToLineTables;
-use Tnt\Ecommerce\Revisions\AddBoxToAddresses;
 use Tnt\Ecommerce\Revisions\AddOrderLineIndexes;
 use Tnt\Ecommerce\Revisions\AddOrderStateColumn;
 use Tnt\Ecommerce\Revisions\AddParentToLineTables;
+use Tnt\Ecommerce\Revisions\AddVariantToLineTables;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
+use Tnt\Ecommerce\Revisions\CreateCartItemTable;
+use Tnt\Ecommerce\Revisions\CreateCartTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
+use Tnt\Ecommerce\Revisions\CreateFulfillmentMethodTable;
+use Tnt\Ecommerce\Revisions\CreateOrderItemTable;
+use Tnt\Ecommerce\Revisions\CreateOrderTable;
 use Tnt\Ecommerce\Revisions\CreatePaymentEntryTable;
+use Tnt\Ecommerce\Revisions\CreateStockItemTable;
+use Tnt\Ecommerce\Revisions\CreateStockTable;
 use Tnt\Ecommerce\Revisions\DropAddressNameColumns;
 use Tnt\Ecommerce\Revisions\MakeCustomerUserUnique;
 use Tnt\Ecommerce\Revisions\MakeOrderCustomerNullable;
@@ -54,13 +62,6 @@ use Tnt\Ecommerce\Revisions\MakeOrderPlacementColumnsNullable;
 use Tnt\Ecommerce\Shop\Shop;
 use Tnt\Ecommerce\Tax\PriceConvention;
 use Tnt\Ecommerce\Tax\TaxPolicy;
-use Tnt\Ecommerce\Revisions\CreateCartTable;
-use Tnt\Ecommerce\Revisions\CreateOrderItemTable;
-use Tnt\Ecommerce\Revisions\CreateOrderTable;
-use Tnt\Ecommerce\Revisions\CreateFulfillmentMethodTable;
-use Tnt\Ecommerce\Revisions\CreateCartItemTable;
-use Tnt\Ecommerce\Revisions\CreateStockItemTable;
-use Tnt\Ecommerce\Revisions\CreateStockTable;
 
 class EcommerceServiceProvider extends ServiceProvider
 {
@@ -103,6 +104,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddParentToLineTables::class,
                 AddBoxToAddresses::class,
                 CreatePaymentEntryTable::class,
+                AddVariantToLineTables::class,
             ]);
 
             /** @var MigrationManager $manager */

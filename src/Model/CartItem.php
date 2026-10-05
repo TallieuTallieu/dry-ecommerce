@@ -4,15 +4,17 @@ namespace Tnt\Ecommerce\Model;
 
 use dry\orm\Model;
 use Tnt\Ecommerce\Cart\LineOptions;
+use Tnt\Ecommerce\Cart\Variants;
 use Tnt\Ecommerce\Contracts\BuyableInterface;
 use Tnt\Ecommerce\Contracts\CartItemInterface;
+use Tnt\Ecommerce\Contracts\VariantInterface;
 use Tnt\Ecommerce\Money;
 
 /**
  * One line of a cart, as stored in `ecommerce_cart_item`. The buyable is
  * referenced by class name plus id; `options` holds the line's choices as
- * {@see LineOptions} canonical JSON (NULL for none) and is part of the merge
- * key.
+ * {@see LineOptions} canonical JSON (NULL for none) and `variant` the id of
+ * the variant it holds (NULL for none); both are part of the merge key.
  *
  * @property int|null $id
  * @property int $created
@@ -22,6 +24,7 @@ use Tnt\Ecommerce\Money;
  * @property string $item_class
  * @property int $quantity
  * @property string|null $options
+ * @property string|null $variant
  * @property CartItem|null $parent
  */
 class CartItem extends Model implements CartItemInterface
@@ -105,7 +108,7 @@ class CartItem extends Model implements CartItemInterface
     public function getPrice(): int
     {
         return Money::lineTotal(
-            $this->getBuyable()->getPrice(),
+            Variants::unitPrice($this->getBuyable(), $this->getVariant()),
             $this->getQuantity()
         );
     }
@@ -138,6 +141,22 @@ class CartItem extends Model implements CartItemInterface
     public function getOptions(): array
     {
         return LineOptions::decode($this->options);
+    }
+
+    /**
+     * @return VariantInterface|null
+     */
+    public function getVariant(): ?VariantInterface
+    {
+        return Variants::of($this->getBuyable(), $this->getVariantId());
+    }
+
+    /**
+     * @return string|null
+     */
+    public function getVariantId(): ?string
+    {
+        return $this->variant;
     }
 
     /**

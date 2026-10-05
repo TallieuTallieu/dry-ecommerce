@@ -367,8 +367,8 @@ A shop that needs invoices to stay put should soft-delete rather than delete,
 and should think twice before letting editors rename sold products. The
 selection itself is safe — it is frozen on the line's own `options` column —
 but a shop still pricing options through a configuration model (see
-[Options](options.md#what-options-are-not-a-price)) has the buyable-load
-consequences above on that model too.
+[Options](options.md#the-configuration-model-workaround-is-obsolete--mostly))
+has the buyable-load consequences above on that model too.
 
 ## The price convention travels with the order
 

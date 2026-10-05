@@ -126,10 +126,9 @@ line placed before options existed reads back `[]`.
 
 Options do not price themselves. The line's price is still
 `quantity × BuyableInterface::getPrice()`, and nothing in the package reads
-the options to adjust it. A shop whose options change the price prices them
-itself — a configuration model with its own frozen price, or a buyable per
-variant — exactly as before. Options carry _what was chosen_; what that
-choice costs is the shop's arithmetic.
+the options to adjust it. A buyable sold as versions with prices of their own
+is what [variants](variants.md) are for; options carry the rest of _what was
+chosen_.
 
 ### The configuration-model workaround is obsolete — mostly
 
@@ -137,12 +136,14 @@ Before options existed, the only way to keep two selections on two lines was
 to make the configuration _be_ the buyable: a `ProductConfiguration` table
 with a fingerprint column, find-or-create, append-only forever. That whole
 apparatus is now unnecessary for a shop whose options are **choices only** —
-pass them as options and delete the table.
+pass them as options and delete the table — and for most shops whose choices
+**change the price** too: make them [variants](variants.md).
 
-It remains the right shape for a shop whose options **change the price**: the
-configuration row is where the computed price is frozen, and
-`getPrice()` reads it. The difference is that such a shop now keeps the table
-for pricing alone, not for line identity.
+It remains the right shape only for a shop that must freeze a computed price
+_per configuration_ before checkout — a quote that has to hold while the
+variant prices underneath it move. There the configuration row is where that
+price is kept, and `getPrice()` reads it; the table is kept for pricing alone,
+not for line identity.
 
 ## One rate per line is the design
 
