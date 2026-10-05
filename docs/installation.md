@@ -83,13 +83,14 @@ only — registers its migrator and the `ecommerce:reap-drafts` command
 `config/ecommerce.php`. Every key has a default, and every default is the
 reading that leaves a shop's totals where they are.
 
-| Key                 | Default                    | What it decides                                                                                                                                                                                                |
-| ------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `payment`           | `NullPayment::class`       | The gateway. See the warning below.                                                                                                                                                                            |
-| `user_resolver`     | `GuestUserResolver::class` | Whether a checkout can link to an account.                                                                                                                                                                     |
-| `prices`            | `inclusive`                | Whether quoted prices already contain their tax.                                                                                                                                                               |
-| `delivery_tax_rate` | `0`                        | The rate charged on fulfillment cost.                                                                                                                                                                          |
-| `cart_lifetime`     | unset                      | Days, `int`. Set and `> 0`: the cart lives in its own cookie for that long ([cookie cart](cart.md#the-cookie-cart)), and the draft reaper measures abandonment against it. Unset: the session cart, as always. |
+| Key                 | Default                        | What it decides                                                                                                                                                                                                |
+| ------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payment`           | `NullPayment::class`           | The gateway. See the warning below.                                                                                                                                                                            |
+| `user_resolver`     | `GuestUserResolver::class`     | Whether a checkout can link to an account.                                                                                                                                                                     |
+| `prices`            | `inclusive`                    | Whether quoted prices already contain their tax.                                                                                                                                                               |
+| `delivery_tax_rate` | `0`                            | The rate charged on fulfillment cost.                                                                                                                                                                          |
+| `variant_storage`   | `OptionsVariantStorage::class` | Where an order line keeps the [variant](variants.md#where-the-variant-is-stored) it was sold as.                                                                                                               |
+| `cart_lifetime`     | unset                          | Days, `int`. Set and `> 0`: the cart lives in its own cookie for that long ([cookie cart](cart.md#the-cookie-cart)), and the draft reaper measures abandonment against it. Unset: the session cart, as always. |
 
 ```php
 <?php

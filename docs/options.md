@@ -122,36 +122,13 @@ checkout and the buyable never knew what was chosen, so the order's own
 column is the only place "what was ordered" can still be read next year. A
 line placed before options existed reads back `[]`.
 
-## Options that set the price
+## What options are not: a price
 
-By default options do not price themselves: a line costs
+Options do not price themselves. The line's price is still
 `quantity × BuyableInterface::getPrice()`, and nothing in the package reads
-the options to adjust it.
-
-A buyable whose choice _is_ the price — a gift basket of € 40 or € 75, a
-variant with a price of its own — opts in with `PricedByOptionsInterface`, and
-its lines cost `quantity × getPriceFor($options)` instead:
-
-```php
-class Product implements PricedByOptionsInterface
-{
-    public function getPriceFor(array $options): int
-    {
-        $variation = $this->variationFrom($options['variation'] ?? null);
-
-        return $variation?->price_cents ?? $this->getPrice();
-    }
-}
-```
-
-Both line implementations ask it (`LineOptions::unitPrice()`), so the cart
-totals, the tax and the frozen order line all follow. Two things stay the
-shop's:
-
-- **Validate before `add()`.** The options are what the shop handed over; the
-  package asks the buyable to price them, not whether they are allowed.
-- **The price is read live, like `getPrice()`.** A line in the cart costs
-  what the variant costs now; checkout freezes it onto the order line.
+the options to adjust it. A buyable sold as versions with prices of their own
+is what [variants](variants.md) are for; options carry the rest of _what was
+chosen_.
 
 ### The configuration-model workaround is obsolete — mostly
 
@@ -159,8 +136,8 @@ Before options existed, the only way to keep two selections on two lines was
 to make the configuration _be_ the buyable: a `ProductConfiguration` table
 with a fingerprint column, find-or-create, append-only forever. That whole
 apparatus is now unnecessary for a shop whose options are **choices only** —
-pass them as options and delete the table — and for most shops whose options
-**change the price** too: implement `PricedByOptionsInterface` instead.
+pass them as options and delete the table — and for most shops whose choices
+**change the price** too: make them [variants](variants.md).
 
 It remains the right shape only for a shop that must freeze a computed price
 _per configuration_ before checkout — a quote that has to hold while the
