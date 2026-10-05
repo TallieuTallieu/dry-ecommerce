@@ -32,6 +32,7 @@ use Tests\Support\CapturingAddOptionsToLineTables;
 use Tests\Support\CapturingAddOrderLineIndexes;
 use Tests\Support\CapturingAddOrderStateColumn;
 use Tests\Support\CapturingAddParentToLineTables;
+use Tests\Support\CapturingAddVariantToLineTables;
 use Tests\Support\CapturingCreateAddressTable;
 use Tests\Support\CapturingDropAddressNameColumns;
 use Tests\Support\CapturingCreateCustomerTable;
@@ -273,6 +274,30 @@ it('hangs a line off another line on both line tables', function (): void {
         expect($statement)->toContain('FOREIGN KEY (`parent`)');
         expect($statement)->toContain('ON DELETE SET NULL');
     }
+});
+
+it('gives both line tables a variant column', function (): void {
+    // The variant's id is a column of its own, beside the options rather
+    // than inside their JSON; the order line adds the title it was sold
+    // under. Binary collation: `variant` is half the cart's merge key.
+    $revision = new CapturingAddVariantToLineTables(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(2);
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_cart_item`'
+    );
+    expect($revision->statements[0])->toContain('ADD `variant` VARCHAR(64)');
+    expect($revision->statements[0])->toContain('utf8mb4_bin');
+    expect($revision->statements[0])->not->toContain('variant_title');
+
+    expect($revision->statements[1])->toContain(
+        'ALTER TABLE `ecommerce_order_item`'
+    );
+    expect($revision->statements[1])->toContain('ADD `variant` VARCHAR(64)');
+    expect($revision->statements[1])->toContain(
+        'ADD `variant_title` VARCHAR(255) NULL'
+    );
 });
 
 it(

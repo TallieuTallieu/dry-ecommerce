@@ -145,18 +145,20 @@ abstract class DatabaseCartStorage implements CartStorageInterface
      * @param int $quantity
      * @param array<array-key, mixed> $options
      * @param CartItemInterface|null $parent
+     * @param string|null $variant
      * @return void
      */
     public function add(
         BuyableInterface $buyable,
         int $quantity = 1,
         array $options = [],
-        ?CartItemInterface $parent = null
+        ?CartItemInterface $parent = null,
+        ?string $variant = null
     ): void {
         $cart = $this->cart();
 
         $item = CartItemRepository::create()
-            ->forBuyable($cart, $buyable, $options, $parent)
+            ->forBuyable($cart, $buyable, $options, $parent, $variant)
             ->firstOrNull();
 
         if ($item !== null) {
@@ -177,6 +179,7 @@ abstract class DatabaseCartStorage implements CartStorageInterface
         // The canonical form, or NULL for no options — the same value the
         // lookup above compares on.
         $item->options = LineOptions::canonical($options);
+        $item->variant = $variant;
 
         // Set before the one save, so the row is never briefly visible
         // without the parent it was added under.

@@ -43,21 +43,24 @@ class CartItemRepository extends Repository
     }
 
     /**
-     * Filter to the single line holding a given buyable with given options —
-     * the whole merge key. No options is stored as NULL, and `= NULL` matches
-     * nothing in SQL, so the empty selection is matched with `IS NULL`.
+     * Filter to the single line holding a given buyable with given options,
+     * variant and parent — the whole merge key. No options is stored as NULL,
+     * and `= NULL` matches nothing in SQL, so the empty selection is matched
+     * with `IS NULL`; the same goes for no variant and no parent.
      *
      * @param Cart $cart
      * @param BuyableInterface $buyable
      * @param array<array-key, mixed> $options
      * @param CartItemInterface|null $parent
+     * @param string|null $variant
      * @return static
      */
     public function forBuyable(
         Cart $cart,
         BuyableInterface $buyable,
         array $options = [],
-        ?CartItemInterface $parent = null
+        ?CartItemInterface $parent = null,
+        ?string $variant = null
     ): static {
         $this->forAnyVariantOf($cart, $buyable);
 
@@ -67,6 +70,12 @@ class CartItemRepository extends Repository
             $canonical === null
                 ? new IsNull('options')
                 : new Equals('options', $canonical)
+        );
+
+        $this->addCriteria(
+            $variant === null
+                ? new IsNull('variant')
+                : new Equals('variant', $variant)
         );
 
         // The rest of the merge key. A standalone line and a line under a
