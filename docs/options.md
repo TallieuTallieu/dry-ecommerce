@@ -122,14 +122,36 @@ checkout and the buyable never knew what was chosen, so the order's own
 column is the only place "what was ordered" can still be read next year. A
 line placed before options existed reads back `[]`.
 
-## What options are not: a price
+## Options that set the price
 
-Options do not price themselves. The line's price is still
+By default options do not price themselves: a line costs
 `quantity × BuyableInterface::getPrice()`, and nothing in the package reads
-the options to adjust it. A shop whose options change the price prices them
-itself — a configuration model with its own frozen price, or a buyable per
-variant — exactly as before. Options carry _what was chosen_; what that
-choice costs is the shop's arithmetic.
+the options to adjust it.
+
+A buyable whose choice _is_ the price — a gift basket of € 40 or € 75, a
+variant with a price of its own — opts in with `PricedByOptionsInterface`, and
+its lines cost `quantity × getPriceFor($options)` instead:
+
+```php
+class Product implements PricedByOptionsInterface
+{
+    public function getPriceFor(array $options): int
+    {
+        $variation = $this->variationFrom($options['variation'] ?? null);
+
+        return $variation?->price_cents ?? $this->getPrice();
+    }
+}
+```
+
+Both line implementations ask it (`LineOptions::unitPrice()`), so the cart
+totals, the tax and the frozen order line all follow. Two things stay the
+shop's:
+
+- **Validate before `add()`.** The options are what the shop handed over; the
+  package asks the buyable to price them, not whether they are allowed.
+- **The price is read live, like `getPrice()`.** A line in the cart costs
+  what the variant costs now; checkout freezes it onto the order line.
 
 ### The configuration-model workaround is obsolete — mostly
 
@@ -137,12 +159,14 @@ Before options existed, the only way to keep two selections on two lines was
 to make the configuration _be_ the buyable: a `ProductConfiguration` table
 with a fingerprint column, find-or-create, append-only forever. That whole
 apparatus is now unnecessary for a shop whose options are **choices only** —
-pass them as options and delete the table.
+pass them as options and delete the table — and for most shops whose options
+**change the price** too: implement `PricedByOptionsInterface` instead.
 
-It remains the right shape for a shop whose options **change the price**: the
-configuration row is where the computed price is frozen, and
-`getPrice()` reads it. The difference is that such a shop now keeps the table
-for pricing alone, not for line identity.
+It remains the right shape only for a shop that must freeze a computed price
+_per configuration_ before checkout — a quote that has to hold while the
+variant prices underneath it move. There the configuration row is where that
+price is kept, and `getPrice()` reads it; the table is kept for pricing alone,
+not for line identity.
 
 ## One rate per line is the design
 

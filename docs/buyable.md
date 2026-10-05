@@ -34,14 +34,15 @@ class Product extends \dry\orm\Model implements BuyableInterface
 ```
 
 That is a complete buyable. It has no stock and no tax, and it does not need
-any: both are **capabilities you opt into**, one interface each.
+any: these are **capabilities you opt into**, one interface each.
 
-| Implement           | To get                                                                            |
-| ------------------- | --------------------------------------------------------------------------------- |
-| `HasStockInterface` | `getStockWorker()`. `Cart::canAdd()` reports whether the stock covers a quantity. |
-| `TaxableInterface`  | `getTaxRate()`. The buyable's lines count towards `Cart::getTax()`.               |
+| Implement                  | To get                                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `HasStockInterface`        | `getStockWorker()`. `Cart::canAdd()` reports whether the stock covers a quantity.                                                          |
+| `TaxableInterface`         | `getTaxRate()`. The buyable's lines count towards `Cart::getTax()`.                                                                        |
+| `PricedByOptionsInterface` | `getPriceFor($options)`. A line's unit price follows the options it was added with — see [options](options.md#options-that-set-the-price). |
 
-Neither, either or both. The cart checks with `instanceof` and asks a buyable
+Any combination. The cart checks with `instanceof` and asks a buyable
 nothing it has not offered to answer.
 
 > **Upgrading.** `getStockWorker()` and `getTaxRate()` used to be mandatory on
