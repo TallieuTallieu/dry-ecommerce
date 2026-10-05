@@ -16,10 +16,10 @@ use Tnt\Ecommerce\Contracts\BuyableInterface;
  * also handing back a `NullStockWorker` and a `NullTaxRate` — which it did, and
  * which is what the two capability interfaces removed the need for.
  *
- * The three fakes that add a capability extend this one, so that the difference
- * between the four combinations is exactly the method each of them adds:
- * {@see FakeTaxableBuyable}, {@see FakeStockedBuyable} and
- * {@see FakeStockedTaxableBuyable}.
+ * The fakes that add a capability extend this one, so that the difference
+ * between them is exactly the method each of them adds:
+ * {@see FakeTaxableBuyable}, {@see FakeStockedBuyable},
+ * {@see FakeStockedTaxableBuyable} and {@see FakeSizedBuyable}.
  *
  * Prices are integer cents, so `1225` is €12.25.
  */

@@ -105,7 +105,7 @@ class CartItem extends Model implements CartItemInterface
     public function getPrice(): int
     {
         return Money::lineTotal(
-            $this->getBuyable()->getPrice(),
+            LineOptions::unitPrice($this->getBuyable(), $this->getOptions()),
             $this->getQuantity()
         );
     }

@@ -3,11 +3,15 @@
 namespace Tnt\Ecommerce\Cart;
 
 use JsonException;
+use Tnt\Ecommerce\Contracts\BuyableInterface;
+use Tnt\Ecommerce\Contracts\PricedByOptionsInterface;
 
 /**
- * The one place per-line options are turned into text and back. The encoding
- * is canonical — keys sorted at every level, list order kept, empty is NULL —
- * because merging compares the encoded form. See docs/options.md.
+ * The one place per-line options are handled: turned into text and back, and
+ * read for the line's unit price. The encoding is canonical — keys sorted at
+ * every level, list order kept, empty is NULL — because merging compares the
+ * encoded form. The price is asked of the buyable only when it implements
+ * {@see PricedByOptionsInterface}. See docs/options.md.
  */
 final class LineOptions
 {
@@ -52,6 +56,24 @@ final class LineOptions
         $decoded = json_decode($encoded, true);
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * The unit price, in cents, of a line holding this buyable with these
+     * options: {@see PricedByOptionsInterface::getPriceFor()} when the
+     * buyable opts in, its plain price otherwise.
+     *
+     * @param BuyableInterface $buyable
+     * @param array<array-key, mixed> $options
+     * @return int
+     */
+    public static function unitPrice(
+        BuyableInterface $buyable,
+        array $options
+    ): int {
+        return $buyable instanceof PricedByOptionsInterface
+            ? $buyable->getPriceFor($options)
+            : $buyable->getPrice();
     }
 
     /**

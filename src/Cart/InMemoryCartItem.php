@@ -104,7 +104,10 @@ class InMemoryCartItem implements CartItemInterface
      */
     public function getPrice(): int
     {
-        return Money::lineTotal($this->buyable->getPrice(), $this->quantity);
+        return Money::lineTotal(
+            LineOptions::unitPrice($this->buyable, $this->options),
+            $this->quantity
+        );
     }
 
     /**
