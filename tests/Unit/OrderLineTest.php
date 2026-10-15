@@ -20,8 +20,10 @@ declare(strict_types=1);
  */
 
 use Tests\Support\FakeBuyable;
+use Tests\Support\FakeTaxableBuyable;
 use Tests\Support\InMemoryLineOrder;
 use Tests\Support\InMemoryOrderItem;
+use Tests\Support\PercentageTaxRate;
 use Tnt\Ecommerce\Cart\InMemoryCartItem;
 use Tnt\Ecommerce\Cart\LineOptions;
 
@@ -144,3 +146,47 @@ it(
         expect(array_keys($item->getOptions()))->toBe(['gift', 'size']);
     }
 );
+
+it('freezes the tax rate the line was sold at', function (): void {
+    $order = new InMemoryLineOrder();
+
+    $order->add(
+        new InMemoryCartItem(
+            '1',
+            new FakeTaxableBuyable('1', 1000, new PercentageTaxRate(21)),
+            1
+        )
+    );
+    $order->add(
+        new InMemoryCartItem(
+            '2',
+            new FakeTaxableBuyable('2', 1000, new PercentageTaxRate(5.5)),
+            1
+        )
+    );
+
+    expect($order->writtenLines[0]->getVatPercentage())->toBe(21.0);
+    expect($order->writtenLines[1]->getVatPercentage())->toBe(5.5);
+});
+
+it('leaves the rate NULL for a buyable without tax', function (): void {
+    $order = new InMemoryLineOrder();
+
+    $order->add(new InMemoryCartItem('1', new FakeBuyable('1', 1000), 1));
+
+    expect($order->writtenLines[0]->vat_percentage)->toBeNull();
+    expect($order->writtenLines[0]->getVatPercentage())->toBeNull();
+});
+
+it('reads the stored rate back as a number', function (): void {
+    // MySQL hands a DECIMAL column back as a string; NULL is every line
+    // placed before the column existed.
+    $line = new InMemoryOrderItem();
+    $line->vat_percentage = '21.0000';
+
+    expect($line->getVatPercentage())->toBe(21.0);
+
+    $line->vat_percentage = null;
+
+    expect($line->getVatPercentage())->toBeNull();
+});

@@ -33,6 +33,7 @@ use Tests\Support\CapturingAddOrderLineIndexes;
 use Tests\Support\CapturingAddOrderStateColumn;
 use Tests\Support\CapturingAddParentToLineTables;
 use Tests\Support\CapturingAddVariantToLineTables;
+use Tests\Support\CapturingAddVatPercentageToOrderItem;
 use Tests\Support\CapturingCreateAddressTable;
 use Tests\Support\CapturingDropAddressNameColumns;
 use Tests\Support\CapturingCreateCustomerTable;
@@ -843,4 +844,24 @@ it('drops the payment ledger on the way down', function (): void {
     expect($revision->statements)->toBe([
         'DROP TABLE `ecommerce_payment_entry`',
     ]);
+});
+
+it('gives the order line the tax rate it was sold at', function (): void {
+    // Four decimals of a percent, as TaxRateInterface honours; NULL for an
+    // untaxed buyable and for every line placed before this revision.
+    $revision = new CapturingAddVatPercentageToOrderItem(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(1);
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_order_item`'
+    );
+    expect($revision->statements[0])->toContain(
+        'ADD `vat_percentage` DECIMAL(7,4) NULL'
+    );
+
+    $revision = new CapturingAddVatPercentageToOrderItem(new QueryBuilder());
+    $revision->down();
+
+    expect($revision->statements[0])->toContain('DROP COLUMN `vat_percentage`');
 });

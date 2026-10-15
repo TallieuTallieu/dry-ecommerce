@@ -44,6 +44,7 @@ use Tnt\Ecommerce\Revisions\AddOrderLineIndexes;
 use Tnt\Ecommerce\Revisions\AddOrderStateColumn;
 use Tnt\Ecommerce\Revisions\AddParentToLineTables;
 use Tnt\Ecommerce\Revisions\AddVariantToLineTables;
+use Tnt\Ecommerce\Revisions\AddVatPercentageToOrderItem;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCartItemTable;
 use Tnt\Ecommerce\Revisions\CreateCartTable;
@@ -105,6 +106,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddBoxToAddresses::class,
                 CreatePaymentEntryTable::class,
                 AddVariantToLineTables::class,
+                AddVatPercentageToOrderItem::class,
             ]);
 
             /** @var MigrationManager $manager */

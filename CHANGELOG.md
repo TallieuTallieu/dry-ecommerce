@@ -5,6 +5,12 @@ follow [Semantic Versioning](https://semver.org). New entries are generated from
 commit messages by [dry-ci](https://github.com/TallieuTallieu/dry-ci); past
 entries may be edited by hand.
 
+## 3.14.0 - 2026-10-15
+
+### Features
+
+- Freeze the VAT percentage on each order line
+
 ## 3.13.4 - 2026-10-05
 
 ### Features
