@@ -28,6 +28,7 @@ use Tnt\Ecommerce\Contracts\VariantInterface;
  * @property string|null $options
  * @property string|null $variant
  * @property string|null $variant_title
+ * @property int|float|string|null $vat_percentage
  * @property OrderItem|null $parent
  */
 class OrderItem extends Model implements OrderItemInterface
@@ -77,6 +78,22 @@ class OrderItem extends Model implements OrderItemInterface
     public function getOptions(): array
     {
         return LineOptions::decode($this->options);
+    }
+
+    /**
+     * The tax rate this line was sold at, as a percentage — frozen like the
+     * price, so a rate changed on the product later does not restate it. Null
+     * for a buyable that carries no tax, and for a line placed before the
+     * column existed.
+     *
+     * @return float|null
+     */
+    public function getVatPercentage(): ?float
+    {
+        // The DECIMAL column reads back as a string: '21.0000'.
+        return $this->vat_percentage === null
+            ? null
+            : (float) $this->vat_percentage;
     }
 
     /**
