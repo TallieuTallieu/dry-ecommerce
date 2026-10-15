@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace Tests\Support;
 
 use LogicException;
+use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Model\PaymentEntry;
 use Tnt\Ecommerce\Payment\PaymentLedger;
 
 /**
- * The production ledger over its one write: entries land in memory, and on
+ * The production ledger over its two writes: entries land in memory, and on
  * the order when it keeps its own ({@see KeepsPaymentEntries}). Holds the
  * table's UNIQUE (`provider`, `kind`, `reference`) too, so a duplicate write
- * fails here the way it would in MySQL.
+ * fails here the way it would in MySQL. `payment_status` is kept per order
+ * row, so two orders with one id are two requests on the same row.
  */
 final class InMemoryPaymentLedger extends PaymentLedger
 {
@@ -22,6 +24,14 @@ final class InMemoryPaymentLedger extends PaymentLedger
      * @var list<PaymentEntry>
      */
     public array $written = [];
+
+    /**
+     * `payment_status` as the table holds it, per order row. A row this
+     * ledger has not moved yet holds what its first mover read.
+     *
+     * @var array<int|string, string|null>
+     */
+    public array $statuses = [];
 
     /**
      * @param PaymentEntry $entry
@@ -51,6 +61,28 @@ final class InMemoryPaymentLedger extends PaymentLedger
         if ($order !== null && method_exists($order, 'keepPaymentEntry')) {
             $order->keepPaymentEntry($entry);
         }
+    }
+
+    /**
+     * @param Order $order
+     * @param string|null $from
+     * @param string $to
+     * @return bool
+     */
+    protected function moveStatus(Order $order, ?string $from, string $to): bool
+    {
+        $row = $order->id ?? 'object ' . spl_object_id($order);
+
+        if (
+            array_key_exists($row, $this->statuses) &&
+            $this->statuses[$row] !== $from
+        ) {
+            return false;
+        }
+
+        $this->statuses[$row] = $to;
+
+        return true;
     }
 
     /**
