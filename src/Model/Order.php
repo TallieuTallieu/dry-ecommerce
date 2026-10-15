@@ -13,6 +13,7 @@ use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\HasAddressesInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\OrderItemInterface;
+use Tnt\Ecommerce\Contracts\TaxableInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Facade\Shop;
 use Tnt\Ecommerce\Order\OrderState;
@@ -107,6 +108,13 @@ class Order extends Model implements OrderInterface, TotalingInterface
         // the order still says which one was picked. See docs/variants.md.
         $item->variant = $cartItem->getVariantId();
         $item->variant_title = $cartItem->getVariant()?->getTitle();
+
+        // NULL for a buyable that carries no tax. See docs/tax.md.
+        $buyable = $cartItem->getBuyable();
+        $item->vat_percentage =
+            $buyable instanceof TaxableInterface
+                ? $buyable->getTaxRate()->getPercentage()
+                : null;
         $item->save();
 
         return $item;

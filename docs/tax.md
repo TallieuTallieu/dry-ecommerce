@@ -71,6 +71,16 @@ Each order **records the convention it was placed under**, in
 switches convention would reprint every old invoice with a total it never
 charged.
 
+## The order line keeps its rate
+
+Each order line records the rate it was sold at, in
+`ecommerce_order_item.vat_percentage` — copied from the buyable's
+`getTaxRate()` by `Order::add()` at checkout, the way the price is. A rate
+changed on the product later does not restate an old invoice.
+`OrderItem::getVatPercentage()` reads it back as a number (`21.0`); it is
+`null` for a buyable that carries no tax, and for every line placed before
+the column existed.
+
 ## The coupon reduces what is taxed
 
 A coupon comes off the cart, and tax is worked out per line, so the reduction is
