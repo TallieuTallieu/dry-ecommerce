@@ -172,7 +172,11 @@ guard:
 
 - **A late `expired` after a capture leaves the order `paid`.** The report is
   recorded and the money outranks it.
-- **A replayed report changes nothing and dispatches nothing.**
+- **A replayed report changes nothing and dispatches nothing.** That holds
+  when two requests settle the same report at once, too: a provider's return
+  and its webhook usually arrive together. The status moves with a
+  conditional update — only while the column still holds what the request
+  read — and only the request whose update moved it dispatches.
 - **A failed attempt is no dead end.** Without money, the latest report
   decides.
 - **A superseded attempt still counts.** A customer who abandons the first

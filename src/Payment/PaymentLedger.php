@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tnt\Ecommerce\Payment;
 
+use dry\db\Connection;
 use Oak\Contracts\Dispatcher\DispatcherInterface;
 use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Events\Order\PaymentCanceled;
@@ -304,6 +305,11 @@ class PaymentLedger
      * Write a status onto the order, and dispatch its event only when it
      * differs from what the order said before. Pending dispatches nothing.
      *
+     * Two requests can settle the same report at once — the provider's return
+     * and its webhook arrive together — each with the order as it loaded it.
+     * Only the one whose write finds the column still as it read it moves the
+     * status, and only that one dispatches.
+     *
      * @param Order $order
      * @param PaymentStatus $status
      * @return void
@@ -314,8 +320,16 @@ class PaymentLedger
 
         // Also rewrites a legacy '' as 'pending' — same reading, no event.
         if ($order->payment_status !== $status->value) {
+            $moved = $this->moveStatus(
+                $order,
+                $order->payment_status,
+                $status->value
+            );
             $order->payment_status = $status->value;
-            $order->save();
+
+            if (!$moved) {
+                return;
+            }
         }
 
         if ($status === $before) {
@@ -364,8 +378,30 @@ class PaymentLedger
     }
 
     /**
-     * Append one entry. The only write the ledger makes, and a test seam:
-     * override it to keep the ledger in memory.
+     * Move `payment_status` from what this request read to $to, unless another
+     * request moved it first. The ledger's other write, and a test seam like
+     * {@see write()}.
+     *
+     * @param Order $order
+     * @param string|null $from
+     * @param string $to
+     * @return bool Whether this call moved it
+     */
+    protected function moveStatus(Order $order, ?string $from, string $to): bool
+    {
+        return Connection::get()->update_query(
+            'UPDATE `' .
+                Order::get_full_table_name() .
+                '` SET payment_status = ? WHERE id = ? AND payment_status <=> ?',
+            $to,
+            (int) $order->id,
+            $from
+        ) === 1;
+    }
+
+    /**
+     * Append one entry. A test seam: override it to keep the ledger in
+     * memory.
      *
      * @param PaymentEntry $entry
      * @return void

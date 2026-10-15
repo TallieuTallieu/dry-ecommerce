@@ -362,3 +362,31 @@ it(
         expect($heard)->toBe([PaymentFailed::class => 1]);
     }
 );
+
+it(
+    'dispatches paid once when two requests settle the same report',
+    function (): void {
+        $heard = [];
+        [$order, $ledger] = orderWithAttempt($heard);
+
+        reportOn($ledger, $order, PaymentStatus::Failed);
+
+        // The provider's return and its webhook, each with the order as it
+        // loaded it: both read failed, both read the entries fresh.
+        $other = new InMemoryOrder();
+        $other->id = $order->id;
+        $other->state = $order->state;
+        $other->total = $order->total;
+        $other->payment_id = $order->payment_id;
+        $other->payment_status = $order->payment_status;
+        $other->entries = &$order->entries;
+
+        reportOn($ledger, $order, PaymentStatus::Paid, [
+            new Movement(EntryKind::Captured, 'cap_1', 10000),
+        ]);
+        $ledger->recompute($other);
+
+        expect($heard[Paid::class])->toBe(1);
+        expect($other->getPaymentStatus())->toBe(PaymentStatus::Paid);
+    }
+);
