@@ -269,6 +269,8 @@ $order->getReturned(); // Σ refunded − Σ refund_reversed + Σ chargeback −
 $order->getNet(); // paid − returned
 $order->getOutstanding(); // max(0, total − net)
 $order->getPaymentEntries(); // the history itself, oldest first
+$order->getPaymentMethod(); // how the latest capture was paid; 'free' for €0
+$order->getPaymentCardLabel(); // the card's brand, when there is one
 ```
 
 `getTotal()` is what the order costs, frozen at placement; these are what

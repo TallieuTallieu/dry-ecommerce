@@ -77,3 +77,20 @@ it('shows no order for an entry filed under none', function (): void {
 
     expect(LedgerManager::order($entry))->toBe('');
 });
+
+it(
+    'shows how a capture was paid, and nothing without a method',
+    function (): void {
+        $entry = new PaymentEntry();
+
+        $entry->method = 'creditcard';
+        $entry->card_label = 'Mastercard';
+        expect(LedgerManager::method($entry))->toBe('creditcard · Mastercard');
+
+        $entry->card_label = null;
+        expect(LedgerManager::method($entry))->toBe('creditcard');
+
+        $entry->method = null;
+        expect(LedgerManager::method($entry))->toBe('');
+    }
+);

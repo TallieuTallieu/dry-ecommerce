@@ -189,6 +189,16 @@ class PaymentLedger
             );
             $entry->amount = $movement->amount;
             $entry->reference = $movement->reference;
+
+            // How it was paid belongs to the money that arrived, so only a
+            // capture carries it. Written once, with the capture: a later
+            // report naming the method does not touch an entry already
+            // written.
+            if ($movement->kind === EntryKind::Captured) {
+                $entry->method = self::nonEmpty($report->method);
+                $entry->card_label = self::nonEmpty($report->cardLabel);
+            }
+
             $this->write($entry);
 
             $written[$key] = true;
@@ -409,6 +419,19 @@ class PaymentLedger
     protected function write(PaymentEntry $entry): void
     {
         $entry->save();
+    }
+
+    /**
+     * A reported word, or null for none — '' says nothing either.
+     *
+     * @param string|null $value
+     * @return string|null
+     */
+    private static function nonEmpty(?string $value): ?string
+    {
+        $value = $value === null ? '' : trim($value);
+
+        return $value === '' ? null : $value;
     }
 
     /**
