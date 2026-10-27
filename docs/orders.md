@@ -415,7 +415,7 @@ interprets.
 ## Figures over a period
 
 `Tnt\Ecommerce\Order\OrderStats` counts and adds up placed orders over a
-`dry\util\Period` (dry 4.16), by when they were placed — what a ranged
+`dry\util\Period` (dry 4.15.2), by when they were placed — what a ranged
 dashboard widget shows:
 
 ```php
