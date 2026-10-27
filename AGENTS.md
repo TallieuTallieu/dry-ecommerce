@@ -85,6 +85,6 @@ Run commands through Docker once it exists, as in the sibling packages.
 | Package         | Relationship                                                                                                                                                                  |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `dry-accounts`  | First-class pairing. `Customer.user` is a nullable FK to its user model.                                                                                                      |
-| `dry-mollie`    | **Stranded.** Pinned to `dry-ecommerce: ^1.2.1`, `oak: ^1.1.15`, `php: ^7.4\|^8.0`. Only real `PaymentInterface` implementation — until ported, no 3.0 shop can take payment. |
+| `dry-mollie`    | The Mollie `PaymentInterface`, on the ledger contract since its 6.0; requires `dry-ecommerce ^3.13.4`.                                                                        |
 | `dry-sendcloud` | Already on the modern line. No dependency on this package; relevant prior art for fulfillment.                                                                                |
 | `dry-dbi`       | Source of the tooling template, and of `BaseRepository` / `QueryBuilder` / `TableBuilder`.                                                                                    |

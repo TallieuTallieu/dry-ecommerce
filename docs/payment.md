@@ -394,11 +394,9 @@ parameters. The visitor's return proves only that they came back.
 
 ## Available gateways
 
-- **Mollie**: `dry-mollie`, https://github.com/reinvanoyen/dry-mollie
-
-`dry-mollie` is pinned to `dry-ecommerce: ^1.2.1` and **cannot be installed
-alongside the 4.x line**. Until it is ported to the ledger contract, a project
-on this version has only `NullPayment` and cannot take a payment at all.
+- **Mollie**: `dry-mollie`, https://github.com/TallieuTallieu/dry-mollie.
+  Since 6.0 it implements the ledger contract above and requires
+  `dry-ecommerce ^3.13.4`.
 
 ## See also
 
