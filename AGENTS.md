@@ -82,9 +82,9 @@ Run commands through Docker once it exists, as in the sibling packages.
 
 ## Related packages
 
-| Package         | Relationship                                                                                                                                                                  |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `dry-accounts`  | First-class pairing. `Customer.user` is a nullable FK to its user model.                                                                                                      |
-| `dry-mollie`    | The Mollie `PaymentInterface`, on the ledger contract since its 6.0; requires `dry-ecommerce ^3.13.4`.                                                                        |
-| `dry-sendcloud` | Already on the modern line. No dependency on this package; relevant prior art for fulfillment.                                                                                |
-| `dry-dbi`       | Source of the tooling template, and of `BaseRepository` / `QueryBuilder` / `TableBuilder`.                                                                                    |
+| Package         | Relationship                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------ |
+| `dry-accounts`  | First-class pairing. `Customer.user` is a nullable FK to its user model.                               |
+| `dry-mollie`    | The Mollie `PaymentInterface`, on the ledger contract since its 6.0; requires `dry-ecommerce ^3.13.4`. |
+| `dry-sendcloud` | Already on the modern line. No dependency on this package; relevant prior art for fulfillment.         |
+| `dry-dbi`       | Source of the tooling template, and of `BaseRepository` / `QueryBuilder` / `TableBuilder`.             |
