@@ -22,6 +22,8 @@ use Tnt\Ecommerce\Payment\PaymentStatus;
  * @property string|null $status
  * @property int|null $amount
  * @property string|null $reference
+ * @property string|null $method
+ * @property string|null $card_label
  */
 class PaymentEntry extends Model
 {
@@ -60,5 +62,37 @@ class PaymentEntry extends Model
     public function getAmount(): int
     {
         return (int) $this->amount;
+    }
+
+    /**
+     * How the money was paid, as the provider names it (`bancontact`), on a
+     * `captured` entry whose report said so; else null — every entry
+     * written before the column existed included.
+     *
+     * @return string|null
+     */
+    public function getMethod(): ?string
+    {
+        return self::word($this->method);
+    }
+
+    /**
+     * The card's brand ("Mastercard") on a `captured` entry whose report
+     * named one; else null.
+     *
+     * @return string|null
+     */
+    public function getCardLabel(): ?string
+    {
+        return self::word($this->card_label);
+    }
+
+    /**
+     * @param string|null $value
+     * @return string|null
+     */
+    private static function word(?string $value): ?string
+    {
+        return $value === null || $value === '' ? null : $value;
     }
 }

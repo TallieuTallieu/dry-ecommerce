@@ -114,7 +114,7 @@ figure, not a shop that will not boot.
 
 ## Migrations
 
-The provider registers a migrator named `ecommerce` with twenty-five
+The provider registers a migrator named `ecommerce` with twenty-six
 revisions: eleven create the tables below, and the others alter existing
 tables (the frozen `fulfillment_attributes` column on
 `ecommerce_order`, the per-line `options` columns on both line tables, the
@@ -133,7 +133,8 @@ the `box` column for the
 [bus number](addresses.md) on the address book and both frozen blocks, the
 [`variant` columns](variants.md) on both line tables, and the
 [`vat_percentage`](tax.md#the-order-line-keeps-its-rate) each order line was
-sold at). One of the eleven creates `ecommerce_payment_entry`, the
+sold at, and [how a capture was paid](payment.md#how-it-was-paid) on the
+ledger). One of the eleven creates `ecommerce_payment_entry`, the
 [payment ledger](payment.md#the-ledger):
 
 ```
@@ -147,7 +148,7 @@ ecommerce_payment_entry
 
 ```sh
 php oak migration migrate
-php oak migration list        # ecommerce (25/25)
+php oak migration list        # ecommerce (26/26)
 ```
 
 Revisions are **appended to the list, never inserted into it.** Oak's migrator

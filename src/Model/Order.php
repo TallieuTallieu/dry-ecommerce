@@ -72,6 +72,12 @@ class Order extends Model implements OrderInterface, TotalingInterface
     const TABLE = 'ecommerce_order';
 
     /**
+     * What {@see getPaymentMethod()} answers for a free order. Derived, never
+     * stored: no provider took part.
+     */
+    const PAYMENT_METHOD_FREE = 'free';
+
+    /**
      * @var array<string, string>
      */
     public static $special_fields = [
@@ -477,6 +483,58 @@ class Order extends Model implements OrderInterface, TotalingInterface
         }
 
         return false;
+    }
+
+    /**
+     * How the order was paid: the method its latest capture was reported
+     * with (`bancontact`, `creditcard`, …). {@see self::PAYMENT_METHOD_FREE}
+     * when that capture is a €0 one with no method — a free order, settled
+     * without a provider. Null when nothing was captured, or the capture
+     * carries no method: a gateway that does not report one, or an order
+     * paid before the ledger kept it. See docs/payment.md.
+     *
+     * @return string|null
+     */
+    public function getPaymentMethod(): ?string
+    {
+        $capture = $this->latestCapture();
+
+        if ($capture === null) {
+            return null;
+        }
+
+        return $capture->getMethod() ??
+            ($capture->getAmount() === 0 ? self::PAYMENT_METHOD_FREE : null);
+    }
+
+    /**
+     * The card's brand ("Mastercard") on the latest capture, when its
+     * provider named one; else null.
+     *
+     * @return string|null
+     */
+    public function getPaymentCardLabel(): ?string
+    {
+        return $this->latestCapture()?->getCardLabel();
+    }
+
+    /**
+     * The latest `captured` entry, on any attempt — what a late capture on a
+     * superseded attempt can make other than the current one.
+     *
+     * @return PaymentEntry|null
+     */
+    private function latestCapture(): ?PaymentEntry
+    {
+        $latest = null;
+
+        foreach ($this->getPaymentEntries() as $entry) {
+            if ($entry->kind === EntryKind::Captured->value) {
+                $latest = $entry;
+            }
+        }
+
+        return $latest;
     }
 
     /**
