@@ -85,6 +85,8 @@ One table, append-only. Nothing updates or deletes an entry.
 | `status`     | The reported status, on a `status_reported` entry.                      |
 | `amount`     | Cents, zero or more, on a money entry. The kind says which way it went. |
 | `reference`  | The provider's own id for a money movement.                             |
+| `method`     | How the money was paid, on a `captured` entry. See below.               |
+| `card_label` | The card's brand, on a `captured` entry whose provider named one.       |
 
 | Kind                  | Written when                                                          |
 | --------------------- | --------------------------------------------------------------------- |
@@ -131,6 +133,40 @@ $order->getOutstanding(); // max(0, total − net)
 
 To read the ledger in the admin, see [Admin](admin.md). It is off until the
 project turns it on.
+
+## How it was paid
+
+A report can say how the payment was paid: the provider's id for the method
+(`bancontact`, `creditcard`, `ideal`, …) and, for a card, its brand
+(`Mastercard`). Both are optional `PaymentReport` arguments, and both are
+kept on the `captured` entry the report writes, in `method` and
+`card_label`. No other kind carries them.
+
+```php
+$order->getPaymentMethod(); // 'bancontact', 'creditcard', 'free' or null
+$order->getPaymentCardLabel(); // 'Mastercard' or null
+$entry->getMethod(); // per capture
+$entry->getCardLabel();
+```
+
+- **The order answers its latest capture.** That is one method per paid
+  order, which is what an invoice or an accounting export prints. An order
+  with captures on several attempts (a late payment of a superseded one)
+  answers the latest. Walk `getPaymentEntries()` for each capture's own.
+- **A refund changes nothing.** Money goes back the way it came, so a
+  refunded order still says how it was paid.
+- **Written once, with the capture.** The ledger is append-only. A later
+  report naming another method for a capture already written does not touch
+  it.
+- **A free order reads `free`** (`Order::PAYMENT_METHOD_FREE`). Nothing
+  stores the word: a latest capture of €0 that carries no method is a free
+  order settled without a provider, whichever gateway settled it. A capture
+  with money and no method reads `null`.
+- **`null` means not known.** A gateway that reports no method, and every
+  order captured before the columns existed. There is no backfill.
+
+The method is the provider's own vocabulary, unchecked. How it reads to a
+person ("Bancontact", "Kredietkaart") is the project's business.
 
 ## Deriving the status
 
@@ -304,7 +340,13 @@ public function reportOf(string $paymentId): PaymentReport
         );
     }
 
-    return new PaymentReport($paymentId, $this->statusFor($payment), $movements);
+    return new PaymentReport(
+        $paymentId,
+        $this->statusFor($payment),
+        $movements,
+        method: $payment->method, // optional: how it was paid
+        cardLabel: $payment->details->cardLabel ?? null // optional: a card's brand
+    );
 }
 ```
 
@@ -319,6 +361,9 @@ public function reportOf(string $paymentId): PaymentReport
   its counterpart is already in the ledger.
 - **Map the provider's vocabulary onto `PaymentStatus`.** `Pending` is the
   honest answer for a payment still open.
+- **Say how it was paid, if the provider knows.** `method` and `cardLabel`
+  are optional; a gateway that leaves them out still works, and its orders
+  read no method. See [How it was paid](#how-it-was-paid).
 
 ### What the project wires
 
@@ -349,11 +394,9 @@ parameters. The visitor's return proves only that they came back.
 
 ## Available gateways
 
-- **Mollie**: `dry-mollie`, https://github.com/reinvanoyen/dry-mollie
-
-`dry-mollie` is pinned to `dry-ecommerce: ^1.2.1` and **cannot be installed
-alongside the 4.x line**. Until it is ported to the ledger contract, a project
-on this version has only `NullPayment` and cannot take a payment at all.
+- **Mollie**: `dry-mollie`, https://github.com/TallieuTallieu/dry-mollie.
+  Since 6.0 it implements the ledger contract above and requires
+  `dry-ecommerce ^3.13.4`.
 
 ## See also
 

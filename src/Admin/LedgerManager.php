@@ -55,6 +55,8 @@ class LedgerManager extends Manager
                 StringEdit::create('status')->set_label('Status'),
                 StringEdit::create('amount')->set_label('Amount (cents)'),
                 StringEdit::create('reference')->set_label('Reference'),
+                StringEdit::create('method')->set_label('Method'),
+                StringEdit::create('card_label')->set_label('Card'),
             ],
             [
                 'popup' => true,
@@ -101,6 +103,12 @@ class LedgerManager extends Manager
             ->add_component(
                 StringView::create('reference', ['header' => 'Reference'])
             )
+            ->add_component(
+                StringView::create('method', [
+                    'header' => 'Method',
+                    'value' => self::method(...),
+                ])
+            )
             ->add_component($view->create_link())
             ->set_row_action($view->create_link(''))
             ->set_searcher(
@@ -145,6 +153,21 @@ class LedgerManager extends Manager
     public static function amount(PaymentEntry $entry): string
     {
         return $entry->amount === null ? '' : Money::toDecimal($entry->amount);
+    }
+
+    /**
+     * How a capture was paid — the method, and the card's brand when there
+     * is one — or nothing on an entry that carries none.
+     *
+     * @param PaymentEntry $entry
+     * @return string
+     */
+    public static function method(PaymentEntry $entry): string
+    {
+        return implode(
+            ' · ',
+            array_filter([$entry->getMethod(), $entry->getCardLabel()])
+        );
     }
 
     /**

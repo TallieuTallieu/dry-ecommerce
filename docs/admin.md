@@ -36,6 +36,7 @@ A flat list, newest first, 25 to a page. The columns:
 | Status     | The reported status, on a `status_reported` entry.                     |
 | Amount     | `Money::toDecimal()` of the cents. Empty on an entry that moves none.  |
 | Reference  | The provider's own id for a money movement.                            |
+| Method     | How a capture was paid, and the card's brand when there is one.        |
 
 The search box matches the payment id, the reference, the order's row id and
 its public reference.

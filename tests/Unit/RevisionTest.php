@@ -32,6 +32,7 @@ use Tests\Support\CapturingAddOptionsToLineTables;
 use Tests\Support\CapturingAddOrderLineIndexes;
 use Tests\Support\CapturingAddOrderStateColumn;
 use Tests\Support\CapturingAddParentToLineTables;
+use Tests\Support\CapturingAddPaymentMethodToPaymentEntry;
 use Tests\Support\CapturingAddVariantToLineTables;
 use Tests\Support\CapturingAddVatPercentageToOrderItem;
 use Tests\Support\CapturingCreateAddressTable;
@@ -864,4 +865,28 @@ it('gives the order line the tax rate it was sold at', function (): void {
     $revision->down();
 
     expect($revision->statements[0])->toContain('DROP COLUMN `vat_percentage`');
+});
+
+it('gives a ledger entry how its money was paid', function (): void {
+    // Nullable both: only a capture carries a method, and every entry
+    // written before this revision keeps none.
+    $revision = new CapturingAddPaymentMethodToPaymentEntry(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(1);
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_payment_entry`'
+    );
+    expect($revision->statements[0])->toContain(
+        'ADD `method` VARCHAR(255) NULL'
+    );
+    expect($revision->statements[0])->toContain(
+        'ADD `card_label` VARCHAR(255) NULL'
+    );
+
+    $revision = new CapturingAddPaymentMethodToPaymentEntry(new QueryBuilder());
+    $revision->down();
+
+    expect($revision->statements[0])->toContain('DROP COLUMN `method`');
+    expect($revision->statements[0])->toContain('DROP COLUMN `card_label`');
 });
