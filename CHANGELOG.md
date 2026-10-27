@@ -5,6 +5,12 @@ follow [Semantic Versioning](https://semver.org). New entries are generated from
 commit messages by [dry-ci](https://github.com/TallieuTallieu/dry-ci); past
 entries may be edited by hand.
 
+## 3.15.0 - 2026-10-27
+
+### Features
+
+- Record how a paid order was paid
+
 ## 3.14.1 - 2026-10-15
 
 ### Fixes
