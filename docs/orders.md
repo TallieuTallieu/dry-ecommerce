@@ -412,6 +412,35 @@ but its column holds `''`, so filtering on `PaymentStatus::Pending` will not
 find it — the query runs against what the column holds; only the reader
 interprets.
 
+## Figures over a period
+
+`Tnt\Ecommerce\Order\OrderStats` counts and adds up placed orders over a
+`dry\util\Period` (dry 4.15.2), by when they were placed — what a ranged
+dashboard widget shows:
+
+```php
+use Tnt\Ecommerce\Order\OrderStats;
+
+$stats = new OrderStats(fn() => ['`canceled` IS NULL']);
+
+$now = $stats->figures($period); // OrderFigures
+$then = $stats->figures($period, comparison: true); // the same days a year back
+
+$now->totals(); // ['orders' => …, 'paid' => …, 'revenue' => …, 'paid_revenue' => …]
+$now->paidRevenue; // cents per bucket of the period, for a chart
+```
+
+- **One query per period.** `INTERVAL(created, …)` sorts each order into its
+  bucket in the pass that sums it, along the `(state, created)` index; the
+  totals are the buckets added up, so cards and charts cost the same two
+  queries.
+- **Paid is `PaymentStatus::Paid` alone.** A refunded order gave its money
+  back, and a partly refunded one is no longer worth its `total`.
+- **Placed** is `state = 'placed'`, or `''` on a row older than the column.
+- **The scope is the shop's own.** Whatever else leaves an order out — a
+  cancel column of its own, failed payments — is a WHERE clause and its
+  parameters, `[sql, ...parameters]`, ANDed onto the query.
+
 ## Events
 
 | Event                                                                                               | When                                                                                                                                                           |
