@@ -383,11 +383,40 @@ Frozen because "was this total gross or net" is not recoverable from the numbers
 alone. A shop that switches convention next year must still be able to reprint
 this invoice as it was charged.
 
+## The uuid
+
+`Order.uuid` is a version 4 UUID, `3f2b8c1e-…`, given to every row on its first
+save — a draft too — and never changed. It is the key a URL names an order by,
+so the URL cannot be guessed whatever the reference looks like:
+
+```php
+OrderRepository::create()->byUuid($uuid)->firstOrNull();
+```
+
+Like the reference, finding an order by its uuid is **not** permission to show
+it: a link in a mail is forwarded, a tab is left open on a shared screen. The
+page still establishes who is asking.
+
+The column is nullable — a row written with raw SQL still inserts — and
+unique. Its revision adds it **empty**: orders saved after the migration get a
+uuid, older ones do not until a console command gives them one:
+
+```sh
+php oak migration migrate
+php oak ecommerce:fill-order-uuids   # Gave 1284 orders a uuid.
+```
+
+Run it once after migrating, before a page looks an older order up with
+`byUuid()`. It uses the same generator a new order does — not `UUID()`, which
+is a version 1: the time and the server's MAC address — skips any order that
+already has one, and is safe to run again.
+
 ## Finding orders
 
 ```php
 OrderRepository::create()->placed()->all(); // never drafts
 OrderRepository::create()->byOrderId('12-K4M7QX9RTB')->firstOrNull();
+OrderRepository::create()->byUuid($uuid)->firstOrNull(); // what a URL names
 OrderRepository::create()->byPaymentId($mollieId)->firstOrNull(); // current attempt only
 OrderRepository::create()->forCustomer($customer)->all();
 OrderRepository::create()->forUser($userId)->placed()->all(); // order history

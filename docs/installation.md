@@ -75,8 +75,9 @@ constructed with that package's `AuthenticationInterface`.
 
 The provider binds the cart, the shop, the attribute and cart storages, the
 payment gateway, the user resolver and the tax policy, and — in console context
-only — registers its migrator and the `ecommerce:reap-drafts` command
-([the reaper](orders.md#the-reaper)).
+only — registers its migrator, the `ecommerce:reap-drafts` command
+([the reaper](orders.md#the-reaper)) and the `ecommerce:fill-order-uuids`
+command ([the uuid](orders.md#the-uuid)).
 
 ## Configuration
 
@@ -114,7 +115,7 @@ figure, not a shop that will not boot.
 
 ## Migrations
 
-The provider registers a migrator named `ecommerce` with twenty-six
+The provider registers a migrator named `ecommerce` with twenty-seven
 revisions: eleven create the tables below, and the others alter existing
 tables (the frozen `fulfillment_attributes` column on
 `ecommerce_order`, the per-line `options` columns on both line tables, the
@@ -133,8 +134,8 @@ the `box` column for the
 [bus number](addresses.md) on the address book and both frozen blocks, the
 [`variant` columns](variants.md) on both line tables, and the
 [`vat_percentage`](tax.md#the-order-line-keeps-its-rate) each order line was
-sold at, and [how a capture was paid](payment.md#how-it-was-paid) on the
-ledger). One of the eleven creates `ecommerce_payment_entry`, the
+sold at, [how a capture was paid](payment.md#how-it-was-paid) on the
+ledger, and the order's [`uuid`](orders.md#the-uuid), added empty — run `ecommerce:fill-order-uuids` after migrating). One of the eleven creates `ecommerce_payment_entry`, the
 [payment ledger](payment.md#the-ledger):
 
 ```
@@ -148,7 +149,7 @@ ecommerce_payment_entry
 
 ```sh
 php oak migration migrate
-php oak migration list        # ecommerce (26/26)
+php oak migration list        # ecommerce (27/27)
 ```
 
 Revisions are **appended to the list, never inserted into it.** Oak's migrator

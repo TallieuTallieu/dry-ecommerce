@@ -45,6 +45,20 @@ class OrderRepository extends Repository
     }
 
     /**
+     * Filter by the key a URL names the order by. Like {@see byOrderId()},
+     * finding the order is not permission to show it.
+     *
+     * @param string $uuid
+     * @return static
+     */
+    public function byUuid(string $uuid): static
+    {
+        $this->addCriteria(new Equals('uuid', $uuid));
+
+        return $this;
+    }
+
+    /**
      * Filter by the reference the payment provider knows the order as.
      *
      * @param string $paymentId

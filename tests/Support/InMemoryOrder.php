@@ -74,6 +74,7 @@ final class InMemoryOrder extends Order
     public function save()
     {
         $this->saveCount++;
+        $this->assignUuid();
 
         if ($this->id === null) {
             $this->id = 1;

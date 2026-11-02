@@ -33,6 +33,7 @@ use Tests\Support\CapturingAddOrderLineIndexes;
 use Tests\Support\CapturingAddOrderStateColumn;
 use Tests\Support\CapturingAddParentToLineTables;
 use Tests\Support\CapturingAddPaymentMethodToPaymentEntry;
+use Tests\Support\CapturingAddUuidToOrderTable;
 use Tests\Support\CapturingAddVariantToLineTables;
 use Tests\Support\CapturingAddVatPercentageToOrderItem;
 use Tests\Support\CapturingCreateAddressTable;
@@ -889,4 +890,28 @@ it('gives a ledger entry how its money was paid', function (): void {
 
     expect($revision->statements[0])->toContain('DROP COLUMN `method`');
     expect($revision->statements[0])->toContain('DROP COLUMN `card_label`');
+});
+
+it('adds an empty, unique uuid to the order table', function (): void {
+    // No fill: existing rows get theirs from ecommerce:fill-order-uuids, and
+    // MySQL's unique lets every one of them stay NULL until then.
+    $revision = new CapturingAddUuidToOrderTable(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(1);
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_order`'
+    );
+    expect($revision->statements[0])->toContain('ADD `uuid` CHAR(36) NULL');
+    expect($revision->statements[0])->toContain('UNIQUE');
+    expect($revision->statements[0])->toContain('`uq_uuid`');
+    expect($revision->statements[0])->not->toContain('UPDATE');
+
+    $revision = new CapturingAddUuidToOrderTable(new QueryBuilder());
+    $revision->down();
+
+    // The same name up() gave the unique, or the drop misses it.
+    expect($revision->statements)->toHaveCount(1);
+    expect($revision->statements[0])->toContain('`uq_uuid`');
+    expect($revision->statements[0])->toContain('DROP COLUMN `uuid`');
 });

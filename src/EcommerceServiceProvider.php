@@ -19,6 +19,7 @@ use Tnt\Ecommerce\Cart\CartLifetime;
 use Tnt\Ecommerce\Cart\CartRelease;
 use Tnt\Ecommerce\Cart\CookieCartStorage;
 use Tnt\Ecommerce\Cart\SessionCartStorage;
+use Tnt\Ecommerce\Console\FillOrderUuidsCommand;
 use Tnt\Ecommerce\Console\ReapDraftsCommand;
 use Tnt\Ecommerce\Contracts\AttributeStorageInterface;
 use Tnt\Ecommerce\Contracts\CartInterface;
@@ -44,6 +45,7 @@ use Tnt\Ecommerce\Revisions\AddOrderLineIndexes;
 use Tnt\Ecommerce\Revisions\AddOrderStateColumn;
 use Tnt\Ecommerce\Revisions\AddParentToLineTables;
 use Tnt\Ecommerce\Revisions\AddPaymentMethodToPaymentEntry;
+use Tnt\Ecommerce\Revisions\AddUuidToOrderTable;
 use Tnt\Ecommerce\Revisions\AddVariantToLineTables;
 use Tnt\Ecommerce\Revisions\AddVatPercentageToOrderItem;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
@@ -109,6 +111,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddVariantToLineTables::class,
                 AddVatPercentageToOrderItem::class,
                 AddPaymentMethodToPaymentEntry::class,
+                AddUuidToOrderTable::class,
             ]);
 
             /** @var MigrationManager $manager */
@@ -119,6 +122,7 @@ class EcommerceServiceProvider extends ServiceProvider
             /** @var KernelInterface $kernel */
             $kernel = $app->get(KernelInterface::class);
             $kernel->registerCommand(ReapDraftsCommand::class);
+            $kernel->registerCommand(FillOrderUuidsCommand::class);
         }
     }
 
@@ -161,10 +165,15 @@ class EcommerceServiceProvider extends ServiceProvider
         }
 
         $app->singleton(ShopInterface::class, Shop::class);
+
         $app->singleton(CartInterface::class, Cart::class);
 
         if ($app->isRunningInConsole()) {
             $app->set(ReapDraftsCommand::class, ReapDraftsCommand::class);
+            $app->set(
+                FillOrderUuidsCommand::class,
+                FillOrderUuidsCommand::class
+            );
         }
 
         $gateway = self::configuredClass(
