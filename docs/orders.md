@@ -278,8 +278,8 @@ actually happened to the money.
 
 ## The order reference
 
-`Order.order_id` is the reference a customer quotes — the row id, a dash, then
-ten characters:
+`Order.order_id` is the reference a customer quotes, on every mail, document
+and payment. By default it is the row id, a dash, then ten characters:
 
 ```
 12-K4M7QX9RTB
@@ -288,6 +288,55 @@ ten characters:
 Find one with `OrderRepository::byOrderId()`. The row id keeps it unique without
 a lookup; the random part is drawn with `random_int()` so a shop's orders cannot
 be walked one after another.
+
+### Yearly numbers
+
+`YearlyOrderReference` numbers orders per year: the year's last two digits,
+then a five-digit counter that starts at 1 every January. Opt in under
+`ecommerce.order_reference` ([installation](installation.md#configuration)):
+
+```
+2600001, 2600002, …   in 2026
+2700001, 2700002, …   in 2027
+```
+
+- **The year is the placement's**, in PHP's default timezone, not
+  `Order.created`: a draft started on 31 December and placed on 1 January is
+  a `27` order.
+- **One statement claims a number.** The counter lives in
+  `ecommerce_order_sequence`, one row per year; an upsert with
+  `LAST_INSERT_ID(expr)` increments it and hands the value back to that
+  connection only, so two checkouts at the same moment never share a number.
+- **Gaps happen, repeats do not.** A placement that fails after its number was
+  claimed leaves that number unused. An order number is not an invoice number;
+  a shop whose invoices must run without gaps numbers those separately.
+- **Past 99999 the counter widens** — `26100000` — rather than stop a
+  checkout.
+
+### A shop's own numbering
+
+Any other scheme is a class implementing `OrderReferenceInterface`, named under
+the same key:
+
+```php
+final class BranchOrderNumber implements OrderReferenceInterface
+{
+    public function reference(Order $order): string
+    {
+        // The order has its id: the row is already written.
+        return 'GENT-' . $order->id;
+    }
+}
+```
+
+`place()` asks the reference **once per order**, at the first placement and
+after the first save, so the order has its id; a re-placed order keeps what it
+answered. What it answers must be unique — nothing else checks.
+
+A sequential reference is guessable, so a URL must not name the order by it —
+that is what [the uuid](#the-uuid) is for. A link already sent out with the
+old reference keeps working for as long as the page still looks it up with
+`byOrderId()`; a page that moves to `byUuid()` should accept both for a while.
 
 > ### It is a reference, not a credential
 >

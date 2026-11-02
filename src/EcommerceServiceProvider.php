@@ -25,6 +25,7 @@ use Tnt\Ecommerce\Contracts\AttributeStorageInterface;
 use Tnt\Ecommerce\Contracts\CartInterface;
 use Tnt\Ecommerce\Contracts\CartStorageInterface;
 use Tnt\Ecommerce\Contracts\LedgerPortalInterface;
+use Tnt\Ecommerce\Contracts\OrderReferenceInterface;
 use Tnt\Ecommerce\Contracts\PaymentGatewayInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\RedirectorInterface;
@@ -33,6 +34,7 @@ use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\Events\Order\Paid;
 use Tnt\Ecommerce\Fulfillment\CartAttributeStorage;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\Order\RandomOrderReference;
 use Tnt\Ecommerce\Payment\HttpRedirector;
 use Tnt\Ecommerce\Payment\NullPayment;
 use Tnt\Ecommerce\Payment\PaymentLedger;
@@ -56,6 +58,7 @@ use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
 use Tnt\Ecommerce\Revisions\CreateFulfillmentMethodTable;
 use Tnt\Ecommerce\Revisions\CreateOrderItemTable;
 use Tnt\Ecommerce\Revisions\CreateOrderTable;
+use Tnt\Ecommerce\Revisions\CreateOrderSequenceTable;
 use Tnt\Ecommerce\Revisions\CreatePaymentEntryTable;
 use Tnt\Ecommerce\Revisions\CreateStockItemTable;
 use Tnt\Ecommerce\Revisions\CreateStockTable;
@@ -112,6 +115,7 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddVatPercentageToOrderItem::class,
                 AddPaymentMethodToPaymentEntry::class,
                 AddUuidToOrderTable::class,
+                CreateOrderSequenceTable::class,
             ]);
 
             /** @var MigrationManager $manager */
@@ -165,6 +169,18 @@ class EcommerceServiceProvider extends ServiceProvider
         }
 
         $app->singleton(ShopInterface::class, Shop::class);
+
+        // What order_id looks like. The default is the row id and ten random
+        // characters; a shop with its own numbering names a class. See
+        // docs/orders.md#the-order-reference.
+        $app->singleton(
+            OrderReferenceInterface::class,
+            self::configuredClass(
+                $config,
+                'ecommerce.order_reference',
+                RandomOrderReference::class
+            )
+        );
 
         $app->singleton(CartInterface::class, Cart::class);
 

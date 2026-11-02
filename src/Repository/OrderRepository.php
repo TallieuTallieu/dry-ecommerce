@@ -30,8 +30,9 @@ class OrderRepository extends Repository
     }
 
     /**
-     * Filter by the public order reference (`12-K4M7QX9RTB`), not the primary
-     * key. Finding an order by it does not establish that the person asking
+     * Filter by the public order reference (`12-K4M7QX9RTB` by default — see
+     * {@see \Tnt\Ecommerce\Contracts\OrderReferenceInterface}), not the
+     * primary key. Finding an order by it does not establish that the person asking
      * is entitled to see it.
      *
      * @param string $orderId

@@ -14,6 +14,7 @@ use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\HasStockInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
+use Tnt\Ecommerce\Contracts\OrderReferenceInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
 use Tnt\Ecommerce\Contracts\RedirectorInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
@@ -27,6 +28,7 @@ use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Money;
 use Tnt\Ecommerce\Order\OrderState;
+use Tnt\Ecommerce\Order\RandomOrderReference;
 use Tnt\Ecommerce\Payment\PaymentLedger;
 use Tnt\Ecommerce\Payment\PaymentRedirect;
 use Tnt\Ecommerce\Tax\TaxPolicy;
@@ -41,17 +43,6 @@ use Tnt\Ecommerce\Tax\TaxPolicy;
  */
 class Cart implements CartInterface, TotalingInterface
 {
-    /**
-     * Crockford's base 32 — no `I`, `L`, `O` or `U`, so a reference survives
-     * being read down a telephone.
-     */
-    private const REFERENCE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-    /**
-     * How many random characters follow the row id in a reference.
-     */
-    private const REFERENCE_LENGTH = 10;
-
     private ShopInterface $shop;
 
     private CartStorageInterface $storage;
@@ -66,6 +57,8 @@ class Cart implements CartInterface, TotalingInterface
 
     private TaxPolicy $tax;
 
+    private OrderReferenceInterface $references;
+
     /**
      * @param ShopInterface $shop
      * @param CartStorageInterface $storage
@@ -77,6 +70,9 @@ class Cart implements CartInterface, TotalingInterface
      * @param TaxPolicy|null $tax How the shop taxes. Defaults to prices that
      *                            contain their tax and untaxed delivery, which
      *                            leaves an existing shop's totals unmoved.
+     * @param OrderReferenceInterface|null $references Makes `order_id`.
+     *                                                Defaults to
+     *                                                {@see RandomOrderReference}.
      */
     public function __construct(
         ShopInterface $shop,
@@ -85,7 +81,8 @@ class Cart implements CartInterface, TotalingInterface
         UserResolverInterface $users,
         PaymentLedger $ledger,
         RedirectorInterface $redirector,
-        ?TaxPolicy $tax = null
+        ?TaxPolicy $tax = null,
+        ?OrderReferenceInterface $references = null
     ) {
         $this->shop = $shop;
         $this->storage = $storage;
@@ -94,6 +91,7 @@ class Cart implements CartInterface, TotalingInterface
         $this->ledger = $ledger;
         $this->redirector = $redirector;
         $this->tax = $tax ?? new TaxPolicy();
+        $this->references = $references ?? new RandomOrderReference();
     }
 
     /**
@@ -502,7 +500,7 @@ class Cart implements CartInterface, TotalingInterface
         // The reference is made once and kept: a re-placed order stays the
         // order the customer was quoted.
         if ((string) $order->order_id === '') {
-            $order->order_id = $this->newOrderReference((int) $order->id);
+            $order->order_id = $this->references->reference($order);
             $order->save();
         }
 
@@ -611,28 +609,5 @@ class Cart implements CartInterface, TotalingInterface
     protected function newOrder(): Order
     {
         return new Order();
-    }
-
-    /**
-     * The reference a customer quotes — `12-K4M7QX9RTB`. Unguessable to stop
-     * enumeration, but not a credential: a page showing an order must still
-     * establish who is asking. See docs/orders.md.
-     *
-     * @param int $orderId The row id the first save handed back.
-     * @return string
-     *
-     * @throws \Random\RandomException If the system has no source of secure
-     *                                 randomness — deliberately not caught.
-     */
-    private function newOrderReference(int $orderId): string
-    {
-        $reference = '';
-        $last = strlen(self::REFERENCE_ALPHABET) - 1;
-
-        for ($i = 0; $i < self::REFERENCE_LENGTH; $i++) {
-            $reference .= self::REFERENCE_ALPHABET[random_int(0, $last)];
-        }
-
-        return $orderId . '-' . $reference;
     }
 }

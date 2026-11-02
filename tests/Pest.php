@@ -13,6 +13,7 @@ use Tnt\Ecommerce\Cart\Cart;
 use Tnt\Ecommerce\Cart\CartRelease;
 use Tnt\Ecommerce\Cart\InMemoryCartStorage;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
+use Tnt\Ecommerce\Contracts\OrderReferenceInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\EcommerceServiceProvider;
 use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
@@ -154,7 +155,8 @@ function makeCheckoutCart(
     array $fulfillments = [],
     ?UserResolverInterface $users = null,
     ?TaxPolicy $tax = null,
-    ?DispatcherInterface $dispatcher = null
+    ?DispatcherInterface $dispatcher = null,
+    ?OrderReferenceInterface $references = null
 ): array {
     $shop = new Shop(new InMemoryAttributeStorage());
 
@@ -173,7 +175,8 @@ function makeCheckoutCart(
         $users ?? new GuestUserResolver(),
         $ledger,
         $redirector,
-        $tax
+        $tax,
+        $references
     );
 
     return [$cart, $storage, $payment, $shop, $ledger, $redirector];
