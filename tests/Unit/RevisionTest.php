@@ -33,6 +33,7 @@ use Tests\Support\CapturingAddOrderLineIndexes;
 use Tests\Support\CapturingAddOrderStateColumn;
 use Tests\Support\CapturingAddParentToLineTables;
 use Tests\Support\CapturingAddPaymentMethodToPaymentEntry;
+use Tests\Support\CapturingAddUuidToOrderTable;
 use Tests\Support\CapturingAddVariantToLineTables;
 use Tests\Support\CapturingAddVatPercentageToOrderItem;
 use Tests\Support\CapturingCreateAddressTable;
@@ -40,6 +41,7 @@ use Tests\Support\CapturingDropAddressNameColumns;
 use Tests\Support\CapturingCreateCustomerTable;
 use Tests\Support\CapturingCreateOrderItemTable;
 use Tests\Support\CapturingCreateOrderTable;
+use Tests\Support\CapturingCreateOrderSequenceTable;
 use Tests\Support\CapturingCreatePaymentEntryTable;
 use Tests\Support\CapturingMakeCustomerUserUnique;
 use Tests\Support\CapturingMakeOrderCustomerNullable;
@@ -889,4 +891,52 @@ it('gives a ledger entry how its money was paid', function (): void {
 
     expect($revision->statements[0])->toContain('DROP COLUMN `method`');
     expect($revision->statements[0])->toContain('DROP COLUMN `card_label`');
+});
+
+it('adds an empty, unique uuid to the order table', function (): void {
+    // No fill: existing rows get theirs from ecommerce:fill-order-uuids, and
+    // MySQL's unique lets every one of them stay NULL until then.
+    $revision = new CapturingAddUuidToOrderTable(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(1);
+    expect($revision->statements[0])->toContain(
+        'ALTER TABLE `ecommerce_order`'
+    );
+    expect($revision->statements[0])->toContain('ADD `uuid` CHAR(36) NULL');
+    expect($revision->statements[0])->toContain('UNIQUE');
+    expect($revision->statements[0])->toContain('`uq_uuid`');
+    expect($revision->statements[0])->not->toContain('UPDATE');
+
+    $revision = new CapturingAddUuidToOrderTable(new QueryBuilder());
+    $revision->down();
+
+    // The same name up() gave the unique, or the drop misses it.
+    expect($revision->statements)->toHaveCount(1);
+    expect($revision->statements[0])->toContain('`uq_uuid`');
+    expect($revision->statements[0])->toContain('DROP COLUMN `uuid`');
+});
+
+it('creates the order sequence keyed by year', function (): void {
+    $revision = new CapturingCreateOrderSequenceTable(new QueryBuilder());
+    $revision->up();
+
+    // The year is the key the upsert collides on: an AUTO_INCREMENT would
+    // make every claim a new row instead of the year's next number.
+    expect($revision->statements)->toHaveCount(1);
+    expect($revision->statements[0])->toContain(
+        'CREATE TABLE `ecommerce_order_sequence`'
+    );
+    expect($revision->statements[0])->toContain(
+        '`year` INT(4) NOT NULL PRIMARY KEY'
+    );
+    expect($revision->statements[0])->not->toContain('AUTO_INCREMENT');
+    expect($revision->statements[0])->toContain('`last` INT(11)');
+
+    $revision = new CapturingCreateOrderSequenceTable(new QueryBuilder());
+    $revision->down();
+
+    expect($revision->statements[0])->toContain(
+        'DROP TABLE `ecommerce_order_sequence`'
+    );
 });

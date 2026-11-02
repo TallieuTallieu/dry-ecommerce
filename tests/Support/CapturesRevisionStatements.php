@@ -30,4 +30,13 @@ trait CapturesRevisionStatements
 
         $this->statements[] = $this->queryBuilder->getQuery();
     }
+
+    /**
+     * @param string $sql
+     * @return void
+     */
+    protected function run(string $sql): void
+    {
+        $this->statements[] = $sql;
+    }
 }

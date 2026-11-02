@@ -17,6 +17,7 @@ use Tnt\Ecommerce\Contracts\TaxableInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Facade\Shop;
 use Tnt\Ecommerce\Order\OrderState;
+use Tnt\Ecommerce\Order\OrderUuid;
 use Tnt\Ecommerce\Payment\EntryKind;
 use Tnt\Ecommerce\Payment\PaymentStatus;
 use Tnt\Ecommerce\Repository\PaymentEntryRepository;
@@ -35,6 +36,7 @@ use Tnt\Ecommerce\Tax\PriceConvention;
  * @property int $created
  * @property int $updated
  * @property string|null $order_id
+ * @property string|null $uuid
  * @property string|null $payment_id
  * @property int|null $total
  * @property int|null $subtotal
@@ -84,6 +86,32 @@ class Order extends Model implements OrderInterface, TotalingInterface
         'customer' => Customer::class,
         'discount' => DiscountCode::class,
     ];
+
+    /**
+     * Every new row gets its {@see OrderUuid} on the insert — a draft too, so
+     * a URL can name it before placement.
+     *
+     * @return void
+     */
+    public function save()
+    {
+        $this->assignUuid();
+
+        parent::save();
+    }
+
+    /**
+     * A seam beside {@see save()}: a test double that keeps the row in memory
+     * calls this from its own save().
+     *
+     * @return void
+     */
+    protected function assignUuid(): void
+    {
+        if ($this->id === null && (string) $this->uuid === '') {
+            $this->uuid = OrderUuid::generate();
+        }
+    }
 
     /**
      * Write one cart line onto this order, as the order's own copy: the frozen

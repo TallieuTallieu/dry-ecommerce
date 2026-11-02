@@ -75,21 +75,23 @@ constructed with that package's `AuthenticationInterface`.
 
 The provider binds the cart, the shop, the attribute and cart storages, the
 payment gateway, the user resolver and the tax policy, and — in console context
-only — registers its migrator and the `ecommerce:reap-drafts` command
-([the reaper](orders.md#the-reaper)).
+only — registers its migrator, the `ecommerce:reap-drafts` command
+([the reaper](orders.md#the-reaper)) and the `ecommerce:fill-order-uuids`
+command ([the uuid](orders.md#the-uuid)).
 
 ## Configuration
 
 `config/ecommerce.php`. Every key has a default, and every default is the
 reading that leaves a shop's totals where they are.
 
-| Key                 | Default                    | What it decides                                                                                                                                                                                                |
-| ------------------- | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `payment`           | `NullPayment::class`       | The gateway. See the warning below.                                                                                                                                                                            |
-| `user_resolver`     | `GuestUserResolver::class` | Whether a checkout can link to an account.                                                                                                                                                                     |
-| `prices`            | `inclusive`                | Whether quoted prices already contain their tax.                                                                                                                                                               |
-| `delivery_tax_rate` | `0`                        | The rate charged on fulfillment cost.                                                                                                                                                                          |
-| `cart_lifetime`     | unset                      | Days, `int`. Set and `> 0`: the cart lives in its own cookie for that long ([cookie cart](cart.md#the-cookie-cart)), and the draft reaper measures abandonment against it. Unset: the session cart, as always. |
+| Key                 | Default                       | What it decides                                                                                                                                                                                                |
+| ------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `payment`           | `NullPayment::class`          | The gateway. See the warning below.                                                                                                                                                                            |
+| `user_resolver`     | `GuestUserResolver::class`    | Whether a checkout can link to an account.                                                                                                                                                                     |
+| `prices`            | `inclusive`                   | Whether quoted prices already contain their tax.                                                                                                                                                               |
+| `delivery_tax_rate` | `0`                           | The rate charged on fulfillment cost.                                                                                                                                                                          |
+| `cart_lifetime`     | unset                         | Days, `int`. Set and `> 0`: the cart lives in its own cookie for that long ([cookie cart](cart.md#the-cookie-cart)), and the draft reaper measures abandonment against it. Unset: the session cart, as always. |
+| `order_reference`   | `RandomOrderReference::class` | What `order_id` looks like. `YearlyOrderReference::class` for [yearly numbers](orders.md#yearly-numbers), or a shop's own class implementing `OrderReferenceInterface`.                                        |
 
 ```php
 <?php
@@ -100,6 +102,7 @@ return [
     'prices' => 'inclusive',
     'delivery_tax_rate' => 0,
     'cart_lifetime' => 30,
+    'order_reference' => \Tnt\Ecommerce\Order\YearlyOrderReference::class,
 ];
 ```
 
@@ -114,8 +117,8 @@ figure, not a shop that will not boot.
 
 ## Migrations
 
-The provider registers a migrator named `ecommerce` with twenty-six
-revisions: eleven create the tables below, and the others alter existing
+The provider registers a migrator named `ecommerce` with twenty-eight
+revisions: twelve create the tables below, and the others alter existing
 tables (the frozen `fulfillment_attributes` column on
 `ecommerce_order`, the per-line `options` columns on both line tables, the
 drop of the address name columns, the nullable `customer` and the `state`
@@ -133,9 +136,11 @@ the `box` column for the
 [bus number](addresses.md) on the address book and both frozen blocks, the
 [`variant` columns](variants.md) on both line tables, and the
 [`vat_percentage`](tax.md#the-order-line-keeps-its-rate) each order line was
-sold at, and [how a capture was paid](payment.md#how-it-was-paid) on the
-ledger). One of the eleven creates `ecommerce_payment_entry`, the
-[payment ledger](payment.md#the-ledger):
+sold at, [how a capture was paid](payment.md#how-it-was-paid) on the
+ledger, and the order's [`uuid`](orders.md#the-uuid), added empty — run `ecommerce:fill-order-uuids` after migrating). One of the twelve creates `ecommerce_payment_entry`, the
+[payment ledger](payment.md#the-ledger); another `ecommerce_order_sequence`,
+the counter behind [yearly order numbers](orders.md#yearly-numbers), empty
+unless the shop opts in:
 
 ```
 ecommerce_customer          ecommerce_cart
@@ -143,12 +148,12 @@ ecommerce_discount_code     ecommerce_cart_item
 ecommerce_fulfillment_method ecommerce_stock
 ecommerce_order             ecommerce_stock_item
 ecommerce_order_item        ecommerce_address
-ecommerce_payment_entry
+ecommerce_payment_entry     ecommerce_order_sequence
 ```
 
 ```sh
 php oak migration migrate
-php oak migration list        # ecommerce (26/26)
+php oak migration list        # ecommerce (28/28)
 ```
 
 Revisions are **appended to the list, never inserted into it.** Oak's migrator

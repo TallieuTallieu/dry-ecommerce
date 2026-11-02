@@ -33,4 +33,17 @@ abstract class DatabaseRevision
         $this->queryBuilder->build();
         Connection::get()->query($this->queryBuilder->getQuery());
     }
+
+    /**
+     * One raw statement — the builder speaks DDL and SELECT, not UPDATE. A
+     * seam like {@see execute()}, for the same reason: a test double keeps
+     * the statement instead of running it.
+     *
+     * @param string $sql
+     * @return void
+     */
+    protected function run(string $sql): void
+    {
+        Connection::get()->query($sql);
+    }
 }

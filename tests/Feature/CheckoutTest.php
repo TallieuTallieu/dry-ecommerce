@@ -283,11 +283,13 @@ it('draws a reference from a source worth trusting', function (): void {
     // Twister's next output can be worked out from its previous ones, so
     // somebody who has placed a few orders can predict other people's
     // references without guessing. The only way to hold that is to say which
-    // functions the cart is not allowed to reach for.
-    $source = file_get_contents(dirname(__DIR__, 2) . '/src/Cart/Cart.php');
+    // functions the default reference is not allowed to reach for.
+    $source = file_get_contents(
+        dirname(__DIR__, 2) . '/src/Order/RandomOrderReference.php'
+    );
     expect($source)->not->toBeFalse();
 
-    // Comments stripped first. The docblock on newOrderReference() explains at
+    // Comments stripped first. The docblock on reference() explains at
     // length why rand() is the wrong source, and a check that read the prose
     // would trip over the explanation for the rule it is enforcing.
     $code = '';

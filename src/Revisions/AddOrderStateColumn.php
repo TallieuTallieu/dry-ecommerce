@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tnt\Ecommerce\Revisions;
 
-use dry\db\Connection;
 use Oak\Contracts\Migration\RevisionInterface;
 use Tnt\Dbi\TableBuilder;
 
@@ -46,18 +45,6 @@ class AddOrderStateColumn extends DatabaseRevision implements RevisionInterface
             });
 
         $this->execute();
-    }
-
-    /**
-     * One raw statement — the builder speaks DDL and SELECT, not UPDATE. A
-     * seam like {@see DatabaseRevision::execute()}, for the same reason.
-     *
-     * @param string $sql
-     * @return void
-     */
-    protected function run(string $sql): void
-    {
-        Connection::get()->query($sql);
     }
 
     public function describeUp(): string

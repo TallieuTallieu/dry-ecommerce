@@ -30,8 +30,9 @@ class OrderRepository extends Repository
     }
 
     /**
-     * Filter by the public order reference (`12-K4M7QX9RTB`), not the primary
-     * key. Finding an order by it does not establish that the person asking
+     * Filter by the public order reference (`12-K4M7QX9RTB` by default — see
+     * {@see \Tnt\Ecommerce\Contracts\OrderReferenceInterface}), not the
+     * primary key. Finding an order by it does not establish that the person asking
      * is entitled to see it.
      *
      * @param string $orderId
@@ -40,6 +41,20 @@ class OrderRepository extends Repository
     public function byOrderId(string $orderId): static
     {
         $this->addCriteria(new Equals('order_id', $orderId));
+
+        return $this;
+    }
+
+    /**
+     * Filter by the key a URL names the order by. Like {@see byOrderId()},
+     * finding the order is not permission to show it.
+     *
+     * @param string $uuid
+     * @return static
+     */
+    public function byUuid(string $uuid): static
+    {
+        $this->addCriteria(new Equals('uuid', $uuid));
 
         return $this;
     }
