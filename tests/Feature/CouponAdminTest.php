@@ -34,6 +34,51 @@ use Tnt\Ecommerce\NotACouponAmount;
 use Tnt\Ecommerce\NotAnAmount;
 use Tnt\Ecommerce\NotAPercentage;
 
+/**
+ * An EnumSwitcher tab's key and the fields it asks, through any Stack.
+ *
+ * @param array<int, mixed> $option
+ * @return array{mixed, list<string>}
+ */
+function tabFields(array $option): array
+{
+    /** @var list<dry\admin\component\Component> $components */
+    $components = $option[2];
+
+    return [$option[0], fieldsOf($components)];
+}
+
+/**
+ * The fields every branch of a Conditional asks.
+ *
+ * @return list<string>
+ */
+function conditionalFields(Conditional $conditional): array
+{
+    return fieldsOf(array_merge(...array_column($conditional->branches, 1)));
+}
+
+/**
+ * @param array<int, dry\admin\component\Component> $components
+ * @return list<string>
+ */
+function fieldsOf(array $components): array
+{
+    $fields = [];
+
+    foreach ($components as $c) {
+        if ($c instanceof Stack) {
+            /** @var array<int, dry\admin\component\Component> $children */
+            $children = $c->components;
+            $fields = [...$fields, ...fieldsOf($children)];
+        } elseif ($c instanceof StringEdit || $c instanceof IntegerEdit) {
+            $fields[] = $c->field;
+        }
+    }
+
+    return $fields;
+}
+
 it('creates and edits coupons, and deletes none', function (): void {
     $manager = new CouponManager();
 
@@ -70,26 +115,38 @@ it('shows a new coupon\'s value fields from the start', function (): void {
     assert($type instanceof EnumSwitcher);
     expect($type->field)->toBe('type');
 
-    $fields = array_map(static function (array $option): array {
-        /** @var list<Stack> $stacks */
-        $stacks = $option[2];
-
-        return [
-            $option[0],
-            array_map(
-                static fn(mixed $c): string => $c instanceof StringEdit ||
-                $c instanceof IntegerEdit
-                    ? $c->field
-                    : '',
-                $stacks[0]->components
-            ),
-        ];
-    }, $type->values);
-
-    expect($fields)->toBe([
+    expect(array_map(tabFields(...), $type->values))->toBe([
         [CouponType::Percentage->value, ['percent', 'max_uses']],
-        [CouponType::Fixed->value, ['amount', 'max_uses']],
+        // The balance is a fixed coupon's limit: no use limit to set.
+        [CouponType::Fixed->value, ['amount']],
     ]);
+});
+
+it('asks a use limit of percentage coupons only, on edit', function (): void {
+    $edit = (new CouponManager())->actions[1];
+    assert($edit instanceof Edit);
+
+    $limits = array_values(
+        array_filter(
+            $edit->components,
+            static fn(mixed $c): bool => $c instanceof Conditional &&
+                in_array('max_uses', conditionalFields($c), true)
+        )
+    );
+
+    expect($limits)->toHaveCount(1);
+    expect($limits[0]->default)->toBe([]);
+    expect($limits[0]->branches)->toHaveCount(1);
+
+    $test = $limits[0]->branches[0][0];
+    expect($test->evaluate(Coupon::percentage('5')))->toBeTrue();
+    expect($test->evaluate(Coupon::fixed(1000)))->toBeFalse();
+
+    foreach ($edit->components as $component) {
+        expect(
+            $component instanceof IntegerEdit ? $component->field : ''
+        )->not->toBe('max_uses');
+    }
 });
 
 it('lists a coupon\'s redemptions on a page of their own', function (): void {

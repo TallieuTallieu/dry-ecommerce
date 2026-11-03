@@ -76,19 +76,15 @@ class CouponManager extends Manager
                                     '7,5 for 7.5% — at most two decimals.'
                                 )
                                 ->set_required(),
-                            IntegerEdit::create('max_uses')
-                                ->set_label('Maximum uses')
-                                ->set_min_value(0)
-                                ->set_default_value(1),
+                            self::maxUses()->set_default_value(1),
                         ]),
                     ])
+                    // No use limit: the balance is the limit. Coupon::fixed()
+                    // leaves max_uses empty — unlimited.
                     ->add_option(CouponType::Fixed->value, 'Fixed amount', [
-                        Stack::horizontal([
-                            StringEdit::create('amount')
-                                ->set_label('Amount (€)')
-                                ->set_required(),
-                            self::maxUses(),
-                        ]),
+                        StringEdit::create('amount')
+                            ->set_label('Amount (€)')
+                            ->set_required(),
                     ]),
                 StringEdit::create('code')
                     ->set_label('Code')
@@ -133,7 +129,7 @@ class CouponManager extends Manager
                         StringEdit::create('code')->set_label('Code'),
                     ]),
                 ...self::limits(),
-                self::maxUses(),
+                Conditional::create()->add($isPercentage, [self::maxUses()]),
                 IntegerEdit::create('uses')->set_label('Uses')->set_disabled(),
                 self::note(),
             ],
