@@ -19,10 +19,14 @@ use Tests\Support\InMemoryPaymentLedger;
 use Tnt\Ecommerce\Account\GuestUserResolver;
 use Tnt\Ecommerce\Cart\InMemoryCartStorage;
 use Tnt\Ecommerce\Contracts\CartInterface;
+use Tnt\Ecommerce\Contracts\CouponInterface;
+use Tnt\Ecommerce\Contracts\RefusesCouponInterface;
+use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Discount\CouponRefusal;
 use Tnt\Ecommerce\Discount\RefusedCode;
 use Tnt\Ecommerce\Fulfillment\InMemoryAttributeStorage;
 use Tnt\Ecommerce\Model\DiscountCode;
+use Tnt\Ecommerce\Model\Order;
 use Tnt\Ecommerce\Shop\Shop;
 
 /**
@@ -149,6 +153,36 @@ it('reads a shop\'s own coupon\'s no as unknown', function (): void {
 
     expect($cart->applyCode('own'))->toEqual(
         new RefusedCode(CouponRefusal::Unknown)
+    );
+    expect($cart->stored())->toBeNull();
+});
+
+it('passes a shop\'s own coupon\'s reason on, without figures', function (): void {
+    $coupon = new class implements CouponInterface, RefusesCouponInterface {
+        public function refusal(
+            TotalingInterface $totalingItem
+        ): CouponRefusal {
+            return CouponRefusal::NotStarted;
+        }
+
+        public function isRedeemable(TotalingInterface $totalingItem): bool
+        {
+            return false;
+        }
+
+        public function getReduction(TotalingInterface $totalingItem): int
+        {
+            return 0;
+        }
+
+        public function redeem(Order $order): void {}
+    };
+    $code = FakeDiscountCode::withCoupon($coupon);
+    $code->code = 'OWNLATER';
+    $cart = cartKnowing($code);
+
+    expect($cart->applyCode('ownlater'))->toEqual(
+        new RefusedCode(CouponRefusal::NotStarted)
     );
     expect($cart->stored())->toBeNull();
 });
