@@ -157,35 +157,38 @@ it('reads a shop\'s own coupon\'s no as unknown', function (): void {
     expect($cart->stored())->toBeNull();
 });
 
-it('passes a shop\'s own coupon\'s reason on, without figures', function (): void {
-    $coupon = new class implements CouponInterface, RefusesCouponInterface {
-        public function refusal(
-            TotalingInterface $totalingItem
-        ): CouponRefusal {
-            return CouponRefusal::NotStarted;
-        }
+it(
+    'passes a shop\'s own coupon\'s reason on, without figures',
+    function (): void {
+        $coupon = new class implements CouponInterface, RefusesCouponInterface {
+            public function refusal(
+                TotalingInterface $totalingItem
+            ): CouponRefusal {
+                return CouponRefusal::NotStarted;
+            }
 
-        public function isRedeemable(TotalingInterface $totalingItem): bool
-        {
-            return false;
-        }
+            public function isRedeemable(TotalingInterface $totalingItem): bool
+            {
+                return false;
+            }
 
-        public function getReduction(TotalingInterface $totalingItem): int
-        {
-            return 0;
-        }
+            public function getReduction(TotalingInterface $totalingItem): int
+            {
+                return 0;
+            }
 
-        public function redeem(Order $order): void {}
-    };
-    $code = FakeDiscountCode::withCoupon($coupon);
-    $code->code = 'OWNLATER';
-    $cart = cartKnowing($code);
+            public function redeem(Order $order): void {}
+        };
+        $code = FakeDiscountCode::withCoupon($coupon);
+        $code->code = 'OWNLATER';
+        $cart = cartKnowing($code);
 
-    expect($cart->applyCode('ownlater'))->toEqual(
-        new RefusedCode(CouponRefusal::NotStarted)
-    );
-    expect($cart->stored())->toBeNull();
-});
+        expect($cart->applyCode('ownlater'))->toEqual(
+            new RefusedCode(CouponRefusal::NotStarted)
+        );
+        expect($cart->stored())->toBeNull();
+    }
+);
 
 it('keeps the applied code when another is refused', function (): void {
     $applied = codeFor(InMemoryCoupon::percentage(10), 'SUMMER10');
