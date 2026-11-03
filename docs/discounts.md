@@ -200,15 +200,18 @@ $split = Reach::fromAmounts(
         ['price' => 500, 'takesDiscount' => false], // the deposit
     ],
     (int) $order->fulfillment_cost
-)->splitFor($order->getReduction(), $order->discount?->coupon);
+)->split($order->getReduction(), $order->discountReachedDelivery());
 
 $split['lines']; // [0 => share, 1 => 0], in the order the cart had them
 $split['delivery']; // delivery's share — what the order froze as
 // fulfillment_reduction
 ```
 
-`split($reduction, $withDelivery)` is the same split for a caller that already
-knows whether delivery is reached.
+`split($reduction, $withDelivery)` is `splitFor()` for a caller that already
+knows whether delivery is reached. `Order::discountReachedDelivery()` knows it
+for an order: what the coupon says while its code and the coupon still exist,
+else whether the order froze anything off delivery — see
+[Orders](orders.md#the-discount-it-was-placed-with).
 
 > [!warning] A fulfillment cost may read only the subtotal
 > A fixed coupon reaches delivery, so working out its reduction asks
@@ -236,29 +239,53 @@ cart always made.
 ## Applying one
 
 ```php
-$cart->addDiscount($discountCode);
+$refused = $cart->applyCode($typed); // null: it is on the cart
 $cart->getDiscount(); // the code in force, or null
 $cart->getReduction(); // what it takes off, in cents
 $cart->removeDiscount(); // take it off again
 ```
 
-`removeDiscount()` is on `Cart`, not on `CartInterface`.
+`applyCode()` takes the string as posted: it looks the code up in any case,
+spaces around it trimmed (`DiscountCodeRepository::byCode()`), and puts it on
+the cart — or answers why not and leaves the cart as it was. One code per
+cart:
 
-`addDiscount()` checks `isRedeemable()` before storing, so a code that does not
-apply is **silently not applied** — there is no exception and no message.
+- a code that applies **replaces** the one in force;
+- a refused code **leaves** the one in force standing;
+- the code in force typed again changes nothing and answers null.
+
+> [!warning] Interface change
+> `CartInterface` gained `applyCode()` and `removeDiscount()`. A shop with
+> its own implementation of `CartInterface` — not a subclass of `Cart` — no
+> longer satisfies it until it adds both. `RefusedCode::of()` does the
+> refusing for it; see below.
+
+`addDiscount($code)` is still there for a shop that holds a `DiscountCode`
+row already. It checks `isRedeemable()` before storing, so a code that does
+not apply is **silently not applied** — no exception and no message.
 
 ### Telling the customer why
 
-`CouponRefusal::of()` says why a code does not apply, or `null` when it does:
+`applyCode()` answers a `Tnt\Ecommerce\Discount\RefusedCode`, or null when the
+code is on the cart. It carries the reason and what a message for it needs:
+
+| Property  | Holds                                                                                        |
+| --------- | -------------------------------------------------------------------------------------------- |
+| `reason`  | A `Tnt\Ecommerce\Discount\CouponRefusal` case — see the table below.                         |
+| `starts`  | For `NotStarted`: the Unix time the coupon starts applying. Otherwise `null`.                |
+| `minimum` | For `BelowMinimum`: the cents the lines that take a discount must come to. Otherwise `null`. |
 
 ```php
 use Tnt\Ecommerce\Discount\CouponRefusal;
 
-$code = DiscountCodeRepository::create()->byCode($typed)->firstOrNull();
-$refusal = CouponRefusal::of($code, $cart);
+$refused = $cart->applyCode($typed);
 
-if ($refusal === null) {
-    $cart->addDiscount($code);
+if ($refused === null) {
+    // applied
+} elseif ($refused->reason === CouponRefusal::NotStarted) {
+    $from = $refused->starts; // Unix time; null for a shop's own coupon
+} elseif ($refused->reason === CouponRefusal::BelowMinimum) {
+    $atLeast = $refused->minimum; // cents; null for a shop's own coupon
 } else {
     // your own message per case
 }
@@ -266,6 +293,7 @@ if ($refusal === null) {
 
 | Case           | When                                                                                |
 | -------------- | ----------------------------------------------------------------------------------- |
+| `Missing`      | Nothing typed, or only spaces. Only `applyCode()` answers it.                       |
 | `Unknown`      | No such code, no coupon behind it, or a coupon that does not say why and says no.   |
 | `NotStarted`   | Before `starts`.                                                                    |
 | `Expired`      | After `ends`.                                                                       |
@@ -275,6 +303,23 @@ if ($refusal === null) {
 
 The shipped coupon checks them in that order. A cart with nothing a coupon can
 reach is not refused: the coupon applies and takes off 0.
+
+Only the shipped coupon has a start and a minimum to give. A shop's own
+coupon's refusal — through `RefusesCouponInterface`, or `Unknown` for one that
+only says no — carries `null` for both.
+
+A shop with its own cart, or a code row in hand, asks the same question
+without applying anything:
+
+```php
+use Tnt\Ecommerce\Discount\CouponRefusal;
+use Tnt\Ecommerce\Discount\RefusedCode;
+
+$code = DiscountCodeRepository::create()->byCode($typed)->firstOrNull();
+
+RefusedCode::of($code, $cart); // with starts and minimum, or null
+CouponRefusal::of($code, $cart); // the reason alone, or null
+```
 
 ## Redeemability is re-checked on every read
 
@@ -381,5 +426,5 @@ the reduction.
 
 - [Money](money.md) — `percentageOf()`, `apportion()`, and the rounding rule
 - [Tax](tax.md) — how a discount changes the taxable base
-- [Cart](cart.md) — `addDiscount()`, `getReduction()`
+- [Cart](cart.md) — `applyCode()`, `getReduction()`
 - [Admin](admin.md#coupons) — the coupon screen

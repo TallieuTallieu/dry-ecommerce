@@ -86,7 +86,9 @@ into it with a fresh order:
    `pending`, or whatever money earlier attempts left on it.
 8. `discount` — the code that was in force, or null. The coupon behind it is
    redeemed on `Paid`, honouring the frozen `reduction` — see
-   [Discounts](discounts.md#redemption).
+   [Discounts](discounts.md#redemption), and
+   [The discount it was placed with](#the-discount-it-was-placed-with) for
+   reading it back.
 9. **If a customer was given:** `customer` — the foreign key — and
    `freezeCustomer($customer)`, the order's **own copy** of who placed it.
    With no customer, both stay exactly as they were: a guest draft already
@@ -105,6 +107,23 @@ into it with a fresh order:
     `RedirectorInterface`; after a settled or refused payment `place()`
     returns the order and the project's controller sends the visitor on. See
     [Payment](payment.md#what-pay-answers).
+
+## The discount it was placed with
+
+`discount` points at a code row, and a code row can be deleted after the
+order was placed — reading `$order->discount` then throws dry's
+`FetchException`. The order answers what a shop needs without it:
+
+| Method                      | Answers                                                             |
+| --------------------------- | ------------------------------------------------------------------- |
+| `getDiscountCode()`         | The code as stored (`SUMMER10`), or null: none, or its row is gone. |
+| `discountReachedDelivery()` | Whether the discount came off delivery too.                         |
+
+`discountReachedDelivery()` asks the coupon's `Reach::reachesDelivery()` while
+the code and the coupon exist, else what the order froze:
+`getFulfillmentReduction() > 0`. It is what a VAT breakdown of the order hands
+`Reach::fromAmounts(...)->split()` — see
+[Discounts](discounts.md#what-a-coupon-reaches).
 
 ## The place-step
 

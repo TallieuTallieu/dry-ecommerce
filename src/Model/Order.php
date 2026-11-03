@@ -2,6 +2,7 @@
 
 namespace Tnt\Ecommerce\Model;
 
+use dry\db\FetchException;
 use dry\orm\Model;
 use Tnt\Ecommerce\Address\AddressType;
 use Tnt\Ecommerce\Address\FrozenAddress;
@@ -15,6 +16,7 @@ use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\OrderItemInterface;
 use Tnt\Ecommerce\Contracts\TaxableInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
+use Tnt\Ecommerce\Discount\Reach;
 use Tnt\Ecommerce\Facade\Shop;
 use Tnt\Ecommerce\Order\OrderState;
 use Tnt\Ecommerce\Order\OrderUuid;
@@ -422,6 +424,51 @@ class Order extends Model implements OrderInterface, TotalingInterface
     public function getFulfillmentReduction(): int
     {
         return (int) $this->fulfillment_reduction;
+    }
+
+    /**
+     * The code the order was placed with, as stored, or null: none, or a
+     * code row deleted since. See docs/orders.md#the-discount-it-was-placed-with.
+     *
+     * @return string|null
+     */
+    public function getDiscountCode(): ?string
+    {
+        $code = (string) $this->discountRow()?->code;
+
+        return $code === '' ? null : $code;
+    }
+
+    /**
+     * Whether the order's discount came off delivery too: what the coupon
+     * says ({@see Reach::reachesDelivery()}) while its code and the coupon
+     * still exist, else whether the order froze anything off delivery.
+     *
+     * @return bool
+     */
+    public function discountReachedDelivery(): bool
+    {
+        $coupon = $this->discountRow()?->coupon;
+
+        return $coupon !== null
+            ? Reach::reachesDelivery($coupon)
+            : $this->getFulfillmentReduction() > 0;
+    }
+
+    /**
+     * The code row the order points at, or null — also when that row has
+     * been deleted, which dry's ORM answers with a FetchException.
+     *
+     * @return DiscountCode|null
+     */
+    private function discountRow(): ?DiscountCode
+    {
+        try {
+            return $this->discount;
+            // @phpstan-ignore catch.neverThrown (the relation loads its row in __get)
+        } catch (FetchException) {
+            return null;
+        }
     }
 
     /**

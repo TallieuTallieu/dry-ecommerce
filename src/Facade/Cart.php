@@ -10,6 +10,7 @@ use Tnt\Ecommerce\Contracts\CartItemInterface;
 use Tnt\Ecommerce\Contracts\CustomerInterface;
 use Tnt\Ecommerce\Contracts\FulfillmentInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
+use Tnt\Ecommerce\Discount\RefusedCode;
 use Tnt\Ecommerce\Model\DiscountCode;
 
 /**
@@ -28,6 +29,8 @@ use Tnt\Ecommerce\Model\DiscountCode;
  * @method static FulfillmentInterface|null getFulfillment()
  * @method static int getFulfillmentCost()
  * @method static mixed addDiscount(DiscountCode $discount)
+ * @method static RefusedCode|null applyCode(string $typed)
+ * @method static void removeDiscount()
  * @method static DiscountCode|null getDiscount()
  * @method static OrderInterface checkout(CustomerInterface $customer, (Closure(OrderInterface): void)|null $callback = null)
  * @method static int getSubTotal()

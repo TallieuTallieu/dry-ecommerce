@@ -8,8 +8,8 @@ use Tnt\Ecommerce\Discount\CouponRefusal;
 
 /**
  * A {@see CouponInterface} that can say why it does not apply, not only that
- * it does not. Optional; {@see CouponRefusal::of()} is the call a controller
- * makes. See docs/discounts.md#telling-the-customer-why.
+ * it does not. Optional; {@see CartInterface::applyCode()} is the call a
+ * controller makes. See docs/discounts.md#telling-the-customer-why.
  */
 interface RefusesCouponInterface
 {

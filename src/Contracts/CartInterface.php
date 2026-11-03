@@ -2,6 +2,7 @@
 
 namespace Tnt\Ecommerce\Contracts;
 
+use Tnt\Ecommerce\Discount\RefusedCode;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Model\Order;
 
@@ -128,6 +129,24 @@ interface CartInterface
      * @return mixed
      */
     public function addDiscount(DiscountCode $discount);
+
+    /**
+     * Look a typed code up — in any case, spaces around it trimmed — and put
+     * it on the cart, or say why not and leave the cart as it was. A code
+     * that applies replaces the one in force; the code in force typed again
+     * changes nothing. See docs/discounts.md#applying-one.
+     *
+     * @param string $typed As posted.
+     * @return RefusedCode|null Null when the code is on the cart.
+     */
+    public function applyCode(string $typed): ?RefusedCode;
+
+    /**
+     * Take the applied code off the cart. A no-op without one.
+     *
+     * @return void
+     */
+    public function removeDiscount(): void;
 
     /**
      * @return null|DiscountCode
