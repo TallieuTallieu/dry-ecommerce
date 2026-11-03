@@ -6,6 +6,7 @@ namespace Tnt\Ecommerce\Admin;
 
 use dry\admin\component\Conditional;
 use dry\admin\component\DateEdit;
+use dry\admin\component\EntryGrid;
 use dry\admin\component\EnumEdit;
 use dry\admin\component\EnumSwitcher;
 use dry\admin\component\EnumView;
@@ -13,6 +14,7 @@ use dry\admin\component\IntegerEdit;
 use dry\admin\component\Stack;
 use dry\admin\component\StringEdit;
 use dry\admin\component\StringView;
+use dry\admin\component\TextEntry;
 use dry\admin\Module;
 use dry\expr\Expr;
 use dry\orm\action\Create;
@@ -57,7 +59,6 @@ class CouponManager extends Manager
             Expr::field('type'),
             Expr::lit(CouponType::Fixed->value)
         );
-        $isUsed = Expr::gt(Expr::field('uses'), Expr::lit(0));
 
         // dry's Create loads no row, so a Conditional on `type` never picks a
         // branch here, and an EnumDisplay waits for the select to change.
@@ -116,18 +117,13 @@ class CouponManager extends Manager
                             ->set_label('Balance (€)')
                             ->set_disabled(),
                     ]),
-                Conditional::create()
-                    ->add($isUsed, [
-                        StringEdit::create('code')
-                            ->set_label('Code')
-                            ->set_tooltip(
-                                'Used, so a customer may hold this code: it can no longer change.'
-                            )
-                            ->set_disabled(),
-                    ])
-                    ->set_default([
-                        StringEdit::create('code')->set_label('Code'),
-                    ]),
+                // Read-only, used or not: a customer may hold the code from
+                // the moment it is made. A mistyped one is a new coupon.
+                EntryGrid::create([
+                    TextEntry::create('code')
+                        ->set_label('Code')
+                        ->set_copyable(),
+                ]),
                 ...self::limits(),
                 Conditional::create()->add($isPercentage, [self::maxUses()]),
                 IntegerEdit::create('uses')->set_label('Uses')->set_disabled(),
@@ -149,7 +145,9 @@ class CouponManager extends Manager
         $this->footer[] = new Pagination();
 
         $this->index = Index::create()
-            ->add_component(StringView::create('code', ['header' => 'Code']))
+            ->add_component(
+                StringView::create('code', ['header' => 'Code'])->set_copyable()
+            )
             ->add_component(EnumView::create('type', self::types()))
             ->add_component(
                 StringView::create('value', [
