@@ -15,6 +15,8 @@ use Tnt\Dbi\BaseRepository;
 use Tnt\Ecommerce\Model\Address;
 use Tnt\Ecommerce\Model\Cart;
 use Tnt\Ecommerce\Model\CartItem;
+use Tnt\Ecommerce\Model\Coupon;
+use Tnt\Ecommerce\Model\CouponRedemption;
 use Tnt\Ecommerce\Model\Customer;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Model\Order;
@@ -25,6 +27,8 @@ use Tnt\Ecommerce\Model\StockItem;
 use Tnt\Ecommerce\Repository\AddressRepository;
 use Tnt\Ecommerce\Repository\CartItemRepository;
 use Tnt\Ecommerce\Repository\CartRepository;
+use Tnt\Ecommerce\Repository\CouponRedemptionRepository;
+use Tnt\Ecommerce\Repository\CouponRepository;
 use Tnt\Ecommerce\Repository\CustomerRepository;
 use Tnt\Ecommerce\Repository\DiscountCodeRepository;
 use Tnt\Ecommerce\Repository\OrderItemRepository;
@@ -45,6 +49,8 @@ it('builds every repository without a criteria collection', function (
     AddressRepository::class,
     CartRepository::class,
     CartItemRepository::class,
+    CouponRepository::class,
+    CouponRedemptionRepository::class,
     CustomerRepository::class,
     DiscountCodeRepository::class,
     OrderRepository::class,
@@ -69,6 +75,8 @@ it('covers every model the cart and order paths read', function (
     [AddressRepository::class, Address::class],
     [CartRepository::class, Cart::class],
     [CartItemRepository::class, CartItem::class],
+    [CouponRepository::class, Coupon::class],
+    [CouponRedemptionRepository::class, CouponRedemption::class],
     [CustomerRepository::class, Customer::class],
     [DiscountCodeRepository::class, DiscountCode::class],
     [OrderRepository::class, Order::class],
@@ -200,4 +208,44 @@ it('finds the order behind a payment id through the ledger', function (): void {
             ' ORDER BY `ecommerce_payment_entry`.`id` ASC'
     );
     expect($builder->getParameters())->toBe(['mollie', 'tr_1']);
+});
+
+it('reads a coupon\'s redemptions oldest first', function (): void {
+    $coupon = new Coupon();
+    $coupon->id = 7;
+
+    $repository = CouponRedemptionRepository::create()->forCoupon($coupon);
+
+    $method = new ReflectionMethod(
+        Tnt\Dbi\Repository::class,
+        'createQueryBuilder'
+    );
+    $builder = $method->invoke($repository);
+    assert($builder instanceof Tnt\Dbi\QueryBuilder);
+
+    $builder->selectAll();
+    $builder->build();
+
+    expect($builder->getQuery())->toBe(
+        'SELECT `ecommerce_coupon_redemption`.* FROM `ecommerce_coupon_redemption`' .
+            ' WHERE `ecommerce_coupon_redemption`.`coupon` = ?' .
+            ' ORDER BY `ecommerce_coupon_redemption`.`id` ASC'
+    );
+    expect($builder->getParameters())->toBe([7]);
+});
+
+it('finds a coupon\'s own code row by its class and id', function (): void {
+    $repository = DiscountCodeRepository::create()->forCoupon(Coupon::class, 7);
+
+    $method = new ReflectionMethod(
+        Tnt\Dbi\Repository::class,
+        'createQueryBuilder'
+    );
+    $builder = $method->invoke($repository);
+    assert($builder instanceof Tnt\Dbi\QueryBuilder);
+
+    $builder->selectAll();
+    $builder->build();
+
+    expect($builder->getParameters())->toBe([Coupon::class, 7]);
 });

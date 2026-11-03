@@ -1,8 +1,9 @@
 # Admin
 
-The package ships one admin screen: a read-only **Ledger** of every payment
-ledger entry. It has no Orders screen. A shop builds its own, because what an
-order screen shows is the shop's business.
+The package ships two admin screens: a read-only **Ledger** of every payment
+ledger entry, and **Coupons** for [the shipped coupon](discounts.md#the-shipped-coupon).
+It has no Orders screen. A shop builds its own, because what an order screen
+shows is the shop's business.
 
 ## Turning it on
 
@@ -45,3 +46,48 @@ its public reference.
 writer (see [Payment](payment.md#the-ledger)). So the manager has no create,
 delete or multi-delete action. A row opens in an `action\Edit` with
 `'readonly' => true`: a view-only popup, whose save dry's API refuses.
+
+## Coupons
+
+`Tnt\Ecommerce\Admin\CouponManager`. Not bound and not in any portal: a
+project adds it to a portal of its own, in `app/configuration/admin.inc.php`:
+
+```php
+admin\Router::$modules[] = new dry\admin\Portal('shop', 'Shop', [
+    // ... the shop's own managers
+    new Tnt\Ecommerce\Admin\CouponManager(),
+]);
+```
+
+The list, newest first, 25 to a page:
+
+| Column  | Shows                                                   |
+| ------- | ------------------------------------------------------- |
+| Code    | The code a customer types.                              |
+| Type    | Percentage or fixed amount.                             |
+| Value   | `7.5%`, or the fixed amount in units.                   |
+| Balance | What is left on a fixed coupon; empty for a percentage. |
+| Uses    | `uses / max_uses`, or the count alone when unlimited.   |
+| Valid   | `always`, `from …`, `until …`, or both dates.           |
+| Note    | The shop's own note.                                    |
+
+The search box matches the code (through `ecommerce_discount_code`) and the
+note.
+
+**Create** asks for the type, then the percentage (`7,5` or `7.5`) or the
+amount in euros; the code — empty generates one; the first and last day; the
+minimum in euros, held against the products that take a discount; the maximum
+uses — `1` by default for a percentage, empty for a fixed amount; and a note.
+
+**Edit** shows the type, a fixed coupon's amount and balance, and the uses
+read-only; the code too, once the coupon has been used. The percentage, dates,
+minimum, maximum uses and note stay editable. Saving never writes the balance
+or the uses — only a redemption does.
+
+**Redemptions**, a page of the coupon's own: every order it was spent on, with
+the amount the order took off and what the coupon could not cover
+(`claimed` while a redemption is unsettled). Read-only.
+
+There is **no delete**. A coupon an order was placed with stays, so its
+redemptions and the orders' codes keep pointing at something; end a coupon by
+giving it a last day.

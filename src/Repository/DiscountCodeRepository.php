@@ -19,14 +19,31 @@ class DiscountCodeRepository extends Repository
     protected string $model = DiscountCode::class;
 
     /**
-     * Filter by the code as typed, trimmed.
+     * Filter by the code as typed — trimmed and uppercased the way codes are
+     * stored ({@see DiscountCode::normalise()}), so `summer10` finds
+     * `SUMMER10`.
      *
      * @param string $code
      * @return static
      */
     public function byCode(string $code): static
     {
-        $this->addCriteria(new Equals('code', trim($code)));
+        $this->addCriteria(new Equals('code', DiscountCode::normalise($code)));
+
+        return $this;
+    }
+
+    /**
+     * The code row behind one coupon.
+     *
+     * @param string $couponClass
+     * @param int $couponId
+     * @return static
+     */
+    public function forCoupon(string $couponClass, int $couponId): static
+    {
+        $this->addCriteria(new Equals('coupon_class', $couponClass));
+        $this->addCriteria(new Equals('coupon_id', $couponId));
 
         return $this;
     }

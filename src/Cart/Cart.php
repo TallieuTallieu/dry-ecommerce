@@ -16,17 +16,18 @@ use Tnt\Ecommerce\Contracts\HasStockInterface;
 use Tnt\Ecommerce\Contracts\OrderInterface;
 use Tnt\Ecommerce\Contracts\OrderReferenceInterface;
 use Tnt\Ecommerce\Contracts\PaymentInterface;
+use Tnt\Ecommerce\Contracts\ReachesDeliveryInterface;
 use Tnt\Ecommerce\Contracts\RedirectorInterface;
 use Tnt\Ecommerce\Contracts\ShopInterface;
 use Tnt\Ecommerce\Contracts\TaxableInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\Contracts\VariantInterface;
+use Tnt\Ecommerce\Discount\Reach;
 use Tnt\Ecommerce\Events\Order\Created;
 use Tnt\Ecommerce\Model\Customer;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Model\Order;
-use Tnt\Ecommerce\Money;
 use Tnt\Ecommerce\Order\OrderState;
 use Tnt\Ecommerce\Order\RandomOrderReference;
 use Tnt\Ecommerce\Payment\PaymentLedger;
@@ -264,6 +265,17 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
+     * Take the applied code off the cart. Not on {@see CartInterface}: a shop
+     * with its own cart class adds it there if it needs it.
+     *
+     * @return void
+     */
+    public function removeDiscount(): void
+    {
+        $this->storage->setDiscount(null);
+    }
+
+    /**
      * The coupon actually in force, or null.
      *
      * A code can be applied and then stop being redeemable — it expires, it
@@ -338,8 +350,9 @@ class Cart implements CartInterface, TotalingInterface
 
     /**
      * The tax on the lines that carry a rate, in cents — per line, on what is
-     * left of the line after its share of the discount, rounded per line.
-     * Whether it is in the total or on top of it is the shop's
+     * left of the line after its share of the discount, rounded per line —
+     * plus delivery's, on what is left of delivery after its share. Whether
+     * it is in the total or on top of it is the shop's
      * {@see \Tnt\Ecommerce\Tax\PriceConvention}. See docs/tax.md.
      *
      * @see \Tnt\Ecommerce\Money
@@ -349,13 +362,11 @@ class Cart implements CartInterface, TotalingInterface
     {
         $items = $this->items();
 
-        // Weighted by *every* line, including the untaxed ones the loop below
-        // skips: a share of the discount belongs to untaxed lines too, or the
-        // taxable ones would be taxed on less than the customer paid.
-        $shares = Money::apportion(
-            $this->getReduction(),
-            array_map(static fn($item): int => $item->getPrice(), $items)
-        );
+        // Shared by every line the coupon reaches, untaxed ones included —
+        // the loop below skips those, but a share of the discount belongs to
+        // them too, or the taxable lines would be taxed on less than the
+        // customer paid. See Reach::split().
+        $split = $this->reductionSplit();
 
         $tax = 0;
 
@@ -367,15 +378,24 @@ class Cart implements CartInterface, TotalingInterface
             }
 
             $tax += $this->tax->taxOn(
-                $item->getPrice() - $shares[$index],
+                $item->getPrice() - ($split['lines'][$index] ?? 0),
                 $buyable->getTaxRate()
             );
         }
 
-        return $tax + $this->tax->taxOnDelivery($this->getFulfillmentCost());
+        return $tax +
+            $this->tax->taxOnDelivery(
+                $this->getFulfillmentCost() - $split['delivery']
+            );
     }
 
     /**
+     * What the coupon in force takes off, in cents — never more than it may
+     * reach: the lines that take a discount, plus delivery for a coupon that
+     * {@see ReachesDeliveryInterface reaches it}. Every coupon is held to
+     * that, a shop's own too ({@see Reach::clamp()}). See
+     * docs/discounts.md#what-a-coupon-reaches.
+     *
      * @return int
      */
     public function getReduction(): int
@@ -386,7 +406,28 @@ class Cart implements CartInterface, TotalingInterface
             return 0;
         }
 
-        return $coupon->getReduction($this);
+        return Reach::of($this)->clamp($coupon, $this);
+    }
+
+    /**
+     * The reduction spread over what it reaches — a share per line, keyed
+     * as {@see items()} is, and delivery's.
+     *
+     * @return array{lines: array<int, int>, delivery: int}
+     */
+    private function reductionSplit(): array
+    {
+        $coupon = $this->getCoupon();
+
+        // Most carts carry no coupon: answer their nothing without reading
+        // every line for it.
+        if ($coupon === null) {
+            return ['lines' => [], 'delivery' => 0];
+        }
+
+        $reach = Reach::of($this);
+
+        return $reach->splitFor($reach->clamp($coupon, $this), $coupon);
     }
 
     /**
@@ -462,6 +503,10 @@ class Cart implements CartInterface, TotalingInterface
         $order->total = $this->getTotal();
         $order->subtotal = $this->getSubTotal();
         $order->reduction = $this->getReduction();
+
+        // What of it came off delivery — delivery's tax was worked out on
+        // the rest, and a breakdown of the order needs to know.
+        $order->fulfillment_reduction = $this->reductionSplit()['delivery'];
         $order->fulfillment_cost = $this->getFulfillmentCost();
         $order->tax = $this->getTax();
 

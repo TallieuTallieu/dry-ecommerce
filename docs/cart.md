@@ -21,6 +21,7 @@ $fulfillmentCost = $cart->getFulfillmentCost();
 
 $cart->addDiscount($discountCode);
 $discountCode = $cart->getDiscount();
+$cart->removeDiscount(); // on Cart, not on CartInterface
 
 $subTotal = $cart->getSubTotal();
 $total = $cart->getTotal();
@@ -49,6 +50,16 @@ does not know which shop it is in, so it reports what the stock says and leaves
 the decision where the knowledge to make it lives.
 
 `Cart::getTax()` draws the same line, for the same reason.
+
+## What a coupon takes off
+
+`getReduction()` is what the coupon in force takes off, **clamped to what it
+may reach**: the lines whose buyable takes a discount, plus delivery for a
+coupon that reaches it (the shipped fixed coupon does). Every coupon is held
+to that, a shop's own included, and `getTax()` spreads the clamped figure over
+the same lines and delivery. `place()` freezes delivery's share as
+`ecommerce_order.fulfillment_reduction`. See
+[Discounts](discounts.md#what-a-coupon-reaches).
 
 ## Lines merge on buyable _and_ options
 

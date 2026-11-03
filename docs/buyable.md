@@ -36,11 +36,12 @@ class Product extends \dry\orm\Model implements BuyableInterface
 That is a complete buyable. It has no stock and no tax, and it does not need
 any: these are **capabilities you opt into**, one interface each.
 
-| Implement              | To get                                                                                                                               |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `HasStockInterface`    | `getStockWorker()`. `Cart::canAdd()` reports whether the stock covers a quantity.                                                    |
-| `TaxableInterface`     | `getTaxRate()`. The buyable's lines count towards `Cart::getTax()`.                                                                  |
-| `HasVariantsInterface` | `getVariants()`, `getVariant($id)`. Every line is one variant, priced at it and frozen onto the order — see [variants](variants.md). |
+| Implement               | To get                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HasStockInterface`     | `getStockWorker()`. `Cart::canAdd()` reports whether the stock covers a quantity.                                                            |
+| `TaxableInterface`      | `getTaxRate()`. The buyable's lines count towards `Cart::getTax()`.                                                                          |
+| `HasVariantsInterface`  | `getVariants()`, `getVariant($id)`. Every line is one variant, priced at it and frozen onto the order — see [variants](variants.md).         |
+| `DiscountableInterface` | `takesDiscount()`. Answer false and no coupon reaches the buyable's lines — a deposit — see [discounts](discounts.md#what-a-coupon-reaches). |
 
 Any combination. The cart checks with `instanceof` and asks a buyable
 nothing it has not offered to answer.
