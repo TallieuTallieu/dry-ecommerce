@@ -15,9 +15,13 @@ declare(strict_types=1);
 
 use Tests\Support\CountingFulfillment;
 use Tests\Support\FakeBuyable;
+use Tests\Support\FakeCoupon;
+use Tests\Support\FakeDeliveryCoupon;
 use Tests\Support\FakeUndiscountedBuyable;
 use Tests\Support\InMemoryOrder;
+use Tnt\Ecommerce\Contracts\CouponInterface;
 use Tnt\Ecommerce\Discount\Reach;
+use Tnt\Ecommerce\Model\Coupon;
 use Tnt\Ecommerce\Money;
 
 it('splits exactly as the cart always did when nothing opts out', function (
@@ -173,5 +177,65 @@ it(
 
         expect($reach->lines())->toBe(4200);
         expect($reach->limit(true))->toBe(4200);
+    }
+);
+
+it('reaches delivery only for a coupon that says it does', function (
+    ?CouponInterface $coupon,
+    bool $reaches
+): void {
+    expect(Reach::reachesDelivery($coupon))->toBe($reaches);
+})->with([
+    'no coupon' => [null, false],
+    'a shop\'s own, silent' => [new FakeCoupon(100), false],
+    'a shop\'s own, yes' => [new FakeDeliveryCoupon(100), true],
+    'a shop\'s own, no' => [new FakeDeliveryCoupon(100, false), false],
+    'percentage' => [Coupon::percentage(10), false],
+    'fixed' => [Coupon::fixed(100), true],
+]);
+
+it(
+    'clamps a coupon to the lines, and delivery when it reaches it',
+    function (): void {
+        $fulfillment = new CountingFulfillment(500);
+        [$cart] = makeCart([$fulfillment]);
+        $cart->add(new FakeBuyable('1', 3000));
+        $cart->add(new FakeUndiscountedBuyable('2', 800));
+        $cart->setFulfillment($fulfillment);
+
+        $reach = Reach::of($cart);
+
+        expect($reach->clamp(new FakeCoupon(99999), $cart))->toBe(3000);
+        expect($reach->clamp(new FakeDeliveryCoupon(99999), $cart))->toBe(3500);
+        expect($reach->clamp(new FakeDeliveryCoupon(1200), $cart))->toBe(1200);
+        expect($reach->clamp(new FakeCoupon(-50), $cart))->toBe(0);
+    }
+);
+
+it(
+    'splits for a coupon as split() does for whether it reaches delivery',
+    function (): void {
+        $reach = Reach::fromAmounts(
+            [
+                ['price' => 600, 'takesDiscount' => true],
+                ['price' => 900, 'takesDiscount' => false],
+            ],
+            500
+        );
+
+        expect($reach->splitFor(1000, new FakeDeliveryCoupon(0)))->toBe(
+            $reach->split(1000, true)
+        );
+        expect($reach->splitFor(1000, new FakeCoupon(0)))->toBe(
+            $reach->split(1000, false)
+        );
+        expect($reach->splitFor(1000, null))->toBe([
+            'lines' => [0 => 600, 1 => 0],
+            'delivery' => 0,
+        ]);
+        expect($reach->splitFor(1000, Coupon::fixed(1000)))->toBe([
+            'lines' => [0 => 545, 1 => 0],
+            'delivery' => 455,
+        ]);
     }
 );

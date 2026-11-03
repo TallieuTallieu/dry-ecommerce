@@ -6,7 +6,9 @@ namespace Tnt\Ecommerce\Discount;
 
 use Closure;
 use Tnt\Ecommerce\Contracts\CartInterface;
+use Tnt\Ecommerce\Contracts\CouponInterface;
 use Tnt\Ecommerce\Contracts\DiscountableInterface;
+use Tnt\Ecommerce\Contracts\ReachesDeliveryInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Money;
 
@@ -82,6 +84,53 @@ final class Reach
         }
 
         return new self($weights, $delivery);
+    }
+
+    /**
+     * Whether a coupon's reduction may come off delivery: only a coupon that
+     * implements {@see ReachesDeliveryInterface} and answers true. No coupon
+     * reaches nothing.
+     *
+     * @param CouponInterface|null $coupon
+     * @return bool
+     */
+    public static function reachesDelivery(?CouponInterface $coupon): bool
+    {
+        return $coupon instanceof ReachesDeliveryInterface &&
+            $coupon->reachesDelivery();
+    }
+
+    /**
+     * What the coupon takes off a cart or an order, held to what it may
+     * reach: never below 0, never past {@see limit()}. Every coupon is held
+     * to it, a shop's own too.
+     *
+     * @param CouponInterface $coupon
+     * @param TotalingInterface $totaling What this reach was read from.
+     * @return int In cents.
+     */
+    public function clamp(
+        CouponInterface $coupon,
+        TotalingInterface $totaling
+    ): int {
+        return min(
+            max(0, $coupon->getReduction($totaling)),
+            $this->limit(self::reachesDelivery($coupon))
+        );
+    }
+
+    /**
+     * {@see split()} for the coupon that made the reduction: delivery takes
+     * a share only when {@see reachesDelivery()} says the coupon reaches it.
+     * What a project calls for a frozen order's VAT breakdown.
+     *
+     * @param int $reduction In cents.
+     * @param CouponInterface|null $coupon
+     * @return array{lines: array<int, int>, delivery: int}
+     */
+    public function splitFor(int $reduction, ?CouponInterface $coupon): array
+    {
+        return $this->split($reduction, self::reachesDelivery($coupon));
     }
 
     /**

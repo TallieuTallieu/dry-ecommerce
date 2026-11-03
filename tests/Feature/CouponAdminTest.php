@@ -8,6 +8,7 @@ declare(strict_types=1);
  * LedgerAdminTest does for the ledger.
  */
 
+use dry\api\ConvertableToApiException;
 use dry\orm\action\Create;
 use dry\orm\action\Delete;
 use dry\orm\action\DeleteAll;
@@ -17,9 +18,13 @@ use dry\orm\Manager;
 use Tnt\Ecommerce\Admin\CouponManager;
 use Tnt\Ecommerce\Admin\CouponRedemptionManager;
 use Tnt\Ecommerce\Admin\CouponSearcher;
+use Tnt\Ecommerce\CouponCodeRefused;
+use Tnt\Ecommerce\CouponTakesNothing;
+use Tnt\Ecommerce\Discount\CouponType;
 use Tnt\Ecommerce\Model\Coupon;
 use Tnt\Ecommerce\Model\CouponRedemption;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\NotAPercentage;
 
 it('creates and edits coupons, and deletes none', function (): void {
     $manager = new CouponManager();
@@ -106,3 +111,48 @@ it('searches the code through the code table, and the note', function (): void {
         '% summer %',
     ]);
 });
+
+it('turns every save refusal into an API error on its field', function (
+    ConvertableToApiException $refusal,
+    string $code,
+    string $field
+): void {
+    // dry's Router answers anything else as a bare php.exception: the admin
+    // would show no reason, and no field.
+    $error = $refusal->to_api_exception();
+
+    expect($error)->toBeInstanceOf(dry\api\Exception::class);
+    expect($error->code)->toBe($code);
+    expect($error->data)->toBe(['field' => $field]);
+})->with([
+    'taken' => [
+        CouponCodeRefused::taken('SUMMER10'),
+        'ecommerce.coupon_code_taken',
+        'code',
+    ],
+    'locked' => [
+        CouponCodeRefused::locked('SUMMER10'),
+        'ecommerce.coupon_code_locked',
+        'code',
+    ],
+    'unreadable percentage' => [
+        NotAPercentage::unreadable('abc'),
+        'ecommerce.coupon_percentage_invalid',
+        'percent',
+    ],
+    'percentage out of range' => [
+        NotAPercentage::outOfRange('101'),
+        'ecommerce.coupon_percentage_invalid',
+        'percent',
+    ],
+    'fixed of nothing' => [
+        CouponTakesNothing::of(CouponType::Fixed),
+        'ecommerce.coupon_value_invalid',
+        'amount',
+    ],
+    'percentage of nothing' => [
+        CouponTakesNothing::of(CouponType::Percentage),
+        'ecommerce.coupon_value_invalid',
+        'percent',
+    ],
+]);

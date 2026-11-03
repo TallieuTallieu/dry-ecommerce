@@ -93,6 +93,19 @@ an integer so `7.5` never becomes `7.4999…`.
   rewrites every loaded column, so an admin saving a note would otherwise put
   back a balance a payment had just taken from.
 
+A coupon that takes off nothing — a fixed amount of 0, a percentage left
+empty — raises `Tnt\Ecommerce\CouponTakesNothing`. Each refusal is an
+`InvalidArgumentException` that implements dry's `ConvertableToApiException`,
+so the admin's save answers with a code and the field it concerns rather than
+a bare `php.exception`:
+
+| Exception                     | `error_code`                          | `field`               |
+| ----------------------------- | ------------------------------------- | --------------------- |
+| `CouponCodeRefused::taken()`  | `ecommerce.coupon_code_taken`         | `code`                |
+| `CouponCodeRefused::locked()` | `ecommerce.coupon_code_locked`        | `code`                |
+| `NotAPercentage`              | `ecommerce.coupon_percentage_invalid` | `percent`             |
+| `CouponTakesNothing`          | `ecommerce.coupon_value_invalid`      | `amount` or `percent` |
+
 ## The coupon contract
 
 ```php
@@ -161,15 +174,17 @@ rounded once; a fixed coupon takes `min(balance, those lines + delivery)`.
 `Tnt\Ecommerce\Discount\Reach` holds the arithmetic: the reach, the clamp and
 the split. `Reach::of($cart)` reads a cart; `Reach::fromAmounts()` runs the
 same arithmetic over amounts a project holds itself — a frozen order's lines,
-for a VAT breakdown of its own:
+for a VAT breakdown of its own. The cart calls the same three methods, so a
+project calls them rather than copying the rule:
+
+| Method                                   | Does                                                                        |
+| ---------------------------------------- | --------------------------------------------------------------------------- |
+| `Reach::reachesDelivery(?$coupon)`       | Whether the coupon reaches delivery: `ReachesDeliveryInterface`, true.      |
+| `$reach->clamp($coupon, $totaling)`      | The coupon's reduction, held between 0 and what it may reach.               |
+| `$reach->splitFor($reduction, ?$coupon)` | The reduction spread over the lines, and delivery if the coupon reaches it. |
 
 ```php
-use Tnt\Ecommerce\Contracts\ReachesDeliveryInterface;
 use Tnt\Ecommerce\Discount\Reach;
-
-$coupon = $order->discount?->coupon;
-$reachesDelivery =
-    $coupon instanceof ReachesDeliveryInterface && $coupon->reachesDelivery();
 
 $split = Reach::fromAmounts(
     [
@@ -177,12 +192,15 @@ $split = Reach::fromAmounts(
         ['price' => 500, 'takesDiscount' => false], // the deposit
     ],
     (int) $order->fulfillment_cost
-)->split($order->getReduction(), $reachesDelivery);
+)->splitFor($order->getReduction(), $order->discount?->coupon);
 
 $split['lines']; // [0 => share, 1 => 0], in the order the cart had them
 $split['delivery']; // delivery's share — what the order froze as
 // fulfillment_reduction
 ```
+
+`split($reduction, $withDelivery)` is the same split for a caller that already
+knows whether delivery is reached.
 
 > [!warning] A fulfillment cost may read only the subtotal
 > A fixed coupon reaches delivery, so working out its reduction asks

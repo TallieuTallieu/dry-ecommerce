@@ -17,7 +17,9 @@ use Tests\Support\FakeFulfillment;
 use Tests\Support\FakeUndiscountedBuyable;
 use Tests\Support\InMemoryCoupon;
 use Tests\Support\InMemoryOrder;
+use dry\api\ConvertableToApiException;
 use Tnt\Ecommerce\CouponCodeRefused;
+use Tnt\Ecommerce\CouponTakesNothing;
 use Tnt\Ecommerce\Discount\CodeGenerator;
 use Tnt\Ecommerce\Discount\CouponRefusal;
 use Tnt\Ecommerce\Model\Coupon;
@@ -448,3 +450,105 @@ it('stores and finds codes uppercase', function (): void {
 
     expect($builder->getParameters())->toBe(['SUMMER10']);
 });
+
+/**
+ * What dry's API router answers for the refusal a call raises: the
+ * exception's to_api_exception(), as code and data.
+ *
+ * @param Closure(): mixed $call
+ * @return array{mixed, mixed}
+ */
+function couponApiError(Closure $call): array
+{
+    try {
+        $call();
+    } catch (ConvertableToApiException $refusal) {
+        $error = $refusal->to_api_exception();
+
+        return [$error->code, $error->data];
+    }
+
+    throw new RuntimeException('Nothing was refused.');
+}
+
+it(
+    'refuses a coupon that takes off nothing, by name and as before',
+    function (): void {
+        expect(static fn() => Coupon::fixed(0))->toThrow(
+            CouponTakesNothing::class
+        );
+        expect(static fn() => Coupon::fixed(-5))->toThrow(
+            InvalidArgumentException::class
+        );
+    }
+);
+
+it(
+    'answers dry\'s API with a code and a field for each refusal on save',
+    function (Closure $call, string $code, string $field): void {
+        /** @var Closure(): mixed $call */
+        expect(couponApiError($call))->toBe([$code, ['field' => $field]]);
+    }
+)->with([
+    'a code another coupon holds' => [
+        static function (): void {
+            $store = new CouponStore();
+            $holder = InMemoryCoupon::fixed(100)->keptIn($store);
+            $holder->code = 'SUMMER10';
+            $holder->save();
+
+            $coupon = InMemoryCoupon::percentage(10)->keptIn($store);
+            $coupon->code = 'summer10';
+            $coupon->save();
+        },
+        'ecommerce.coupon_code_taken',
+        'code',
+    ],
+    'a used coupon\'s new code' => [
+        static function (): void {
+            $coupon = InMemoryCoupon::percentage(10)->keptIn(new CouponStore());
+            $coupon->code = 'SUMMER10';
+            $coupon->save();
+            $coupon->uses = 1;
+            $coupon->code = 'WINTER10';
+            $coupon->save();
+        },
+        'ecommerce.coupon_code_locked',
+        'code',
+    ],
+    'a percentage it cannot store' => [
+        static function (): void {
+            $coupon = new InMemoryCoupon();
+            $coupon->type = 'percentage';
+            $coupon->percent = '7.555';
+            $coupon->save();
+        },
+        'ecommerce.coupon_percentage_invalid',
+        'percent',
+    ],
+    'a fixed coupon of nothing' => [
+        static function (): void {
+            $coupon = new InMemoryCoupon();
+            $coupon->type = 'fixed';
+            $coupon->amount = '0';
+            $coupon->save();
+        },
+        'ecommerce.coupon_value_invalid',
+        'amount',
+    ],
+    'a percentage left empty' => [
+        static function (): void {
+            $coupon = new InMemoryCoupon();
+            $coupon->type = 'percentage';
+            $coupon->percent = '';
+            $coupon->save();
+        },
+        'ecommerce.coupon_value_invalid',
+        'percent',
+    ],
+    'Coupon::fixed(0)' => [
+        static fn() => Coupon::fixed(0),
+        'ecommerce.coupon_value_invalid',
+        'amount',
+    ],
+]);

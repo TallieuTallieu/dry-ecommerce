@@ -4,14 +4,18 @@ declare(strict_types=1);
 
 namespace Tnt\Ecommerce;
 
+use dry\api\ConvertableToApiException;
+use dry\api\Exception as ApiException;
 use InvalidArgumentException;
 
 /**
  * A coupon percentage that cannot be stored exactly: not a number, finer
- * than a hundredth of a percent, or outside 0.01–100. See
+ * than a hundredth of a percent, or outside 0.01–100. dry's API answers it
+ * as `ecommerce.coupon_percentage_invalid` on the `percent` field. See
  * docs/discounts.md#the-shipped-coupon.
  */
-final class NotAPercentage extends InvalidArgumentException
+final class NotAPercentage extends InvalidArgumentException implements
+    ConvertableToApiException
 {
     /**
      * @param string $text What was refused, as given.
@@ -39,5 +43,15 @@ final class NotAPercentage extends InvalidArgumentException
                 $text
             )
         );
+    }
+
+    /**
+     * @return ApiException
+     */
+    public function to_api_exception(): ApiException
+    {
+        return new ApiException('ecommerce.coupon_percentage_invalid', [
+            'field' => 'percent',
+        ]);
     }
 }

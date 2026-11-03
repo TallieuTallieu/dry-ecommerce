@@ -52,6 +52,7 @@ it('autoloads every published exception', function (string $class): void {
 })->with([
     Tnt\Ecommerce\AmountTooLarge::class,
     Tnt\Ecommerce\CouponCodeRefused::class,
+    Tnt\Ecommerce\CouponTakesNothing::class,
     Tnt\Ecommerce\NotAnAddressType::class,
     Tnt\Ecommerce\NotAnAmount::class,
     Tnt\Ecommerce\NotAPercentage::class,

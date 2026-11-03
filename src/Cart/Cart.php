@@ -393,7 +393,8 @@ class Cart implements CartInterface, TotalingInterface
      * What the coupon in force takes off, in cents — never more than it may
      * reach: the lines that take a discount, plus delivery for a coupon that
      * {@see ReachesDeliveryInterface reaches it}. Every coupon is held to
-     * that, a shop's own too. See docs/discounts.md#what-a-coupon-reaches.
+     * that, a shop's own too ({@see Reach::clamp()}). See
+     * docs/discounts.md#what-a-coupon-reaches.
      *
      * @return int
      */
@@ -405,7 +406,7 @@ class Cart implements CartInterface, TotalingInterface
             return 0;
         }
 
-        return self::clamped($coupon, $this, Reach::of($this));
+        return Reach::of($this)->clamp($coupon, $this);
     }
 
     /**
@@ -419,41 +420,10 @@ class Cart implements CartInterface, TotalingInterface
         $coupon = $this->getCoupon();
         $reach = Reach::of($this);
 
-        if ($coupon === null) {
-            return $reach->split(0, false);
-        }
-
-        return $reach->split(
-            self::clamped($coupon, $this, $reach),
-            self::reachesDelivery($coupon)
+        return $reach->splitFor(
+            $coupon === null ? 0 : $reach->clamp($coupon, $this),
+            $coupon
         );
-    }
-
-    /**
-     * @param CouponInterface $coupon
-     * @param TotalingInterface $cart
-     * @param Reach $reach
-     * @return int
-     */
-    private static function clamped(
-        CouponInterface $coupon,
-        TotalingInterface $cart,
-        Reach $reach
-    ): int {
-        return min(
-            max(0, $coupon->getReduction($cart)),
-            $reach->limit(self::reachesDelivery($coupon))
-        );
-    }
-
-    /**
-     * @param CouponInterface $coupon
-     * @return bool
-     */
-    private static function reachesDelivery(CouponInterface $coupon): bool
-    {
-        return $coupon instanceof ReachesDeliveryInterface &&
-            $coupon->reachesDelivery();
     }
 
     /**

@@ -15,6 +15,7 @@ use Tnt\Ecommerce\Contracts\ReachesDeliveryInterface;
 use Tnt\Ecommerce\Contracts\RefusesCouponInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\CouponCodeRefused;
+use Tnt\Ecommerce\CouponTakesNothing;
 use Tnt\Ecommerce\Discount\CodeGenerator;
 use Tnt\Ecommerce\Discount\CouponRefusal;
 use Tnt\Ecommerce\Discount\CouponType;
@@ -110,13 +111,13 @@ class Coupon extends Model implements
      *
      * @param int $cents
      * @return static
+     *
+     * @throws CouponTakesNothing
      */
     public static function fixed(int $cents): static
     {
         if ($cents <= 0) {
-            throw new InvalidArgumentException(
-                'A fixed coupon takes off more than nothing.'
-            );
+            throw CouponTakesNothing::of(CouponType::Fixed);
         }
 
         /** @phpstan-ignore new.static */
@@ -451,6 +452,7 @@ class Coupon extends Model implements
      * @return void
      *
      * @throws CouponCodeRefused
+     * @throws CouponTakesNothing
      * @throws NotAPercentage
      * @throws \Tnt\Ecommerce\NotAnAmount
      */
@@ -901,6 +903,7 @@ class Coupon extends Model implements
     /**
      * @return void
      *
+     * @throws CouponTakesNothing
      * @throws NotAPercentage
      * @throws \Tnt\Ecommerce\NotAnAmount
      */
@@ -924,9 +927,7 @@ class Coupon extends Model implements
         $this->amountInput = null;
 
         if ($this->getValue() <= 0) {
-            throw new InvalidArgumentException(
-                'A coupon takes off more than nothing.'
-            );
+            throw CouponTakesNothing::of($type);
         }
 
         if ($isNew) {
