@@ -7,8 +7,10 @@ namespace Tnt\Ecommerce\Admin;
 use dry\admin\component\Conditional;
 use dry\admin\component\DateEdit;
 use dry\admin\component\EnumEdit;
+use dry\admin\component\EnumSwitcher;
 use dry\admin\component\EnumView;
 use dry\admin\component\IntegerEdit;
+use dry\admin\component\Stack;
 use dry\admin\component\StringEdit;
 use dry\admin\component\StringView;
 use dry\admin\Module;
@@ -57,37 +59,41 @@ class CouponManager extends Manager
         );
         $isUsed = Expr::gt(Expr::field('uses'), Expr::lit(0));
 
+        // dry's Create loads no row, so a Conditional on `type` never picks a
+        // branch here, and an EnumDisplay waits for the select to change.
+        // EnumSwitcher owns the field and shows its first tab's fields from
+        // the start — so everything that depends on the type lives in it.
         $this->actions[] = $create = new Create(
             [
-                EnumEdit::create('type', self::types())
+                EnumSwitcher::create('type')
                     ->set_label('Type')
-                    ->set_required(),
-                Conditional::create()
-                    ->add($isPercentage, [
-                        StringEdit::create('percent')
-                            ->set_label('Percentage')
-                            ->set_tooltip(
-                                '7,5 for 7.5% — at most two decimals.'
-                            )
-                            ->set_required(),
+                    ->tabs()
+                    ->add_option(CouponType::Percentage->value, 'Percentage', [
+                        Stack::horizontal([
+                            StringEdit::create('percent')
+                                ->set_label('Percentage')
+                                ->set_tooltip(
+                                    '7,5 for 7.5% — at most two decimals.'
+                                )
+                                ->set_required(),
+                            IntegerEdit::create('max_uses')
+                                ->set_label('Maximum uses')
+                                ->set_min_value(0)
+                                ->set_default_value(1),
+                        ]),
                     ])
-                    ->add($isFixed, [
-                        StringEdit::create('amount')
-                            ->set_label('Amount (€)')
-                            ->set_required(),
+                    ->add_option(CouponType::Fixed->value, 'Fixed amount', [
+                        Stack::horizontal([
+                            StringEdit::create('amount')
+                                ->set_label('Amount (€)')
+                                ->set_required(),
+                            self::maxUses(),
+                        ]),
                     ]),
                 StringEdit::create('code')
                     ->set_label('Code')
-                    ->set_tooltip('Leave empty to generate one.'),
+                    ->set_description('Empty: one is generated.'),
                 ...self::limits(),
-                Conditional::create()
-                    ->add($isPercentage, [
-                        IntegerEdit::create('max_uses')
-                            ->set_label('Maximum uses')
-                            ->set_min_value(0)
-                            ->set_default_value(1),
-                    ])
-                    ->add($isFixed, [self::maxUses()]),
                 self::note(),
             ],
             ['popup' => true]
@@ -267,12 +273,14 @@ class CouponManager extends Manager
     private static function limits(): array
     {
         return [
-            DateEdit::create('starts')
-                ->set_label('Valid from')
-                ->set_unix_timestamp(true),
-            DateEdit::create('ends')
-                ->set_label('Valid until (inclusive)')
-                ->set_unix_timestamp(true),
+            Stack::horizontal([
+                DateEdit::create('starts')
+                    ->set_label('Valid from')
+                    ->set_unix_timestamp(true),
+                DateEdit::create('ends')
+                    ->set_label('Valid until (inclusive)')
+                    ->set_unix_timestamp(true),
+            ]),
             StringEdit::create('minimum_amount')
                 ->set_label('Minimum order (€)')
                 ->set_tooltip(

@@ -74,8 +74,9 @@ The list, newest first, 25 to a page:
 The search box matches the code (through `ecommerce_discount_code`) and the
 note.
 
-**Create** asks for the type, then the percentage (`7,5` or `7.5`) or the
-amount in euros; the code — empty generates one; the first and last day; the
+**Create** asks for the type, on two tabs that start on Percentage, then the
+percentage (`7,5` or `7.5`) or the amount in euros — an `EnumSwitcher`, since
+dry's create form loads no row for a `Conditional` to test; the code — empty generates one; the first and last day; the
 minimum in euros, held against the products that take a discount; the maximum
 uses — `1` by default for a percentage, empty for a fixed amount; and a note.
 

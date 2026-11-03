@@ -8,6 +8,12 @@ declare(strict_types=1);
  * LedgerAdminTest does for the ledger.
  */
 
+use dry\admin\component\Conditional;
+use dry\admin\component\EnumEdit;
+use dry\admin\component\EnumSwitcher;
+use dry\admin\component\IntegerEdit;
+use dry\admin\component\Stack;
+use dry\admin\component\StringEdit;
 use dry\api\ConvertableToApiException;
 use dry\orm\action\Create;
 use dry\orm\action\Delete;
@@ -45,6 +51,45 @@ it('creates and edits coupons, and deletes none', function (): void {
         expect($action)->not->toBeInstanceOf(MultiDelete::class);
         expect($action)->not->toBeInstanceOf(DeleteAll::class);
     }
+});
+
+it('shows a new coupon\'s value fields from the start', function (): void {
+    // dry's Create loads no row, so a Conditional there never shows a branch,
+    // and an EnumDisplay waits for its select to change: the value fields
+    // went missing and every save was refused. EnumSwitcher shows its first
+    // tab's fields as it is drawn.
+    $create = (new CouponManager())->actions[0];
+    assert($create instanceof Create);
+
+    foreach ($create->components as $component) {
+        expect($component)->not->toBeInstanceOf(Conditional::class);
+        expect($component)->not->toBeInstanceOf(EnumEdit::class);
+    }
+
+    $type = $create->components[0];
+    assert($type instanceof EnumSwitcher);
+    expect($type->field)->toBe('type');
+
+    $fields = array_map(static function (array $option): array {
+        /** @var list<Stack> $stacks */
+        $stacks = $option[2];
+
+        return [
+            $option[0],
+            array_map(
+                static fn(mixed $c): string => $c instanceof StringEdit ||
+                $c instanceof IntegerEdit
+                    ? $c->field
+                    : '',
+                $stacks[0]->components
+            ),
+        ];
+    }, $type->values);
+
+    expect($fields)->toBe([
+        [CouponType::Percentage->value, ['percent', 'max_uses']],
+        [CouponType::Fixed->value, ['amount', 'max_uses']],
+    ]);
 });
 
 it('lists a coupon\'s redemptions on a page of their own', function (): void {
