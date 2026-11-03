@@ -262,7 +262,8 @@ class CouponManager extends Manager
     }
 
     /**
-     * The dates and the minimum, the same on create and edit.
+     * The dates and the minimum, the same on create and edit. A coupon may
+     * have no dates: nullable, so one without opens empty, not 01/01/1970.
      *
      * @return list<\dry\admin\component\Component>
      */
@@ -272,10 +273,12 @@ class CouponManager extends Manager
             Stack::horizontal([
                 DateEdit::create('starts')
                     ->set_label('Valid from')
-                    ->set_unix_timestamp(true),
+                    ->set_unix_timestamp(true)
+                    ->set_nullable(),
                 DateEdit::create('ends')
                     ->set_label('Valid until (inclusive)')
-                    ->set_unix_timestamp(true),
+                    ->set_unix_timestamp(true)
+                    ->set_nullable(),
             ]),
             StringEdit::create('minimum_amount')
                 ->set_label('Minimum order (€)')

@@ -84,7 +84,8 @@ discount; and a note.
 
 **Edit** shows the type, a fixed coupon's amount and balance, and the uses
 read-only; the code too, once the coupon has been used. The percentage, dates,
-minimum, a percentage coupon's maximum uses and note stay editable. Saving
+minimum, a percentage coupon's maximum uses and note stay editable. A coupon
+without dates opens with them empty; emptying one clears it. Saving
 never writes the balance or the uses — only a redemption does.
 
 **Redemptions**, a page of the coupon's own: every order it was spent on, with

@@ -9,6 +9,7 @@ declare(strict_types=1);
  */
 
 use dry\admin\component\Conditional;
+use dry\admin\component\DateEdit;
 use dry\admin\component\EnumEdit;
 use dry\admin\component\EnumSwitcher;
 use dry\admin\component\IntegerEdit;
@@ -146,6 +147,27 @@ it('asks a use limit of percentage coupons only, on edit', function (): void {
         expect(
             $component instanceof IntegerEdit ? $component->field : ''
         )->not->toBe('max_uses');
+    }
+});
+
+it('lets a coupon\'s dates be empty, on create and edit', function (): void {
+    // Without nullable, dry shows a coupon without dates as 01/01/1970 and
+    // saves that back.
+    foreach ((new CouponManager())->actions as $action) {
+        assert($action instanceof Create); // Edit extends Create
+
+        $dates = [];
+        foreach ($action->components as $c) {
+            if ($c instanceof Stack) {
+                foreach ($c->components as $child) {
+                    if ($child instanceof DateEdit) {
+                        $dates[$child->field] = $child->nullable;
+                    }
+                }
+            }
+        }
+
+        expect($dates)->toBe(['starts' => true, 'ends' => true]);
     }
 });
 
