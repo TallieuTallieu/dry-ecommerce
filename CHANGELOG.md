@@ -5,6 +5,12 @@ follow [Semantic Versioning](https://semver.org). New entries are generated from
 commit messages by [dry-ci](https://github.com/TallieuTallieu/dry-ci); past
 entries may be edited by hand.
 
+## 3.18.0 - 2026-11-03
+
+### Features
+
+- **ecommerce:** Apply a typed coupon code and say why not
+
 ## 3.17.1 - 2026-11-03
 
 ### Fixes
