@@ -37,6 +37,10 @@ use Tnt\Ecommerce\Repository\DiscountCodeRepository;
  * percentage one (750 is 7.5%). `balance` and `uses` belong to
  * {@see redeem()}: {@see save()} never writes them on an existing row.
  *
+ * Not for subclassing: the code row always names this class, whichever
+ * class saved it, so every reader loads a row as the same coupon. A shop
+ * that needs other rules implements CouponInterface on its own model.
+ *
  * @property int|null $id
  * @property int $created
  * @property int $updated
@@ -489,9 +493,26 @@ class Coupon extends Model implements
             throw CouponCodeRefused::taken($code);
         }
 
+        $isNew = $this->id === null;
+
         $this->writeRow();
 
-        $this->codeRow = $this->writeCode($code);
+        try {
+            $this->codeRow = $this->writeCode($code);
+        } catch (DuplicateEntryException) {
+            // Another save took the code since codeTaken() said it was free;
+            // UNIQUE(code) refused this one. A new coupon goes again rather
+            // than stay behind without a code.
+            if ($isNew) {
+                $this->discard();
+            }
+
+            $this->codeRow = null;
+            $this->codeLoaded = false;
+
+            throw CouponCodeRefused::taken($code);
+        }
+
         $this->codeLoaded = true;
 
         $this->pendingCode = null;
@@ -648,12 +669,14 @@ class Coupon extends Model implements
 
     /**
      * Take up to $amount off the balance and count the use, in one
-     * statement: LEAST() keeps the balance at 0 or above, and
-     * LAST_INSERT_ID(expr) hands what was taken back to this connection
-     * alone — two payments at once each see their own figure.
+     * statement: LEAST() keeps the balance at 0 or above, a use past
+     * `max_uses` takes nothing, and LAST_INSERT_ID(expr) hands what was
+     * taken back to this connection alone — two payments at once each see
+     * their own figure. MySQL assigns left to right, so the limit is held
+     * against `uses` before this use counts.
      *
      * @param int $amount
-     * @return int|null What the balance covered, or null when the coupon row
+     * @return int|null What the coupon covered, or null when the coupon row
      *                  is gone.
      *
      * @internal A seam for tests, not an extension point.
@@ -664,7 +687,9 @@ class Coupon extends Model implements
         // UPDATE that matched nothing would read the claim's id back.
         $affected = $this->affected(
             'UPDATE `ecommerce_coupon` ' .
-                'SET `balance` = `balance` - LAST_INSERT_ID(LEAST(`balance`, ?)), ' .
+                'SET `balance` = `balance` - LAST_INSERT_ID(IF(' .
+                '`max_uses` IS NULL OR `max_uses` = 0 OR `uses` < `max_uses`, ' .
+                'LEAST(`balance`, ?), 0)), ' .
                 '`uses` = `uses` + 1 ' .
                 'WHERE `id` = ?',
             $amount,
@@ -866,10 +891,26 @@ class Coupon extends Model implements
     }
 
     /**
+     * Delete the row a new coupon has just written, when its code could not
+     * follow.
+     *
+     * @return void
+     *
+     * @internal A seam for tests, not an extension point.
+     */
+    protected function discard(): void
+    {
+        $this->delete();
+        $this->id = null;
+    }
+
+    /**
      * Create or update this coupon's code row.
      *
      * @param string $code Normalised.
      * @return DiscountCode The row, as written.
+     *
+     * @throws DuplicateEntryException When another coupon holds the code.
      *
      * @internal A seam for tests, not an extension point.
      */

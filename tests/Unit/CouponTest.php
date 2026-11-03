@@ -347,6 +347,54 @@ it(
     }
 );
 
+it(
+    'refuses a code another save took in the meantime, and keeps no coupon without one',
+    function (): void {
+        // Both saves found SUMMER10 free; the other one wrote its code row
+        // first, between this coupon's row and its code row.
+        $store = new CouponStore();
+        $coupon = InMemoryCoupon::percentage(10)->savingTo($store);
+        $coupon->code = 'summer10';
+        $coupon->meanwhile = static function () use ($store): void {
+            $other = InMemoryCoupon::fixed(1000)->keptIn($store);
+            $other->code = 'SUMMER10';
+            $other->save();
+        };
+
+        expect(couponApiError(static fn() => $coupon->save()))->toBe([
+            'ecommerce.coupon_code_taken',
+            ['field' => 'code'],
+        ]);
+        expect($coupon->id)->toBeNull();
+        expect($store->coupons)->toHaveCount(1);
+        expect($store->codes)->toHaveCount(1);
+    }
+);
+
+it(
+    'keeps a coupon and its old code when another save takes its new one',
+    function (): void {
+        $store = new CouponStore();
+        $coupon = InMemoryCoupon::percentage(10)->keptIn($store);
+        $coupon->code = 'SPRING10';
+        $coupon->save();
+
+        $coupon->code = 'SUMMER10';
+        $coupon->meanwhile = static function () use ($store): void {
+            $other = InMemoryCoupon::fixed(1000)->keptIn($store);
+            $other->code = 'SUMMER10';
+            $other->save();
+        };
+
+        expect(couponApiError(static fn() => $coupon->save()))->toBe([
+            'ecommerce.coupon_code_taken',
+            ['field' => 'code'],
+        ]);
+        expect($coupon->id)->not->toBeNull();
+        expect($store->codes[(int) $coupon->id]->code)->toBe('SPRING10');
+    }
+);
+
 it('stores a typed code trimmed and uppercase', function (): void {
     $coupon = InMemoryCoupon::percentage(10)->keptIn(new CouponStore());
     $coupon->code = '  summer10 ';

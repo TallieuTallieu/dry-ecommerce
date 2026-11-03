@@ -97,6 +97,37 @@ it(
     }
 );
 
+it(
+    'holds a fixed coupon to its use limit as well as its balance',
+    function (): void {
+        // A single-use €50 voucher, two carts quoted 30 each. The first
+        // payment takes 30 and the use; the second is past the limit, so it
+        // takes nothing and the whole 30 is not covered — the 20 left stays.
+        $store = new CouponStore();
+        $coupon = InMemoryCoupon::fixed(5000);
+        $coupon->max_uses = 1;
+        $first = $coupon->keptIn($store);
+        $second = $first->loadedAgain();
+
+        $dispatcher = bootEcommerce();
+        $dispatcher->dispatch(
+            Paid::class,
+            new Paid(orderPlacedWith($first, 1, 3000))
+        );
+        $dispatcher->dispatch(
+            Paid::class,
+            new Paid(orderPlacedWith($second, 2, 3000))
+        );
+
+        expect($store->coupons[(int) $first->id])->toBe([
+            'balance' => 2000,
+            'uses' => 2,
+        ]);
+        expect($store->redemptions[1]['shortfall'])->toBe(0);
+        expect($store->redemptions[2]['shortfall'])->toBe(3000);
+    }
+);
+
 it('redeems nothing on a second Paid for the same order', function (): void {
     $store = new CouponStore();
     $coupon = InMemoryCoupon::fixed(5000)->keptIn($store);

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
+use Closure;
+use dry\db\DuplicateEntryException;
 use Tnt\Ecommerce\Model\Coupon;
 use Tnt\Ecommerce\Model\DiscountCode;
 use Tnt\Ecommerce\Model\Order;
@@ -34,6 +36,14 @@ final class InMemoryCoupon extends Coupon
      */
     public array $generated = [];
 
+    /**
+     * Runs once, right after the coupon row is written and before its code
+     * row is — where another request's save can take the code.
+     *
+     * @var (Closure(): void)|null
+     */
+    public ?Closure $meanwhile = null;
+
     private ?CouponStore $store = null;
 
     /**
@@ -55,6 +65,20 @@ final class InMemoryCoupon extends Coupon
             'balance' => $this->getBalance(),
             'uses' => $this->getUses(),
         ];
+
+        return $this;
+    }
+
+    /**
+     * Point the coupon at a store without giving it a row: it stays new
+     * until it saves.
+     *
+     * @param CouponStore $store
+     * @return $this
+     */
+    public function savingTo(CouponStore $store): self
+    {
+        $this->store = $store;
 
         return $this;
     }
@@ -112,7 +136,12 @@ final class InMemoryCoupon extends Coupon
             return null;
         }
 
-        $taken = min($store->coupons[$id]['balance'], $amount);
+        // As the UPDATE: a use past max_uses takes nothing.
+        $maxUses = $this->getMaxUses();
+        $taken =
+            $maxUses === null || $store->coupons[$id]['uses'] < $maxUses
+                ? min($store->coupons[$id]['balance'], $amount)
+                : 0;
         $store->coupons[$id]['balance'] -= $taken;
         $store->coupons[$id]['uses']++;
 
@@ -175,10 +204,30 @@ final class InMemoryCoupon extends Coupon
         if ($this->id === null) {
             $this->keptIn($this->store());
         }
+
+        $meanwhile = $this->meanwhile;
+        $this->meanwhile = null;
+
+        if ($meanwhile !== null) {
+            $meanwhile();
+        }
+    }
+
+    protected function discard(): void
+    {
+        unset($this->store()->coupons[(int) $this->id]);
+        $this->id = null;
     }
 
     protected function writeCode(string $code): DiscountCode
     {
+        // As UNIQUE(code) does.
+        foreach ($this->store()->codes as $couponId => $held) {
+            if ($held->code === $code && $couponId !== (int) $this->id) {
+                throw new DuplicateEntryException('uq_code');
+            }
+        }
+
         $row = $this->findCode() ?? new DiscountCode();
         $row->coupon_class = Coupon::class;
         $row->coupon_id = (int) $this->id;

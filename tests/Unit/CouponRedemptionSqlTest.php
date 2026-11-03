@@ -7,7 +7,8 @@ declare(strict_types=1);
  * the connection.
  *
  * What these pin down is the shape: claim, take in one statement, settle;
- * LEAST() so the balance never goes below 0; LAST_INSERT_ID(expr) so each
+ * LEAST() so the balance never goes below 0; IF() so a use past max_uses
+ * takes nothing; LAST_INSERT_ID(expr) so each
  * payment reads back its own figure; and no transaction of its own, because
  * the project's may be open and dry's START TRANSACTION would commit it.
  * Whether MySQL then behaves under two payments at once — the row lock, the
@@ -49,7 +50,9 @@ it('claims, takes the balance in one statement and settles', function (): void {
         ],
         [
             'UPDATE `ecommerce_coupon` ' .
-            'SET `balance` = `balance` - LAST_INSERT_ID(LEAST(`balance`, ?)), ' .
+            'SET `balance` = `balance` - LAST_INSERT_ID(IF(' .
+            '`max_uses` IS NULL OR `max_uses` = 0 OR `uses` < `max_uses`, ' .
+            'LEAST(`balance`, ?), 0)), ' .
             '`uses` = `uses` + 1 ' .
             'WHERE `id` = ?',
             [3000, 7],

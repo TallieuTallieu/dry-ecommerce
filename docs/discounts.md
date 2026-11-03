@@ -49,6 +49,12 @@ $code = DiscountCodeRepository::create()->byCode($typed)->firstOrNull();
 `ecommerce_coupon`, one row per coupon. The code is **not** on it: it lives in
 `ecommerce_discount_code` like every coupon's, behind the virtual `code`.
 
+A code row always points at `Tnt\Ecommerce\Model\Coupon`, whichever class
+saved it, so the package's admin and a project read the same row as the same
+coupon. `Coupon` is therefore not for subclassing: a shop that needs other
+rules implements `CouponInterface` on its own model (see
+[The coupon contract](#the-coupon-contract)).
+
 | Column     | Holds                                                                                       |
 | ---------- | ------------------------------------------------------------------------------------------- |
 | `type`     | `percentage` or `fixed` — `Tnt\Ecommerce\Discount\CouponType`.                              |
@@ -320,12 +326,13 @@ The listener above reaches `redeem()` whatever happened since placement.
    order's reduction, `shortfall` `NULL`. `UNIQUE(order)` makes a second claim
    for the same order fail, so a replayed `Paid` redeems nothing.
 2. **takes**, in one statement. Fixed:
-   `balance = balance - LAST_INSERT_ID(LEAST(balance, ?)), uses = uses + 1` — the
-   balance never goes below 0, and `LAST_INSERT_ID(expr)` hands back what was
-   taken to this connection alone. Percentage: `uses = LAST_INSERT_ID(uses + 1)`.
+   `balance = balance - LAST_INSERT_ID(IF(max_uses IS NULL OR max_uses = 0 OR uses < max_uses, LEAST(balance, ?), 0)), uses = uses + 1`
+   — the balance never goes below 0, a use past `max_uses` takes nothing, and
+   `LAST_INSERT_ID(expr)` hands back what was taken to this connection alone.
+   Percentage: `uses = LAST_INSERT_ID(uses + 1)`.
 3. **settles**: writes the shortfall — for a fixed coupon what the balance
-   could not cover; for a percentage coupon the whole amount when the use went
-   past `max_uses`, else 0.
+   and the use limit could not cover; for a percentage coupon the whole amount
+   when the use went past `max_uses`, else 0.
 
 Two orders quoted €30 each against a €50 balance both pay: the balance ends at
 0, the second redemption records a shortfall of €10, `uses` is 2, and both
