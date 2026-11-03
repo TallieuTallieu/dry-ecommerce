@@ -50,20 +50,7 @@ enum CouponRefusal: string
         ?DiscountCode $code,
         TotalingInterface $totaling
     ): ?self {
-        $coupon = $code?->coupon;
-
-        if ($coupon === null) {
-            return self::Unknown;
-        }
-
-        if ($coupon instanceof RefusesCouponInterface) {
-            $refusal = $coupon->refusal($totaling);
-
-            if ($refusal !== null) {
-                return $refusal;
-            }
-        }
-
-        return $coupon->isRedeemable($totaling) ? null : self::Unknown;
+        // One place loads the coupon and decides: RefusedCode::of().
+        return RefusedCode::of($code, $totaling)?->reason;
     }
 }

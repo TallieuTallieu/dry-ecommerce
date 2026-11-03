@@ -114,12 +114,14 @@ into it with a fresh order:
 order was placed — reading `$order->discount` then throws dry's
 `FetchException`. The order answers what a shop needs without it:
 
-| Method                      | Answers                                                                                                                                                                                |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `getDiscountCode()`         | The code as stored (`SUMMER10`), or null: none, or its row is gone.                                                                                                                    |
-| `discountReachedDelivery()` | Whether the discount came off delivery too: `Reach::reachesDelivery()` of the coupon while the code and the coupon exist, else `getFulfillmentReduction() > 0` — what the order froze. |
+| Method                      | Answers                                                             |
+| --------------------------- | ------------------------------------------------------------------- |
+| `getDiscountCode()`         | The code as stored (`SUMMER10`), or null: none, or its row is gone. |
+| `discountReachedDelivery()` | Whether the discount came off delivery too.                         |
 
-The second is what a VAT breakdown of the order hands
+`discountReachedDelivery()` asks the coupon's `Reach::reachesDelivery()` while
+the code and the coupon exist, else what the order froze:
+`getFulfillmentReduction() > 0`. It is what a VAT breakdown of the order hands
 `Reach::fromAmounts(...)->split()` — see
 [Discounts](discounts.md#what-a-coupon-reaches).
 

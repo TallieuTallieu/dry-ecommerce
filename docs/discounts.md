@@ -254,9 +254,7 @@ cart:
 - a refused code **leaves** the one in force standing;
 - the code in force typed again changes nothing and answers null.
 
-Both `applyCode()` and `removeDiscount()` are on `CartInterface`.
-
-> [!warning] Breaking change
+> [!warning] Interface change
 > `CartInterface` gained `applyCode()` and `removeDiscount()`. A shop with
 > its own implementation of `CartInterface` — not a subclass of `Cart` — no
 > longer satisfies it until it adds both. `RefusedCode::of()` does the

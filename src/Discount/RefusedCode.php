@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tnt\Ecommerce\Discount;
 
+use Tnt\Ecommerce\Contracts\RefusesCouponInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Model\Coupon;
 use Tnt\Ecommerce\Model\DiscountCode;
@@ -33,10 +34,12 @@ final readonly class RefusedCode
     ) {}
 
     /**
-     * Why this code does not apply to this cart, or null when it does — as
-     * {@see CouponRefusal::of()}, with the start and the minimum filled in.
-     * Only the shipped {@see Coupon} has those to give; a shop's own
-     * coupon's refusal carries neither.
+     * Why this code does not apply to this cart, or null when it does, with
+     * the start and the minimum filled in. A coupon that does not implement
+     * {@see RefusesCouponInterface} only says yes or no, so its no reads as
+     * {@see CouponRefusal::Unknown}. Only the shipped {@see Coupon} has a
+     * start and a minimum to give; a shop's own coupon's refusal carries
+     * neither. {@see CouponRefusal::of()} answers its reason alone.
      *
      * @param DiscountCode|null $code What {@see \Tnt\Ecommerce\Repository\DiscountCodeRepository::byCode()}
      *                                found, or null.
@@ -47,13 +50,24 @@ final readonly class RefusedCode
         ?DiscountCode $code,
         TotalingInterface $totaling
     ): ?self {
-        $reason = CouponRefusal::of($code, $totaling);
+        // One load: dry has no identity map, so each read is a fresh SELECT,
+        // and the start or minimum must come from the coupon that refused.
+        $coupon = $code?->coupon;
 
-        if ($reason === null) {
-            return null;
+        if ($coupon === null) {
+            return new self(CouponRefusal::Unknown);
         }
 
-        $coupon = $code?->coupon;
+        $reason =
+            $coupon instanceof RefusesCouponInterface
+                ? $coupon->refusal($totaling)
+                : null;
+
+        if ($reason === null) {
+            return $coupon->isRedeemable($totaling)
+                ? null
+                : new self(CouponRefusal::Unknown);
+        }
 
         if (!($coupon instanceof Coupon)) {
             return new self($reason);

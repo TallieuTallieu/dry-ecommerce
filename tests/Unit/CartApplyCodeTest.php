@@ -33,14 +33,16 @@ use Tnt\Ecommerce\Shop\Shop;
  */
 function cartKnowing(DiscountCode ...$codes): CodeLookupCart
 {
+    $storage = new InMemoryCartStorage();
     $cart = new CodeLookupCart(
         new Shop(new InMemoryAttributeStorage()),
-        new InMemoryCartStorage(),
+        $storage,
         new FakePayment(),
         new GuestUserResolver(),
         new InMemoryPaymentLedger(new Dispatcher()),
         new FakeRedirector()
     );
+    $cart->storedIn($storage);
 
     foreach ($codes as $code) {
         $cart->knowing($code);
@@ -84,6 +86,7 @@ it('refuses an empty field without looking it up', function (
         new RefusedCode(CouponRefusal::Missing)
     );
     expect($cart->lookups)->toBe(0);
+    expect($cart->stored())->toBeNull();
 })->with(['', '   ']);
 
 it('refuses a code nobody holds, and one without a coupon', function (): void {
@@ -97,7 +100,7 @@ it('refuses a code nobody holds, and one without a coupon', function (): void {
     expect($cart->applyCode('orphan'))->toEqual(
         new RefusedCode(CouponRefusal::Unknown)
     );
-    expect($cart->getDiscount())->toBeNull();
+    expect($cart->stored())->toBeNull();
 });
 
 it('says when a coupon that has not started starts', function (): void {
@@ -111,7 +114,7 @@ it('says when a coupon that has not started starts', function (): void {
             starts: $coupon->clock + 86400
         )
     );
-    expect($cart->getDiscount())->toBeNull();
+    expect($cart->stored())->toBeNull();
 });
 
 it('says what minimum a cart falls below', function (): void {
@@ -122,6 +125,7 @@ it('says what minimum a cart falls below', function (): void {
     expect($cart->applyCode('big'))->toEqual(
         new RefusedCode(CouponRefusal::BelowMinimum, minimum: 5000)
     );
+    expect($cart->stored())->toBeNull();
 });
 
 it('carries no start or minimum the reason does not need', function (): void {
@@ -133,6 +137,7 @@ it('carries no start or minimum the reason does not need', function (): void {
     expect($cart->applyCode('spent'))->toEqual(
         new RefusedCode(CouponRefusal::Empty)
     );
+    expect($cart->stored())->toBeNull();
 });
 
 it('reads a shop\'s own coupon\'s no as unknown', function (): void {
@@ -145,6 +150,7 @@ it('reads a shop\'s own coupon\'s no as unknown', function (): void {
     expect($cart->applyCode('own'))->toEqual(
         new RefusedCode(CouponRefusal::Unknown)
     );
+    expect($cart->stored())->toBeNull();
 });
 
 it('keeps the applied code when another is refused', function (): void {
@@ -156,7 +162,7 @@ it('keeps the applied code when another is refused', function (): void {
     $cart->applyCode('summer10');
 
     expect($cart->applyCode('gone')?->reason)->toBe(CouponRefusal::Expired);
-    expect($cart->getDiscount())->toBe($applied);
+    expect($cart->stored())->toBe($applied);
 });
 
 it('replaces the applied code with another that applies', function (): void {
@@ -184,7 +190,8 @@ it('changes nothing when the applied code is typed again', function (): void {
 it('refuses the stored code again once it stopped applying', function (): void {
     $coupon = InMemoryCoupon::fixed(1000);
     $coupon->minimum = 3000;
-    $cart = cartKnowing(codeFor($coupon, 'MIN30'));
+    $code = codeFor($coupon, 'MIN30');
+    $cart = cartKnowing($code);
     $cart->applyCode('min30');
 
     $cart->removeItem($cart->items()[0]->getId());
@@ -193,6 +200,7 @@ it('refuses the stored code again once it stopped applying', function (): void {
     expect($cart->applyCode('min30'))->toEqual(
         new RefusedCode(CouponRefusal::BelowMinimum, minimum: 3000)
     );
+    expect($cart->stored())->toBe($code);
 });
 
 it('applies and removes a code through the interface', function (): void {

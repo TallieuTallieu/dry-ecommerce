@@ -278,16 +278,18 @@ class Cart implements CartInterface, TotalingInterface
      */
     public function applyCode(string $typed): ?RefusedCode
     {
-        if (trim($typed) === '') {
+        $normal = DiscountCode::normalise($typed);
+
+        if ($normal === '') {
             return new RefusedCode(CouponRefusal::Missing);
         }
 
         // A stored code is normalised already — DiscountCode::save().
-        if ($this->getDiscount()?->code === DiscountCode::normalise($typed)) {
+        if ($this->getDiscount()?->code === $normal) {
             return null;
         }
 
-        $code = $this->findCode($typed);
+        $code = $this->findCode($normal);
         $refused = RefusedCode::of($code, $this);
 
         if ($refused === null && $code !== null) {
@@ -298,15 +300,15 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
-     * The code row a typed code names, or null. A test seam beside
+     * The code row a code names, or null. A test seam beside
      * {@see newOrder()}: override it to look codes up in memory.
      *
-     * @param string $typed
+     * @param string $code Normalised already — {@see DiscountCode::normalise()}.
      * @return DiscountCode|null
      */
-    protected function findCode(string $typed): ?DiscountCode
+    protected function findCode(string $code): ?DiscountCode
     {
-        return DiscountCodeRepository::create()->byCode($typed)->firstOrNull();
+        return DiscountCodeRepository::create()->byCode($code)->firstOrNull();
     }
 
     /**

@@ -54,16 +54,8 @@ the decision where the knowledge to make it lives.
 
 ## Applying a typed code
 
-`applyCode($typed)` looks the code up in any case and puts it on the cart, or
-answers a `RefusedCode` — why not, with the coupon's start or minimum when the
-message needs it — and leaves the cart as it was. A code that applies replaces
-the one in force; a refused one leaves it. See
-[Discounts](discounts.md#applying-one).
-
-> [!warning] Breaking change
-> `applyCode()` and `removeDiscount()` are on `CartInterface` now. A shop's
-> own implementation of the interface adds both; a subclass of `Cart` has
-> them already.
+`applyCode($typed)` puts a typed code on the cart or answers a `RefusedCode`
+saying why not — see [Discounts](discounts.md#applying-one).
 
 ## What a coupon takes off
 

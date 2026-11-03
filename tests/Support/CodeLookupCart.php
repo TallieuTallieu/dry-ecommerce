@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Support;
 
+use LogicException;
 use Tnt\Ecommerce\Cart\Cart;
+use Tnt\Ecommerce\Cart\InMemoryCartStorage;
 use Tnt\Ecommerce\Model\DiscountCode;
 
 /**
@@ -27,6 +29,8 @@ final class CodeLookupCart extends Cart
      */
     public int $lookups = 0;
 
+    private ?InMemoryCartStorage $memory = null;
+
     /**
      * Store a row the way {@see DiscountCode::save()} would: normalised.
      *
@@ -41,11 +45,49 @@ final class CodeLookupCart extends Cart
         return $this;
     }
 
-    protected function findCode(string $typed): ?DiscountCode
+    /**
+     * The storage this cart was built with, so a test reads the code it
+     * holds — not {@see getDiscount()}, which hides one that stopped
+     * applying.
+     *
+     * @param InMemoryCartStorage $storage
+     * @return $this
+     */
+    public function storedIn(InMemoryCartStorage $storage): self
+    {
+        $this->memory = $storage;
+
+        return $this;
+    }
+
+    /**
+     * The code the storage holds, whether or not it still applies.
+     *
+     * @return DiscountCode|null
+     */
+    public function stored(): ?DiscountCode
+    {
+        if ($this->memory === null) {
+            throw new LogicException(
+                'This cart was not told its storage — see storedIn().'
+            );
+        }
+
+        return $this->memory->getDiscount();
+    }
+
+    /**
+     * An exact-key lookup: the cart normalises before it asks, as
+     * {@see \Tnt\Ecommerce\Repository\DiscountCodeRepository::byCode()}
+     * matches.
+     *
+     * @param string $code
+     * @return DiscountCode|null
+     */
+    protected function findCode(string $code): ?DiscountCode
     {
         $this->lookups++;
 
-        // As DiscountCodeRepository::byCode() matches.
-        return $this->codes[DiscountCode::normalise($typed)] ?? null;
+        return $this->codes[$code] ?? null;
     }
 }
