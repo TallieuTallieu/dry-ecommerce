@@ -19,9 +19,10 @@ $cart->setFulfillment($shipping);
 $fulfillment = $cart->getFulfillment();
 $fulfillmentCost = $cart->getFulfillmentCost();
 
-$cart->addDiscount($discountCode);
+$refused = $cart->applyCode($typed); // null, or why not — see docs/discounts.md
+$cart->addDiscount($discountCode); // a code row already in hand
 $discountCode = $cart->getDiscount();
-$cart->removeDiscount(); // on Cart, not on CartInterface
+$cart->removeDiscount();
 
 $subTotal = $cart->getSubTotal();
 $total = $cart->getTotal();
@@ -50,6 +51,19 @@ does not know which shop it is in, so it reports what the stock says and leaves
 the decision where the knowledge to make it lives.
 
 `Cart::getTax()` draws the same line, for the same reason.
+
+## Applying a typed code
+
+`applyCode($typed)` looks the code up in any case and puts it on the cart, or
+answers a `RefusedCode` — why not, with the coupon's start or minimum when the
+message needs it — and leaves the cart as it was. A code that applies replaces
+the one in force; a refused one leaves it. See
+[Discounts](discounts.md#applying-one).
+
+> [!warning] Breaking change
+> `applyCode()` and `removeDiscount()` are on `CartInterface` now. A shop's
+> own implementation of the interface adds both; a subclass of `Cart` has
+> them already.
 
 ## What a coupon takes off
 

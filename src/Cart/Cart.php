@@ -23,7 +23,9 @@ use Tnt\Ecommerce\Contracts\TaxableInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
 use Tnt\Ecommerce\Contracts\UserResolverInterface;
 use Tnt\Ecommerce\Contracts\VariantInterface;
+use Tnt\Ecommerce\Discount\CouponRefusal;
 use Tnt\Ecommerce\Discount\Reach;
+use Tnt\Ecommerce\Discount\RefusedCode;
 use Tnt\Ecommerce\Events\Order\Created;
 use Tnt\Ecommerce\Model\Customer;
 use Tnt\Ecommerce\Model\DiscountCode;
@@ -32,6 +34,7 @@ use Tnt\Ecommerce\Order\OrderState;
 use Tnt\Ecommerce\Order\RandomOrderReference;
 use Tnt\Ecommerce\Payment\PaymentLedger;
 use Tnt\Ecommerce\Payment\PaymentRedirect;
+use Tnt\Ecommerce\Repository\DiscountCodeRepository;
 use Tnt\Ecommerce\Tax\TaxPolicy;
 
 /**
@@ -265,8 +268,49 @@ class Cart implements CartInterface, TotalingInterface
     }
 
     /**
-     * Take the applied code off the cart. Not on {@see CartInterface}: a shop
-     * with its own cart class adds it there if it needs it.
+     * Put a typed code on the cart, or say why not. One code per cart: a code
+     * that applies replaces the one in force, a refused one leaves it, and
+     * the code in force typed again changes nothing. See
+     * docs/discounts.md#applying-one.
+     *
+     * @param string $typed As posted — any case, spaces around it allowed.
+     * @return RefusedCode|null Null when the code is on the cart.
+     */
+    public function applyCode(string $typed): ?RefusedCode
+    {
+        if (trim($typed) === '') {
+            return new RefusedCode(CouponRefusal::Missing);
+        }
+
+        // A stored code is normalised already — DiscountCode::save().
+        if ($this->getDiscount()?->code === DiscountCode::normalise($typed)) {
+            return null;
+        }
+
+        $code = $this->findCode($typed);
+        $refused = RefusedCode::of($code, $this);
+
+        if ($refused === null && $code !== null) {
+            $this->storage->setDiscount($code);
+        }
+
+        return $refused;
+    }
+
+    /**
+     * The code row a typed code names, or null. A test seam beside
+     * {@see newOrder()}: override it to look codes up in memory.
+     *
+     * @param string $typed
+     * @return DiscountCode|null
+     */
+    protected function findCode(string $typed): ?DiscountCode
+    {
+        return DiscountCodeRepository::create()->byCode($typed)->firstOrNull();
+    }
+
+    /**
+     * Take the applied code off the cart. A no-op without one.
      *
      * @return void
      */
