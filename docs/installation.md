@@ -117,8 +117,8 @@ figure, not a shop that will not boot.
 
 ## Migrations
 
-The provider registers a migrator named `ecommerce` with twenty-eight
-revisions: twelve create the tables below, and the others alter existing
+The provider registers a migrator named `ecommerce` with thirty-two
+revisions: fourteen create the tables below, and the others alter existing
 tables (the frozen `fulfillment_attributes` column on
 `ecommerce_order`, the per-line `options` columns on both line tables, the
 drop of the address name columns, the nullable `customer` and the `state`
@@ -137,10 +137,13 @@ the `box` column for the
 [`variant` columns](variants.md) on both line tables, and the
 [`vat_percentage`](tax.md#the-order-line-keeps-its-rate) each order line was
 sold at, [how a capture was paid](payment.md#how-it-was-paid) on the
-ledger, and the order's [`uuid`](orders.md#the-uuid), added empty — run `ecommerce:fill-order-uuids` after migrating). One of the twelve creates `ecommerce_payment_entry`, the
+ledger, the order's [`uuid`](orders.md#the-uuid), added empty — run `ecommerce:fill-order-uuids` after migrating —
+the uppercase, [unique discount codes](discounts.md#codes), and the order's
+`fulfillment_reduction`). One of the fourteen creates `ecommerce_payment_entry`, the
 [payment ledger](payment.md#the-ledger); another `ecommerce_order_sequence`,
 the counter behind [yearly order numbers](orders.md#yearly-numbers), empty
-unless the shop opts in:
+unless the shop opts in; the last two `ecommerce_coupon` and
+`ecommerce_coupon_redemption`, for [the shipped coupon](discounts.md#the-shipped-coupon):
 
 ```
 ecommerce_customer          ecommerce_cart
@@ -149,11 +152,12 @@ ecommerce_fulfillment_method ecommerce_stock
 ecommerce_order             ecommerce_stock_item
 ecommerce_order_item        ecommerce_address
 ecommerce_payment_entry     ecommerce_order_sequence
+ecommerce_coupon            ecommerce_coupon_redemption
 ```
 
 ```sh
 php oak migration migrate
-php oak migration list        # ecommerce (28/28)
+php oak migration list        # ecommerce (32/32)
 ```
 
 Revisions are **appended to the list, never inserted into it.** Oak's migrator
@@ -171,6 +175,18 @@ either — will halt the migration on a duplicate column. Drop the project's own
 revision **and** the column before running, or rename the column out of the
 way, and let the package's revision put it back. The package now owns the
 concept; a project-side copy of it has nothing left to do.
+
+### If your project already has a coupon table
+
+`CreateCouponTable` and `CreateCouponRedemptionTable` create
+`ecommerce_coupon` and `ecommerce_coupon_redemption`. A project that named its
+own coupon table either of those halts the migration on an existing table:
+rename the project's table — and its model's `TABLE` — before migrating. Its
+codes stay valid either way, since they point at its own coupon class.
+
+`MakeDiscountCodeUnique` uppercases every existing code and then makes `code`
+unique. Two codes that differ only in case or surrounding spaces make it fail
+loudly on a duplicate entry; rename one of them by hand, then run it again.
 
 ### Upgrading a shop that predates the address book
 

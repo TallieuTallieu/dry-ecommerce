@@ -69,7 +69,10 @@ public function getCost(CartInterface $cart): int
 
 Be careful what you read off the cart inside it. `Cart::getTotal()` calls
 `getFulfillmentCost()`, which calls this — a `getCost()` that reads
-`getTotal()` recurses until PHP gives up. Read `getSubTotal()` instead.
+`getTotal()` or `getTax()` recurses until PHP gives up. So does one that reads
+`getReduction()` while a fixed coupon is applied: a fixed coupon [reaches
+delivery](discounts.md#what-a-coupon-reaches), so its reduction asks this cost.
+Read `getSubTotal()` or the lines instead.
 
 ### Attributes are the method's own questions
 

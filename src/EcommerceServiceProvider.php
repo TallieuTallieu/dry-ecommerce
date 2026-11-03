@@ -41,6 +41,7 @@ use Tnt\Ecommerce\Payment\PaymentLedger;
 use Tnt\Ecommerce\Revisions\AddBoxToAddresses;
 use Tnt\Ecommerce\Revisions\AddCartLifecycleColumns;
 use Tnt\Ecommerce\Revisions\AddFulfillmentAttributesToOrderTable;
+use Tnt\Ecommerce\Revisions\AddFulfillmentReductionToOrderTable;
 use Tnt\Ecommerce\Revisions\AddIndexesToEcommerceTables;
 use Tnt\Ecommerce\Revisions\AddOptionsToLineTables;
 use Tnt\Ecommerce\Revisions\AddOrderLineIndexes;
@@ -53,6 +54,8 @@ use Tnt\Ecommerce\Revisions\AddVatPercentageToOrderItem;
 use Tnt\Ecommerce\Revisions\CreateAddressTable;
 use Tnt\Ecommerce\Revisions\CreateCartItemTable;
 use Tnt\Ecommerce\Revisions\CreateCartTable;
+use Tnt\Ecommerce\Revisions\CreateCouponRedemptionTable;
+use Tnt\Ecommerce\Revisions\CreateCouponTable;
 use Tnt\Ecommerce\Revisions\CreateCustomerTable;
 use Tnt\Ecommerce\Revisions\CreateDiscountCodeTable;
 use Tnt\Ecommerce\Revisions\CreateFulfillmentMethodTable;
@@ -64,6 +67,7 @@ use Tnt\Ecommerce\Revisions\CreateStockItemTable;
 use Tnt\Ecommerce\Revisions\CreateStockTable;
 use Tnt\Ecommerce\Revisions\DropAddressNameColumns;
 use Tnt\Ecommerce\Revisions\MakeCustomerUserUnique;
+use Tnt\Ecommerce\Revisions\MakeDiscountCodeUnique;
 use Tnt\Ecommerce\Revisions\MakeOrderCustomerNullable;
 use Tnt\Ecommerce\Revisions\MakeOrderPlacementColumnsNullable;
 use Tnt\Ecommerce\Shop\Shop;
@@ -116,6 +120,10 @@ class EcommerceServiceProvider extends ServiceProvider
                 AddPaymentMethodToPaymentEntry::class,
                 AddUuidToOrderTable::class,
                 CreateOrderSequenceTable::class,
+                CreateCouponTable::class,
+                CreateCouponRedemptionTable::class,
+                MakeDiscountCodeUnique::class,
+                AddFulfillmentReductionToOrderTable::class,
             ]);
 
             /** @var MigrationManager $manager */

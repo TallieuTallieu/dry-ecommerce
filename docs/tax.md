@@ -84,9 +84,9 @@ the column existed.
 ## The coupon reduces what is taxed
 
 A coupon comes off the cart, and tax is worked out per line, so the reduction is
-spread across the lines in proportion to their totals — largest remainder, so
-the parts sum to the reduction exactly — and each line is taxed on what is left
-of it.
+spread across what it reaches in proportion to the line totals — largest
+remainder, so the parts sum to the reduction exactly — and each line is taxed
+on what is left of it.
 
 ```
 2000 at 21%, 500 at 6%, coupon 250 off
@@ -95,9 +95,29 @@ of it.
   line B: 250 x  500/2500 =  50  ->  ( 500- 50) at  6% =  27
 ```
 
-It is spread over _every_ line, including untaxed ones. A discount applies to
-the whole cart, so charging the taxable lines with all of it would tax them on
-less than the customer paid.
+It is spread over _every_ line that takes a discount, including untaxed ones. A
+discount applies to the whole cart, so charging the taxable lines with all of
+it would tax them on less than the customer paid.
+
+A line whose buyable answers `takesDiscount()` false
+([`DiscountableInterface`](discounts.md#what-a-coupon-reaches)) takes no share:
+it is taxed on its whole price.
+
+A coupon that reaches delivery — the shipped fixed coupon — puts delivery into
+the same split, weighted by its cost, and delivery is taxed on what is left of
+it:
+
+```
+line 3000 at 6%, delivery 1000, delivery_tax_rate 21, fixed coupon 2000
+
+  line:     2000 x 3000/4000 = 1500  ->  (3000-1500) at  6%
+  delivery: 2000 x 1000/4000 =  500  ->  (1000- 500) at 21%
+```
+
+The order freezes delivery's share as `fulfillment_reduction`, so a breakdown
+of the order later can tell it apart from the lines'. With no line opted out
+and a coupon that does not reach delivery, the split is exactly what it was
+before delivery could be reached.
 
 Per-line rounding still holds: a line is the figure that gets printed, so the
 total is the sum of the printed lines. See [the rounding

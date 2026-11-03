@@ -11,7 +11,9 @@ use Tnt\Ecommerce\Contracts\CouponInterface;
  *
  * The code itself carries no discount logic: it points at a coupon — any model
  * the project makes implement {@see CouponInterface} — which decides whether it
- * is redeemable and by how much.
+ * is redeemable and by how much. Codes are stored trimmed and uppercase, so a
+ * customer may type one in any case; the column is unique. See
+ * docs/discounts.md#codes.
  *
  * @property int|null $id
  * @property int $created
@@ -24,6 +26,27 @@ use Tnt\Ecommerce\Contracts\CouponInterface;
 class DiscountCode extends Model
 {
     const TABLE = 'ecommerce_discount_code';
+
+    /**
+     * A code the way it is stored and looked up: trimmed, uppercase.
+     *
+     * @param string $code
+     * @return string
+     */
+    public static function normalise(string $code): string
+    {
+        return strtoupper(trim($code));
+    }
+
+    /**
+     * @return void
+     */
+    public function save()
+    {
+        $this->code = self::normalise((string) $this->code);
+
+        parent::save();
+    }
 
     public function get_coupon(): ?CouponInterface
     {

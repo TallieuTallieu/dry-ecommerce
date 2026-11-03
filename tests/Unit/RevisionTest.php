@@ -27,6 +27,7 @@ declare(strict_types=1);
 use Tests\Support\CapturingAddBoxToAddresses;
 use Tests\Support\CapturingAddCartLifecycleColumns;
 use Tests\Support\CapturingAddFulfillmentAttributesToOrderTable;
+use Tests\Support\CapturingAddFulfillmentReductionToOrderTable;
 use Tests\Support\CapturingAddIndexesToEcommerceTables;
 use Tests\Support\CapturingAddOptionsToLineTables;
 use Tests\Support\CapturingAddOrderLineIndexes;
@@ -38,12 +39,15 @@ use Tests\Support\CapturingAddVariantToLineTables;
 use Tests\Support\CapturingAddVatPercentageToOrderItem;
 use Tests\Support\CapturingCreateAddressTable;
 use Tests\Support\CapturingDropAddressNameColumns;
+use Tests\Support\CapturingCreateCouponRedemptionTable;
+use Tests\Support\CapturingCreateCouponTable;
 use Tests\Support\CapturingCreateCustomerTable;
 use Tests\Support\CapturingCreateOrderItemTable;
 use Tests\Support\CapturingCreateOrderTable;
 use Tests\Support\CapturingCreateOrderSequenceTable;
 use Tests\Support\CapturingCreatePaymentEntryTable;
 use Tests\Support\CapturingMakeCustomerUserUnique;
+use Tests\Support\CapturingMakeDiscountCodeUnique;
 use Tests\Support\CapturingMakeOrderCustomerNullable;
 use Tests\Support\CapturingMakeOrderPlacementColumnsNullable;
 use Tnt\Dbi\QueryBuilder;
@@ -940,3 +944,121 @@ it('creates the order sequence keyed by year', function (): void {
         'DROP TABLE `ecommerce_order_sequence`'
     );
 });
+
+it('creates the coupon table with its money as bigint', function (
+    string $column
+): void {
+    $revision = new CapturingCreateCouponTable(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(1);
+    expect($revision->statements[0])->toContain(
+        'CREATE TABLE `ecommerce_coupon`'
+    );
+    expect($revision->statements[0])->toContain($column);
+})->with([
+    '`type` VARCHAR(16)',
+    '`value` BIGINT(20)',
+    '`balance` BIGINT(20) NULL',
+    '`starts` INT(11) NULL',
+    '`ends` INT(11) NULL',
+    '`minimum` BIGINT(20) NULL',
+    '`max_uses` INT(11) NULL',
+    '`uses` INT(11)',
+    '`note` TEXT NULL',
+]);
+
+it('keeps the code off the coupon table', function (): void {
+    // D1: the code lives in ecommerce_discount_code alone.
+    $revision = new CapturingCreateCouponTable(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements[0])->not->toContain('`code`');
+
+    $revision = new CapturingCreateCouponTable(new QueryBuilder());
+    $revision->down();
+
+    expect($revision->statements)->toBe(['DROP TABLE `ecommerce_coupon`']);
+});
+
+it('lets an order redeem a coupon once', function (): void {
+    $revision = new CapturingCreateCouponRedemptionTable(new QueryBuilder());
+    $revision->up();
+
+    expect($revision->statements)->toHaveCount(1);
+
+    $sql = $revision->statements[0];
+
+    expect($sql)->toContain('CREATE TABLE `ecommerce_coupon_redemption`');
+    expect($sql)->toContain('`amount` BIGINT(20)');
+    expect($sql)->toContain('`shortfall` BIGINT(20) NULL');
+    expect($sql)->toContain('REFERENCES `ecommerce_coupon` (`id`)');
+    expect($sql)->toContain('REFERENCES `ecommerce_order` (`id`)');
+    expect($sql)->toContain('UNIQUE (`order`)');
+    expect($sql)->toContain('INDEX `idx_coupon_id` (`coupon`, `id`)');
+
+    $revision = new CapturingCreateCouponRedemptionTable(new QueryBuilder());
+    $revision->down();
+
+    expect($revision->statements)->toBe([
+        'DROP TABLE `ecommerce_coupon_redemption`',
+    ]);
+});
+
+it(
+    'uppercases the existing codes before making them unique',
+    function (): void {
+        $revision = new CapturingMakeDiscountCodeUnique(new QueryBuilder());
+        $revision->up();
+
+        expect($revision->statements)->toHaveCount(2);
+        expect($revision->statements[0])->toBe(
+            'UPDATE `ecommerce_discount_code` SET `code` = UPPER(TRIM(`code`))'
+        );
+        expect($revision->statements[1])->toContain(
+            'ALTER TABLE `ecommerce_discount_code`'
+        );
+        expect($revision->statements[1])->toContain(
+            'ADD CONSTRAINT `uq_code` UNIQUE (`code`)'
+        );
+        expect($revision->statements[1])->toContain(
+            'ADD INDEX `idx_coupon_class_coupon_id` (`coupon_class`, `coupon_id`)'
+        );
+
+        $revision = new CapturingMakeDiscountCodeUnique(new QueryBuilder());
+        $revision->down();
+
+        expect($revision->statements)->toHaveCount(1);
+        expect($revision->statements[0])->toContain('DROP INDEX `uq_code`');
+        expect($revision->statements[0])->toContain(
+            'DROP INDEX `idx_coupon_class_coupon_id`'
+        );
+    }
+);
+
+it(
+    'gives the order the part of its reduction that came off delivery',
+    function (): void {
+        $revision = new CapturingAddFulfillmentReductionToOrderTable(
+            new QueryBuilder()
+        );
+        $revision->up();
+
+        expect($revision->statements)->toHaveCount(1);
+        expect($revision->statements[0])->toContain(
+            'ALTER TABLE `ecommerce_order`'
+        );
+        expect($revision->statements[0])->toContain(
+            'ADD `fulfillment_reduction` BIGINT(20) NULL'
+        );
+
+        $revision = new CapturingAddFulfillmentReductionToOrderTable(
+            new QueryBuilder()
+        );
+        $revision->down();
+
+        expect($revision->statements[0])->toContain(
+            'DROP COLUMN `fulfillment_reduction`'
+        );
+    }
+);

@@ -42,6 +42,7 @@ use Tnt\Ecommerce\Tax\PriceConvention;
  * @property int|null $subtotal
  * @property int|null $reduction
  * @property int|null $fulfillment_cost
+ * @property int|null $fulfillment_reduction
  * @property int|null $tax
  * @property string|null $prices
  * @property string $state
@@ -409,6 +410,18 @@ class Order extends Model implements OrderInterface, TotalingInterface
     public function getReduction(): int
     {
         return (int) $this->reduction;
+    }
+
+    /**
+     * The part of {@see getReduction()} that came off delivery, in cents —
+     * frozen at placement; 0 for an order placed before it was recorded.
+     * See docs/orders.md.
+     *
+     * @return int
+     */
+    public function getFulfillmentReduction(): int
+    {
+        return (int) $this->fulfillment_reduction;
     }
 
     /**

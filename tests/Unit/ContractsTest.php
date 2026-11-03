@@ -23,12 +23,15 @@ it('autoloads every public contract', function (string $contract): void {
     Tnt\Ecommerce\Contracts\CartStorageInterface::class,
     Tnt\Ecommerce\Contracts\CouponInterface::class,
     Tnt\Ecommerce\Contracts\CustomerInterface::class,
+    Tnt\Ecommerce\Contracts\DiscountableInterface::class,
     Tnt\Ecommerce\Contracts\FulfillmentInterface::class,
     Tnt\Ecommerce\Contracts\HasAddressesInterface::class,
     Tnt\Ecommerce\Contracts\HasStockInterface::class,
     Tnt\Ecommerce\Contracts\OrderInterface::class,
     Tnt\Ecommerce\Contracts\OrderItemInterface::class,
     Tnt\Ecommerce\Contracts\PaymentInterface::class,
+    Tnt\Ecommerce\Contracts\ReachesDeliveryInterface::class,
+    Tnt\Ecommerce\Contracts\RefusesCouponInterface::class,
     Tnt\Ecommerce\Contracts\ShopInterface::class,
     Tnt\Ecommerce\Contracts\StockWorkerInterface::class,
     Tnt\Ecommerce\Contracts\TaxableInterface::class,
@@ -48,8 +51,10 @@ it('autoloads every published exception', function (string $class): void {
     expect(is_a($class, InvalidArgumentException::class, true))->toBeTrue();
 })->with([
     Tnt\Ecommerce\AmountTooLarge::class,
+    Tnt\Ecommerce\CouponCodeRefused::class,
     Tnt\Ecommerce\NotAnAddressType::class,
     Tnt\Ecommerce\NotAnAmount::class,
+    Tnt\Ecommerce\NotAPercentage::class,
     Tnt\Ecommerce\UnsupportedRate::class,
 ]);
 
@@ -69,3 +74,12 @@ it('autoloads the two kinds of address', function (string $class): void {
 it('publishes the address type as an enum', function (): void {
     expect(enum_exists(Tnt\Ecommerce\Address\AddressType::class))->toBeTrue();
 });
+
+it('publishes the coupon type and refusal as enums', function (
+    string $enum
+): void {
+    expect(enum_exists($enum))->toBeTrue();
+})->with([
+    Tnt\Ecommerce\Discount\CouponType::class,
+    Tnt\Ecommerce\Discount\CouponRefusal::class,
+]);

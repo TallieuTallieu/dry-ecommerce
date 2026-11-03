@@ -70,7 +70,12 @@ into it with a fresh order:
    be finished by then. Skipped entirely for a guest (null customer).
 2. On re-placement: the order's existing lines are deleted, so the copy in
    step 10 replaces rather than stacks.
-3. The money: `total`, `subtotal`, `reduction`, `fulfillment_cost`, `tax`.
+3. The money: `total`, `subtotal`, `reduction`, `fulfillment_cost`, `tax`,
+   and `fulfillment_reduction` — the part of `reduction` that came off
+   delivery, which only a coupon that [reaches
+   delivery](discounts.md#what-a-coupon-reaches) puts there; `0` otherwise,
+   `NULL` on an order placed before the column existed.
+   `Order::getFulfillmentReduction()` reads it as cents.
 4. `prices` — the [price convention](tax.md) the order was placed under.
 5. `fulfillment_method` — the id, as a string — and `fulfillment_attributes`,
    the order's **own copy** of the method's required attributes, as JSON, or
@@ -79,7 +84,9 @@ into it with a fresh order:
 7. `payment_id` cleared — no attempt is current until `pay()` starts one —
    and `payment_status` derived from the [ledger](payment.md#the-ledger):
    `pending`, or whatever money earlier attempts left on it.
-8. `discount` — the code that was in force, or null.
+8. `discount` — the code that was in force, or null. The coupon behind it is
+   redeemed on `Paid`, honouring the frozen `reduction` — see
+   [Discounts](discounts.md#redemption).
 9. **If a customer was given:** `customer` — the foreign key — and
    `freezeCustomer($customer)`, the order's **own copy** of who placed it.
    With no customer, both stay exactly as they were: a guest draft already

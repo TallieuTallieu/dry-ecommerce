@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Support;
 
 use Tnt\Ecommerce\Contracts\CouponInterface;
+use Tnt\Ecommerce\Model\Coupon;
 use Tnt\Ecommerce\Model\DiscountCode;
 
 /**
@@ -26,6 +27,22 @@ final class FakeDiscountCode extends DiscountCode
         $code->fakeCoupon = $coupon;
 
         return $code;
+    }
+
+    /**
+     * The code row the package's own coupon would have: its class and id,
+     * which is what an order placed with it is checked against.
+     */
+    public static function forCoupon(
+        Coupon $coupon,
+        string $code = 'SUMMER10'
+    ): self {
+        $row = self::withCoupon($coupon);
+        $row->coupon_class = Coupon::class;
+        $row->coupon_id = (int) $coupon->id;
+        $row->code = $code;
+
+        return $row;
     }
 
     public static function withoutCoupon(): self
