@@ -10,11 +10,14 @@ declare(strict_types=1);
 
 use dry\admin\component\Conditional;
 use dry\admin\component\DateEdit;
+use dry\admin\component\EntryGrid;
 use dry\admin\component\EnumEdit;
 use dry\admin\component\EnumSwitcher;
 use dry\admin\component\IntegerEdit;
 use dry\admin\component\Stack;
 use dry\admin\component\StringEdit;
+use dry\admin\component\StringView;
+use dry\admin\component\TextEntry;
 use dry\api\ConvertableToApiException;
 use dry\orm\action\Create;
 use dry\orm\action\Delete;
@@ -121,6 +124,39 @@ it('shows a new coupon\'s value fields from the start', function (): void {
         // The balance is a fixed coupon's limit: no use limit to set.
         [CouponType::Fixed->value, ['amount']],
     ]);
+});
+
+it('asks a code on create only, and offers to copy it', function (): void {
+    [$create, $edit] = (new CouponManager())->actions;
+    assert($create instanceof Create && $edit instanceof Edit);
+
+    expect(fieldsOf($create->components))->toContain('code');
+
+    // Used or not: a customer may hold the code from the moment it is made.
+    expect(fieldsOf($edit->components))->not->toContain('code');
+    foreach ($edit->components as $component) {
+        if ($component instanceof Conditional) {
+            expect(conditionalFields($component))->not->toContain('code');
+        }
+    }
+
+    $entries = array_values(
+        array_filter(
+            $edit->components,
+            static fn(mixed $c): bool => $c instanceof EntryGrid
+        )
+    );
+    expect($entries)->toHaveCount(1);
+
+    $code = $entries[0]->components[0];
+    assert($code instanceof TextEntry);
+    expect($code->field)->toBe('code');
+    expect($code->copyable)->toBeTrue();
+
+    $column = (new CouponManager())->index->components[0];
+    assert($column instanceof StringView);
+    expect($column->field)->toBe('code');
+    expect($column->copyable)->toBe('code');
 });
 
 it('asks a use limit of percentage coupons only, on edit', function (): void {

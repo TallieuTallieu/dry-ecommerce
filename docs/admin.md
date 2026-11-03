@@ -63,7 +63,7 @@ The list, newest first, 25 to a page:
 
 | Column  | Shows                                                   |
 | ------- | ------------------------------------------------------- |
-| Code    | The code a customer types.                              |
+| Code    | The code a customer types, with a copy button.          |
 | Type    | Percentage or fixed amount.                             |
 | Value   | `7.5%`, or the fixed amount in units.                   |
 | Balance | What is left on a fixed coupon; empty for a percentage. |
@@ -83,10 +83,12 @@ last day; the minimum in euros, held against the products that take a
 discount; and a note.
 
 **Edit** shows the type, a fixed coupon's amount and balance, and the uses
-read-only; the code too, once the coupon has been used. The percentage, dates,
-minimum, a percentage coupon's maximum uses and note stay editable. A coupon
-without dates opens with them empty; emptying one clears it. Saving
-never writes the balance or the uses — only a redemption does.
+read-only. The code is read-only too, used or not, with a copy button: a
+customer may hold it from the moment it is made, so a mistyped code is a new
+coupon. The percentage, dates, minimum, a percentage coupon's maximum uses and
+note stay editable. A coupon without dates opens with them empty; emptying one
+clears it. Saving never writes the balance or the uses — only a redemption
+does.
 
 **Redemptions**, a page of the coupon's own: every order it was spent on, with
 the amount the order took off and what the coupon could not cover
