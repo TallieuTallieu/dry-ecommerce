@@ -24,6 +24,8 @@ use Tnt\Ecommerce\Discount\CouponType;
 use Tnt\Ecommerce\Model\Coupon;
 use Tnt\Ecommerce\Model\CouponRedemption;
 use Tnt\Ecommerce\Model\Order;
+use Tnt\Ecommerce\NotACouponAmount;
+use Tnt\Ecommerce\NotAnAmount;
 use Tnt\Ecommerce\NotAPercentage;
 
 it('creates and edits coupons, and deletes none', function (): void {
@@ -154,5 +156,18 @@ it('turns every save refusal into an API error on its field', function (
         CouponTakesNothing::of(CouponType::Percentage),
         'ecommerce.coupon_value_invalid',
         'percent',
+    ],
+    'unreadable amount' => [
+        NotACouponAmount::in('amount', NotAnAmount::unreadable('€12')),
+        'ecommerce.coupon_amount_invalid',
+        'amount',
+    ],
+    'unreadable minimum' => [
+        NotACouponAmount::in(
+            'minimum_amount',
+            NotAnAmount::unreadable('1.250,00')
+        ),
+        'ecommerce.coupon_amount_invalid',
+        'minimum_amount',
     ],
 ]);

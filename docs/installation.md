@@ -185,7 +185,7 @@ rename the project's table — and its model's `TABLE` — before migrating. Its
 codes stay valid either way, since they point at its own coupon class.
 
 `MakeDiscountCodeUnique` uppercases every existing code and then makes `code`
-unique. Two codes that differ only in case or surrounding spaces make it fail
+unique, dropping the plain `idx_code` the unique replaces. Two codes that differ only in case or surrounding spaces make it fail
 loudly on a duplicate entry; rename one of them by hand, then run it again.
 
 ### Upgrading a shop that predates the address book

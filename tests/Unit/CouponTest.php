@@ -546,6 +546,24 @@ it(
         'ecommerce.coupon_value_invalid',
         'percent',
     ],
+    'an amount it cannot read' => [
+        static function (): void {
+            $coupon = new InMemoryCoupon();
+            $coupon->type = 'fixed';
+            $coupon->amount = '€12';
+            $coupon->save();
+        },
+        'ecommerce.coupon_amount_invalid',
+        'amount',
+    ],
+    'a minimum it cannot read' => [
+        static function (): void {
+            $coupon = InMemoryCoupon::percentage(10);
+            $coupon->minimum_amount = '1.250,00';
+        },
+        'ecommerce.coupon_amount_invalid',
+        'minimum_amount',
+    ],
     'Coupon::fixed(0)' => [
         static fn() => Coupon::fixed(0),
         'ecommerce.coupon_value_invalid',

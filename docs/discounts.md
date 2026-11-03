@@ -94,17 +94,19 @@ an integer so `7.5` never becomes `7.4999…`.
   back a balance a payment had just taken from.
 
 A coupon that takes off nothing — a fixed amount of 0, a percentage left
-empty — raises `Tnt\Ecommerce\CouponTakesNothing`. Each refusal is an
+empty — raises `Tnt\Ecommerce\CouponTakesNothing`; a euro amount it cannot
+read (`€12`, `1.250,00`) raises `Tnt\Ecommerce\NotACouponAmount`. Each refusal is an
 `InvalidArgumentException` that implements dry's `ConvertableToApiException`,
 so the admin's save answers with a code and the field it concerns rather than
 a bare `php.exception`:
 
-| Exception                     | `error_code`                          | `field`               |
-| ----------------------------- | ------------------------------------- | --------------------- |
-| `CouponCodeRefused::taken()`  | `ecommerce.coupon_code_taken`         | `code`                |
-| `CouponCodeRefused::locked()` | `ecommerce.coupon_code_locked`        | `code`                |
-| `NotAPercentage`              | `ecommerce.coupon_percentage_invalid` | `percent`             |
-| `CouponTakesNothing`          | `ecommerce.coupon_value_invalid`      | `amount` or `percent` |
+| Exception                     | `error_code`                          | `field`                      |
+| ----------------------------- | ------------------------------------- | ---------------------------- |
+| `CouponCodeRefused::taken()`  | `ecommerce.coupon_code_taken`         | `code`                       |
+| `CouponCodeRefused::locked()` | `ecommerce.coupon_code_locked`        | `code`                       |
+| `NotAPercentage`              | `ecommerce.coupon_percentage_invalid` | `percent`                    |
+| `CouponTakesNothing`          | `ecommerce.coupon_value_invalid`      | `amount` or `percent`        |
+| `NotACouponAmount`            | `ecommerce.coupon_amount_invalid`     | `amount` or `minimum_amount` |
 
 ## The coupon contract
 

@@ -418,12 +418,16 @@ class Cart implements CartInterface, TotalingInterface
     private function reductionSplit(): array
     {
         $coupon = $this->getCoupon();
+
+        // Most carts carry no coupon: answer their nothing without reading
+        // every line for it.
+        if ($coupon === null) {
+            return ['lines' => [], 'delivery' => 0];
+        }
+
         $reach = Reach::of($this);
 
-        return $reach->splitFor(
-            $coupon === null ? 0 : $reach->clamp($coupon, $this),
-            $coupon
-        );
+        return $reach->splitFor($reach->clamp($coupon, $this), $coupon);
     }
 
     /**

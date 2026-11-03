@@ -15,7 +15,11 @@ use Tnt\Dbi\TableBuilder;
  * A shop holding two rows whose codes differ only in case or spaces fails
  * this ALTER loudly (duplicate entry) — the same precedent as
  * {@see MakeCustomerUserUnique}. Merge or rename those rows by hand first.
- * down() drops the unique and the index; the codes stay uppercase.
+ *
+ * The same ALTER drops revision 17's plain `idx_code`: the unique index
+ * serves every lookup by code by itself. down() puts it back under its own
+ * name, so revision 17's down() still finds it, and drops the unique and the
+ * pointer index; the codes stay uppercase.
  */
 class MakeDiscountCodeUnique extends DatabaseRevision implements
     RevisionInterface
@@ -32,6 +36,7 @@ class MakeDiscountCodeUnique extends DatabaseRevision implements
         $this->queryBuilder
             ->table('ecommerce_discount_code')
             ->alter(function (TableBuilder $table) {
+                $table->dropIndex('code');
                 $table->addUnique('code');
                 $table->addIndex(['coupon_class', 'coupon_id']);
             });
@@ -49,6 +54,9 @@ class MakeDiscountCodeUnique extends DatabaseRevision implements
             ->alter(function (TableBuilder $table) {
                 $table->dropIndex(['coupon_class', 'coupon_id']);
                 $table->dropUnique('code');
+
+                // Under the name revision 17's down() expects to find.
+                $table->addIndex('code');
             });
 
         $this->execute();
@@ -57,12 +65,13 @@ class MakeDiscountCodeUnique extends DatabaseRevision implements
     public function describeUp(): string
     {
         return 'Codes in ecommerce_discount_code uppercased, unique ' .
-            'constraint added on code, index on the coupon pointer';
+            'constraint added on code, redundant idx_code dropped, index ' .
+            'on the coupon pointer';
     }
 
     public function describeDown(): string
     {
         return 'Unique constraint dropped from ecommerce_discount_code.code, ' .
-            'index on the coupon pointer dropped';
+            'idx_code restored, index on the coupon pointer dropped';
     }
 }

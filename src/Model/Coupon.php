@@ -21,6 +21,8 @@ use Tnt\Ecommerce\Discount\CouponRefusal;
 use Tnt\Ecommerce\Discount\CouponType;
 use Tnt\Ecommerce\Discount\Reach;
 use Tnt\Ecommerce\Money;
+use Tnt\Ecommerce\NotACouponAmount;
+use Tnt\Ecommerce\NotAnAmount;
 use Tnt\Ecommerce\NotAPercentage;
 use Tnt\Ecommerce\Repository\DiscountCodeRepository;
 
@@ -454,7 +456,7 @@ class Coupon extends Model implements
      * @throws CouponCodeRefused
      * @throws CouponTakesNothing
      * @throws NotAPercentage
-     * @throws \Tnt\Ecommerce\NotAnAmount
+     * @throws NotACouponAmount
      */
     public function save()
     {
@@ -593,20 +595,22 @@ class Coupon extends Model implements
      * @param mixed $amount Euros; empty for no minimum.
      * @return void
      *
-     * @throws \Tnt\Ecommerce\NotAnAmount
+     * @throws NotACouponAmount
      */
     public function set_minimum_amount(mixed $amount): void
     {
         $text = is_scalar($amount) ? trim((string) $amount) : '';
 
         $this->minimum =
-            $text === '' ? null : Money::fromDecimal(self::euros($text));
+            $text === '' ? null : self::cents($text, 'minimum_amount');
     }
 
     /**
      * The clock refusal() reads — a seam for tests.
      *
      * @return int
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function now(): int
     {
@@ -622,6 +626,8 @@ class Coupon extends Model implements
      * @param int $amount
      * @return int|null The redemption's id, or null when the order already
      *                  has one.
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function claim(Order $order, int $amount): ?int
     {
@@ -649,6 +655,8 @@ class Coupon extends Model implements
      * @param int $amount
      * @return int|null What the balance covered, or null when the coupon row
      *                  is gone.
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function takeBalance(int $amount): ?int
     {
@@ -671,6 +679,8 @@ class Coupon extends Model implements
      *
      * @return int|null The uses after this one, or null when the coupon row
      *                  is gone.
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function countUse(): ?int
     {
@@ -691,6 +701,8 @@ class Coupon extends Model implements
      * @param int $redemption
      * @param int $shortfall
      * @return void
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function settle(int $redemption, int $shortfall): void
     {
@@ -706,6 +718,8 @@ class Coupon extends Model implements
      * @param string $sql
      * @param int ...$params
      * @return int The new row's id.
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function insert(string $sql, int ...$params): int
     {
@@ -720,6 +734,8 @@ class Coupon extends Model implements
      * @param string $sql
      * @param int ...$params
      * @return int
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function affected(string $sql, int ...$params): int
     {
@@ -746,6 +762,8 @@ class Coupon extends Model implements
     /**
      * @param string $sql
      * @return mixed
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function field(string $sql): mixed
     {
@@ -756,6 +774,8 @@ class Coupon extends Model implements
      * This coupon's code row, or null.
      *
      * @return DiscountCode|null
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function findCode(): ?DiscountCode
     {
@@ -773,6 +793,8 @@ class Coupon extends Model implements
      *
      * @param string $code Normalised.
      * @return bool
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function codeTaken(string $code): bool
     {
@@ -785,6 +807,8 @@ class Coupon extends Model implements
      * A code, before {@see freeCode()} checks it is free.
      *
      * @return string
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function generateCode(): string
     {
@@ -833,6 +857,8 @@ class Coupon extends Model implements
      * dry's save of whatever columns are loaded. A seam for tests.
      *
      * @return void
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function persist(): void
     {
@@ -844,6 +870,8 @@ class Coupon extends Model implements
      *
      * @param string $code Normalised.
      * @return DiscountCode The row, as written.
+     *
+     * @internal A seam for tests, not an extension point.
      */
     protected function writeCode(string $code): DiscountCode
     {
@@ -905,7 +933,7 @@ class Coupon extends Model implements
      *
      * @throws CouponTakesNothing
      * @throws NotAPercentage
-     * @throws \Tnt\Ecommerce\NotAnAmount
+     * @throws NotACouponAmount
      */
     private function resolveFields(): void
     {
@@ -920,7 +948,7 @@ class Coupon extends Model implements
         }
 
         if ($type === CouponType::Fixed && $amount !== '') {
-            $this->value = Money::fromDecimal(self::euros($amount));
+            $this->value = self::cents($amount, 'amount');
         }
 
         $this->percentInput = null;
@@ -975,14 +1003,22 @@ class Coupon extends Model implements
     }
 
     /**
-     * An admin's euro amount as {@see Money::fromDecimal()} reads it: a
-     * decimal comma becomes the full stop.
+     * An admin's euro amount in cents. A decimal comma reads as the full
+     * stop; anything else {@see Money::fromDecimal()} refuses is refused on
+     * the field it was typed in.
      *
      * @param string $text
-     * @return string
+     * @param string $field The admin field, for the API error.
+     * @return int
+     *
+     * @throws NotACouponAmount
      */
-    private static function euros(string $text): string
+    private static function cents(string $text, string $field): int
     {
-        return str_replace(',', '.', trim($text));
+        try {
+            return Money::fromDecimal(str_replace(',', '.', trim($text)));
+        } catch (NotAnAmount $refusal) {
+            throw NotACouponAmount::in($field, $refusal);
+        }
     }
 }

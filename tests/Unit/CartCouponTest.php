@@ -137,6 +137,22 @@ it(
     }
 );
 
+it(
+    'reads no line for a reduction when no coupon is in force',
+    function (): void {
+        $policy = new TaxPolicy(PriceConvention::Exclusive, 21);
+        [$cart] = makeCart([], null, $policy);
+
+        $rate = new PercentageTaxRate(21);
+        $deposit = new FakeUndiscountedBuyable('1', 1000, $rate);
+        $cart->add($deposit);
+
+        expect($cart->getTax())->toBe($policy->taxOn(1000, $rate));
+        expect($cart->getTotal())->toBe(1000 + $policy->taxOn(1000, $rate));
+        expect($deposit->asked)->toBe(0);
+    }
+);
+
 it('takes the applied code off again', function (): void {
     [$cart, $storage] = makeCart();
 

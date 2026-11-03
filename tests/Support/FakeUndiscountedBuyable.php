@@ -10,12 +10,15 @@ use Tnt\Ecommerce\Contracts\TaxRateInterface;
 
 /**
  * A buyable that takes no discount — a deposit — and carries tax, so a test
- * can see it is taxed on its whole price whatever coupon is in force.
+ * can see it is taxed on its whole price whatever coupon is in force. Counts
+ * how often it is asked, so a test can see a cart without a coupon never asks.
  */
 final class FakeUndiscountedBuyable extends FakeBuyable implements
     DiscountableInterface,
     TaxableInterface
 {
+    public int $asked = 0;
+
     public function __construct(
         string $id,
         int $price,
@@ -26,6 +29,8 @@ final class FakeUndiscountedBuyable extends FakeBuyable implements
 
     public function takesDiscount(): bool
     {
+        $this->asked++;
+
         return false;
     }
 

@@ -1018,6 +1018,7 @@ it(
         expect($revision->statements[1])->toContain(
             'ALTER TABLE `ecommerce_discount_code`'
         );
+        expect($revision->statements[1])->toContain('DROP INDEX `idx_code`');
         expect($revision->statements[1])->toContain(
             'ADD CONSTRAINT `uq_code` UNIQUE (`code`)'
         );
@@ -1032,6 +1033,10 @@ it(
         expect($revision->statements[0])->toContain('DROP INDEX `uq_code`');
         expect($revision->statements[0])->toContain(
             'DROP INDEX `idx_coupon_class_coupon_id`'
+        );
+        // Under its own name, so revision 17's down() still finds it.
+        expect($revision->statements[0])->toContain(
+            'ADD INDEX `idx_code` (`code`)'
         );
     }
 );
