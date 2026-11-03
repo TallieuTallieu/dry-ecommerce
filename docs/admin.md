@@ -74,15 +74,19 @@ The list, newest first, 25 to a page:
 The search box matches the code (through `ecommerce_discount_code`) and the
 note.
 
-**Create** asks for the type, then the percentage (`7,5` or `7.5`) or the
-amount in euros; the code — empty generates one; the first and last day; the
-minimum in euros, held against the products that take a discount; the maximum
-uses — `1` by default for a percentage, empty for a fixed amount; and a note.
+**Create** asks for the type, on two tabs that start on Percentage — an
+`EnumSwitcher`, since dry's create form loads no row for a `Conditional` to
+test. A percentage takes the percentage (`7,5` or `7.5`) and the maximum uses,
+`1` by default; a fixed amount takes the amount in euros and no use limit, its
+balance being the limit. Then the code — empty generates one; the first and
+last day; the minimum in euros, held against the products that take a
+discount; and a note.
 
 **Edit** shows the type, a fixed coupon's amount and balance, and the uses
 read-only; the code too, once the coupon has been used. The percentage, dates,
-minimum, maximum uses and note stay editable. Saving never writes the balance
-or the uses — only a redemption does.
+minimum, a percentage coupon's maximum uses and note stay editable. A coupon
+without dates opens with them empty; emptying one clears it. Saving
+never writes the balance or the uses — only a redemption does.
 
 **Redemptions**, a page of the coupon's own: every order it was spent on, with
 the amount the order took off and what the coupon could not cover

@@ -8,6 +8,13 @@ declare(strict_types=1);
  * LedgerAdminTest does for the ledger.
  */
 
+use dry\admin\component\Conditional;
+use dry\admin\component\DateEdit;
+use dry\admin\component\EnumEdit;
+use dry\admin\component\EnumSwitcher;
+use dry\admin\component\IntegerEdit;
+use dry\admin\component\Stack;
+use dry\admin\component\StringEdit;
 use dry\api\ConvertableToApiException;
 use dry\orm\action\Create;
 use dry\orm\action\Delete;
@@ -28,6 +35,51 @@ use Tnt\Ecommerce\NotACouponAmount;
 use Tnt\Ecommerce\NotAnAmount;
 use Tnt\Ecommerce\NotAPercentage;
 
+/**
+ * An EnumSwitcher tab's key and the fields it asks, through any Stack.
+ *
+ * @param array<int, mixed> $option
+ * @return array{mixed, list<string>}
+ */
+function tabFields(array $option): array
+{
+    /** @var list<dry\admin\component\Component> $components */
+    $components = $option[2];
+
+    return [$option[0], fieldsOf($components)];
+}
+
+/**
+ * The fields every branch of a Conditional asks.
+ *
+ * @return list<string>
+ */
+function conditionalFields(Conditional $conditional): array
+{
+    return fieldsOf(array_merge(...array_column($conditional->branches, 1)));
+}
+
+/**
+ * @param array<int, dry\admin\component\Component> $components
+ * @return list<string>
+ */
+function fieldsOf(array $components): array
+{
+    $fields = [];
+
+    foreach ($components as $c) {
+        if ($c instanceof Stack) {
+            /** @var array<int, dry\admin\component\Component> $children */
+            $children = $c->components;
+            $fields = [...$fields, ...fieldsOf($children)];
+        } elseif ($c instanceof StringEdit || $c instanceof IntegerEdit) {
+            $fields[] = $c->field;
+        }
+    }
+
+    return $fields;
+}
+
 it('creates and edits coupons, and deletes none', function (): void {
     $manager = new CouponManager();
 
@@ -44,6 +96,78 @@ it('creates and edits coupons, and deletes none', function (): void {
         expect($action)->not->toBeInstanceOf(Delete::class);
         expect($action)->not->toBeInstanceOf(MultiDelete::class);
         expect($action)->not->toBeInstanceOf(DeleteAll::class);
+    }
+});
+
+it('shows a new coupon\'s value fields from the start', function (): void {
+    // dry's Create loads no row, so a Conditional there never shows a branch,
+    // and an EnumDisplay waits for its select to change: the value fields
+    // went missing and every save was refused. EnumSwitcher shows its first
+    // tab's fields as it is drawn.
+    $create = (new CouponManager())->actions[0];
+    assert($create instanceof Create);
+
+    foreach ($create->components as $component) {
+        expect($component)->not->toBeInstanceOf(Conditional::class);
+        expect($component)->not->toBeInstanceOf(EnumEdit::class);
+    }
+
+    $type = $create->components[0];
+    assert($type instanceof EnumSwitcher);
+    expect($type->field)->toBe('type');
+
+    expect(array_map(tabFields(...), $type->values))->toBe([
+        [CouponType::Percentage->value, ['percent', 'max_uses']],
+        // The balance is a fixed coupon's limit: no use limit to set.
+        [CouponType::Fixed->value, ['amount']],
+    ]);
+});
+
+it('asks a use limit of percentage coupons only, on edit', function (): void {
+    $edit = (new CouponManager())->actions[1];
+    assert($edit instanceof Edit);
+
+    $limits = array_values(
+        array_filter(
+            $edit->components,
+            static fn(mixed $c): bool => $c instanceof Conditional &&
+                in_array('max_uses', conditionalFields($c), true)
+        )
+    );
+
+    expect($limits)->toHaveCount(1);
+    expect($limits[0]->default)->toBe([]);
+    expect($limits[0]->branches)->toHaveCount(1);
+
+    $test = $limits[0]->branches[0][0];
+    expect($test->evaluate(Coupon::percentage('5')))->toBeTrue();
+    expect($test->evaluate(Coupon::fixed(1000)))->toBeFalse();
+
+    foreach ($edit->components as $component) {
+        expect(
+            $component instanceof IntegerEdit ? $component->field : ''
+        )->not->toBe('max_uses');
+    }
+});
+
+it('lets a coupon\'s dates be empty, on create and edit', function (): void {
+    // Without nullable, dry shows a coupon without dates as 01/01/1970 and
+    // saves that back.
+    foreach ((new CouponManager())->actions as $action) {
+        assert($action instanceof Create); // Edit extends Create
+
+        $dates = [];
+        foreach ($action->components as $c) {
+            if ($c instanceof Stack) {
+                foreach ($c->components as $child) {
+                    if ($child instanceof DateEdit) {
+                        $dates[$child->field] = $child->nullable;
+                    }
+                }
+            }
+        }
+
+        expect($dates)->toBe(['starts' => true, 'ends' => true]);
     }
 });
 

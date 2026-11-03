@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "78cb98e8818311fda90351ffd31c18e5",
+    "content-hash": "34abbe47ab775d0fcd1e1b7db5412cfe",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3185,11 +3185,11 @@
         },
         {
             "name": "tallieutallieu/dry",
-            "version": "v4.15.4",
+            "version": "v4.17.0",
             "source": {
                 "type": "git",
                 "url": "git@bitbucket.org:tallieu/dry3.git",
-                "reference": "2cba2162b5fac2581b6ba65bc1d97f08fcd91f0c"
+                "reference": "862522e1237657e2cf9dd6666d2d8f01664a5b88"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.356.23",
@@ -3278,7 +3278,7 @@
             ],
             "description": "Source of DRY",
             "homepage": "https://bitbucket.org/tallieu/dry3",
-            "time": "2026-10-28T18:58:47+00:00"
+            "time": "2026-11-03T10:37:35+00:00"
         },
         {
             "name": "tallieutallieu/dry-dbi",
