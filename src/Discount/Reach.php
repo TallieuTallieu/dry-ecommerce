@@ -7,6 +7,7 @@ namespace Tnt\Ecommerce\Discount;
 use Closure;
 use Tnt\Ecommerce\Contracts\CartInterface;
 use Tnt\Ecommerce\Contracts\CouponInterface;
+use Tnt\Ecommerce\Contracts\DiscountableByCouponInterface;
 use Tnt\Ecommerce\Contracts\DiscountableInterface;
 use Tnt\Ecommerce\Contracts\ReachesDeliveryInterface;
 use Tnt\Ecommerce\Contracts\TotalingInterface;
@@ -42,10 +43,14 @@ final class Reach
      * discount, and no delivery.
      *
      * @param TotalingInterface $totaling
+     * @param CouponInterface|null $coupon The coupon asking, for a line that
+     *        answers per coupon ({@see DiscountableByCouponInterface}).
      * @return self
      */
-    public static function of(TotalingInterface $totaling): self
-    {
+    public static function of(
+        TotalingInterface $totaling,
+        ?CouponInterface $coupon = null
+    ): self {
         if (!($totaling instanceof CartInterface)) {
             return new self([max(0, $totaling->getSubTotal())], 0);
         }
@@ -54,9 +59,14 @@ final class Reach
 
         foreach ($totaling->items() as $index => $item) {
             $buyable = $item->getBuyable();
-            $takes =
-                !($buyable instanceof DiscountableInterface) ||
-                $buyable->takesDiscount();
+            $takes = match (true) {
+                $coupon !== null &&
+                    $buyable instanceof DiscountableByCouponInterface
+                    => $buyable->takesDiscountFrom($coupon),
+                $buyable instanceof DiscountableInterface
+                    => $buyable->takesDiscount(),
+                default => true,
+            };
 
             $weights[$index] = $takes ? max(0, $item->getPrice()) : 0;
         }

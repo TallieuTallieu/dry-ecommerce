@@ -325,7 +325,10 @@ class Coupon extends Model implements
             return CouponRefusal::Empty;
         }
 
-        if ($minimum !== null && Reach::of($totalingItem)->lines() < $minimum) {
+        if (
+            $minimum !== null &&
+            Reach::of($totalingItem, $this)->lines() < $minimum
+        ) {
             return CouponRefusal::BelowMinimum;
         }
 
@@ -367,7 +370,7 @@ class Coupon extends Model implements
                 : 0;
         }
 
-        $reach = Reach::of($totalingItem);
+        $reach = Reach::of($totalingItem, $this);
 
         if ($this->getType() === CouponType::Percentage) {
             return Money::percentageOf($reach->lines(), $this->getPercentage());

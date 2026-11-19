@@ -452,7 +452,7 @@ class Cart implements CartInterface, TotalingInterface
             return 0;
         }
 
-        return Reach::of($this)->clamp($coupon, $this);
+        return Reach::of($this, $coupon)->clamp($coupon, $this);
     }
 
     /**
@@ -471,7 +471,7 @@ class Cart implements CartInterface, TotalingInterface
             return ['lines' => [], 'delivery' => 0];
         }
 
-        $reach = Reach::of($this);
+        $reach = Reach::of($this, $coupon);
 
         return $reach->splitFor($reach->clamp($coupon, $this), $coupon);
     }
