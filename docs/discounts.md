@@ -167,6 +167,30 @@ class Deposit extends Model implements DiscountableInterface
 }
 ```
 
+A line whose answer depends on the coupon implements
+`DiscountableByCouponInterface` beside it: `takesDiscountFrom($coupon)` —
+a deposit a voucher may pay but a percentage may not. It is asked wherever the
+coupon is known: its reduction, its minimum and the cart's split all read
+`Reach::of($cart, $coupon)`. `takesDiscount()` stays the answer where no
+coupon asks — `Reach::of($cart)` alone, and a project's frozen lines through
+`Reach::fromAmounts()`, which take `takesDiscount` as given.
+
+```php
+class Deposit extends Model implements DiscountableByCouponInterface
+{
+    public function takesDiscount(): bool
+    {
+        return false;
+    }
+
+    public function takesDiscountFrom(CouponInterface $coupon): bool
+    {
+        return $coupon instanceof Coupon &&
+            $coupon->getType() === CouponType::Fixed;
+    }
+}
+```
+
 **The cart clamps every coupon to what it may reach.** `Cart::getReduction()`
 is `min(coupon->getReduction($cart), what it may reach)`, whichever coupon is
 in force. A percentage is worked out on the lines that take a discount and
@@ -417,7 +441,7 @@ class PercentageOff implements CouponInterface
 ```
 
 The cart clamps it like any coupon. To read the lines that take a discount
-rather than the subtotal, use `Reach::of($item)->lines()`. Mind the window
+rather than the subtotal, use `Reach::of($item, $this)->lines()`. Mind the window
 between placing and paying: `isRedeemable($order)` is asked again on `Paid`,
 and a coupon that answers false then is not redeemed although the order took
 the reduction.

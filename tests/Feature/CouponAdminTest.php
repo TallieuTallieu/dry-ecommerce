@@ -129,11 +129,15 @@ it('shows a new coupon\'s value fields from the start', function (): void {
 it('asks a code on create only, and offers to copy it', function (): void {
     [$create, $edit] = (new CouponManager())->actions;
     assert($create instanceof Create && $edit instanceof Edit);
+    /** @var array<int, dry\admin\component\Component> $createComponents */
+    $createComponents = $create->components;
+    /** @var array<int, dry\admin\component\Component> $editComponents */
+    $editComponents = $edit->components;
 
-    expect(fieldsOf($create->components))->toContain('code');
+    expect(fieldsOf($createComponents))->toContain('code');
 
     // Used or not: a customer may hold the code from the moment it is made.
-    expect(fieldsOf($edit->components))->not->toContain('code');
+    expect(fieldsOf($editComponents))->not->toContain('code');
     foreach ($edit->components as $component) {
         if ($component instanceof Conditional) {
             expect(conditionalFields($component))->not->toContain('code');

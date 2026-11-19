@@ -101,7 +101,9 @@ it would tax them on less than the customer paid.
 
 A line whose buyable answers `takesDiscount()` false
 ([`DiscountableInterface`](discounts.md#what-a-coupon-reaches)) takes no share:
-it is taxed on its whole price.
+it is taxed on its whole price. One that answers per coupon
+(`DiscountableByCouponInterface`) takes a share when the coupon in force
+reaches it.
 
 A coupon that reaches delivery — the shipped fixed coupon — puts delivery into
 the same split, weighted by its cost, and delivery is taxed on what is left of
